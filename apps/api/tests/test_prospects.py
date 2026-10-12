@@ -11,7 +11,11 @@ from sqlalchemy.pool import StaticPool
 
 from app.bootstrap_admin import provision_admin
 from app.main import app
-from app.models import Base, Prospect, ProspectUpiIdentifier
+from app.models import (
+    AdminUser, AuditEvent, Base, Organization, OrganizationSettings, Prospect,
+    ProspectUpiIdentifier,
+)
+from app.security import hash_password
 
 BASE = {
     "full_name": "Ayesha Khan",
@@ -167,3 +171,79 @@ def test_input_validation_and_no_unverified_status_setting(system):
     assert client.delete(path, headers=csrf).status_code == 428
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Prospect)) == 1
+
+
+def test_org_isolation_and_independent_contribution_defaults(system):
+    client, engine = system
+    csrf = login(client)
+    first = create(client, csrf).json()
+    with Session(engine) as db:
+        other = Organization(name="Second Foundation")
+        db.add(other)
+        db.flush()
+        db.add(AdminUser(
+            organization_id=other.id,
+            email="different@foundation.org",
+            password_hash=hash_password("synthetic-second-admin-password"),
+            is_active=True,
+        ))
+        db.add(OrganizationSettings(
+            organization_id=other.id,
+            currency_code="INR", timezone="Asia/Kolkata",
+            default_contribution_paise=70000,
+            sponsor_reminder_day=8, promoter_reminder_day=20,
+            inactivity_months=2, automation_enabled=False,
+        ))
+        db.commit()
+    assert client.post(
+        "/v1/auth/login", json={
+            "email": "different@foundation.org",
+            "password": "synthetic-second-admin-password",
+        }
+    ).status_code == 200
+    other_csrf = {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+    assert client.get("/v1/prospects").json()["total"] == 0
+    assert client.get("/v1/prospects/" + first["id"]).status_code == 404
+    assert client.patch(
+        "/v1/prospects/" + first["id"],
+        json={"version": 1, "notes": "unapproved"},
+        headers=other_csrf,
+    ).status_code == 404
+    assert client.delete(
+        "/v1/prospects/" + first["id"],
+        headers={**other_csrf, "If-Match": "1"},
+    ).status_code == 404
+    new_item = create(client, other_csrf).json()
+    assert new_item["monthly_contribution_paise"] == 70000
+    assert client.get("/v1/prospects").json()["total"] == 1
+
+
+def test_upi_key_missing_fails_closed_and_audits_omit_personal_values(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(upi_match_secret=None),
+    )
+    assert create(client, csrf, upi_ids=["payer@oksbi"]).status_code == 503
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(upi_match_secret="synthetic-valid-upi-match-secret-0123456789"),
+    )
+    candidate = create(
+        client, csrf, full_name="Sensitive Test Candidate",
+        notes="private notes for demonstration", upi_ids=["payer@oksbi"],
+    ).json()
+    assert client.patch(
+        "/v1/prospects/" + candidate["id"],
+        json={"version": 1, "notes": "private updated note"},
+        headers=csrf,
+    ).status_code == 200
+    with Session(engine) as db:
+        events = db.scalars(
+            select(AuditEvent).where(AuditEvent.entity_type == "prospect")
+        ).all()
+        audit_values = str([event.after_data for event in events])
+        assert "Sensitive Test Candidate" not in audit_values
+        assert "private" not in audit_values
+        assert "payer@oksbi" not in audit_values
