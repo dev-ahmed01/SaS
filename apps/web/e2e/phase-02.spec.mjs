@@ -8,7 +8,7 @@ const modules = [
   ["reminders", "Reminders"],
   ["settings", "Settings"],
   ["dashboard", "Dashboard"],
-] as const;
+];
 
 test("all seven approved modules have a working navigation destination", async ({ page, isMobile }) => {
   await page.goto("/prospects");
