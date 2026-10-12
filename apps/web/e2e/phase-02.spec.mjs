@@ -153,6 +153,10 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await search.fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
+  await page.getByRole("row",{name:new RegExp(label)}).getByRole("button",{name:"Edit"}).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("row",{name:new RegExp(label)}).getByRole("button",{name:"Edit"})).toBeFocused();
 });
 
 test("Admin can archive and restore a prospect without deleting its record",async ({page})=>{
