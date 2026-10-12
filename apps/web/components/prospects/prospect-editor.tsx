@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Prospect } from "./prospects-types";
 
 type EditValues = {
@@ -30,7 +30,7 @@ function toPaise(amount: string): number | null {
   if (!/^\d{1,7}(?:\.\d{1,2})?$/.test(amount.trim())) return null;
   const [whole, fraction = ""] = amount.trim().split(".");
   const paise = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(paise) && paise > 0 && paise <= 100000000 ? paise : null;
+  return Number.isSafeInteger(paise) && paise > 0 && paise <= 1000000000 ? paise : null;
 }
 
 function normalizePhone(input: string): string | null {
@@ -49,6 +49,7 @@ async function csrfToken(): Promise<string> {
 export function ProspectEditor({
   initial, onSaved, onCancel,
 }: {initial?: Prospect; onSaved: () => void; onCancel?: () => void}) {
+  const registrationKey=useRef<string | null>(null);
   const [values, setValues] = useState<EditValues>(() => initial
     ? {
       full_name:initial.full_name,
@@ -114,7 +115,11 @@ export function ProspectEditor({
         whatsapp_opt_in:values.whatsapp_opt_in,
       };
       if (current) body.version = current.version;
-      else body.upi_ids = values.upi_id.trim() ? [values.upi_id.trim()] : [];
+      else {
+        if (!registrationKey.current) registrationKey.current=crypto.randomUUID();
+        body.request_id=registrationKey.current;
+        body.upi_ids=values.upi_id.trim() ? [values.upi_id.trim()] : [];
+      }
       const csrf = await csrfToken();
       const response = await fetch(
         current ? "/api/admin/prospects/" + current.id : "/api/admin/prospects", {
@@ -135,7 +140,10 @@ export function ProspectEditor({
       }
       const saved:Prospect = await response.json();
       setCurrent(saved);
-      if (!current) setValues({...empty, amount_rupees:values.amount_rupees});
+      if (!current) {
+        registrationKey.current=null;
+        setValues({...empty, amount_rupees:values.amount_rupees});
+      }
       onSaved();
     }catch{
       setError("Connection problem. The save could not be confirmed.");
@@ -181,7 +189,7 @@ export function ProspectEditor({
         <label className="field"><span className="field-label">Mobile number <span className="required">*</span></span><input required type="tel" value={values.mobile_number} onChange={e=>update("mobile_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">WhatsApp number (optional)</span><input type="tel" value={values.whatsapp_number} onChange={e=>update("whatsapp_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">Area / City <span className="required">*</span></span><input required minLength={2} maxLength={120} value={values.area_city} onChange={e=>update("area_city",e.target.value)} placeholder="Enter area or city"/></label>
-        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step="0.01" min="0.01" max="1000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
+        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step="0.01" min="0.01" max="10000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
         <label className="field"><span className="field-label">Next follow-up date</span><input type="date" value={values.next_followup_on} onChange={e=>update("next_followup_on",e.target.value)}/></label>
         <label className="field"><span className="field-label">Last contact date</span><input type="date" value={values.last_contact_on} onChange={e=>update("last_contact_on",e.target.value)}/></label>
         {!current && <label className="field"><span className="field-label">UPI ID (optional)</span><input maxLength={193} value={values.upi_id} onChange={e=>update("upi_id",e.target.value)} placeholder="name@bank"/></label>}

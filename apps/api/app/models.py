@@ -134,6 +134,7 @@ class Prospect(Base):
     __tablename__ = "prospects"
     __table_args__ = (
         UniqueConstraint("organization_id", "id", name="uq_prospects_org_id"),
+        UniqueConstraint("organization_id", "registration_request_id", name="uq_prospect_registration"),
         CheckConstraint("monthly_contribution_paise > 0", name="ck_prospect_amount_positive"),
         CheckConstraint(
             "lifecycle_status IN ('new', 'active', 'inactive')",
@@ -152,6 +153,8 @@ class Prospect(Base):
     area_city: Mapped[str] = mapped_column(String(120), nullable=False)
     monthly_contribution_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
     version: Mapped[int] = mapped_column(nullable=False, default=1)
+    registration_request_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    registration_payload_hash: Mapped[str | None] = mapped_column(String(64))
     next_followup_on: Mapped[date | None] = mapped_column(Date)
     last_contact_on: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(String(1500))

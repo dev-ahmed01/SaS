@@ -6,6 +6,7 @@ Payment lifecycle logic belongs to Phase 06 and verified reconciliation Phase 08
 
 import hashlib
 import hmac
+import json
 import re
 import uuid
 from datetime import date, datetime
@@ -14,6 +15,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
@@ -32,7 +34,7 @@ router = APIRouter(prefix="/v1/prospects", tags=["Admin prospects"])
 
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 VPA = re.compile(r"^[a-z0-9][a-z0-9._-]{1,127}@[a-z0-9][a-z0-9.-]{1,63}$")
-MAX_AMOUNT_PAISE = 100_000_000
+MAX_AMOUNT_PAISE = 1_000_000_000
 
 
 def _clean_text(value: str) -> str:
@@ -83,6 +85,7 @@ class ProspectFields(BaseModel):
 
 class ProspectCreate(ProspectFields):
     upi_ids: list[str] = Field(default_factory=list, max_length=5)
+    request_id: uuid.UUID | None = None
 
 
 class ProspectUpdate(BaseModel):
@@ -314,6 +317,28 @@ def create_prospect(
     response: Response,
 ) -> ProspectRead:
     admin = context[0]
+    # Optional client-supplied registration ID makes browser retries safe even when
+    # a successful response is lost in transit. Never retain the original payload.
+    payload_hash = hashlib.sha256(
+        json.dumps(
+            payload.model_dump(mode="json", exclude={"request_id"}),
+            sort_keys=True, ensure_ascii=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    if payload.request_id is not None:
+        existing = database.scalars(
+            select(Prospect).where(
+                Prospect.organization_id == admin.organization_id,
+                Prospect.registration_request_id == payload.request_id,
+            )
+        ).one_or_none()
+        if existing is not None:
+            if existing.registration_payload_hash != payload_hash:
+                raise HTTPException(status_code=409, detail="Request ID reused with different data")
+            response.status_code = 200
+            response.headers["Cache-Control"] = "no-store"
+            return _read(existing)
+
     settings = database.get(OrganizationSettings, admin.organization_id)
     if settings is None:
         raise HTTPException(status_code=503, detail="Organization settings unavailable")
@@ -325,32 +350,48 @@ def create_prospect(
     ids = [_upi_normalized(raw) for raw in payload.upi_ids]
     if len(set(ids)) != len(ids):
         raise HTTPException(status_code=422, detail="Duplicate UPI identifiers supplied")
-    # Resolve the hashing secret before making any mutations.
     if ids:
         for identifier in ids:
             _upi_digest(identifier)
-    fields = payload.model_dump(exclude={"upi_ids", "monthly_contribution_paise"})
+    fields = payload.model_dump(exclude={
+        "upi_ids", "monthly_contribution_paise", "request_id",
+    })
     prospect = Prospect(
         organization_id=admin.organization_id,
         **fields,
         monthly_contribution_paise=amount,
         lifecycle_status="new",
+        registration_request_id=payload.request_id,
+        registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
     )
-    database.add(prospect)
-    database.flush()
-    for raw in ids:
-        _attach_upi(database, admin, prospect, raw)
-    database.flush()
-    # Relationship is selectin-loaded automatically on read.
-    database.refresh(prospect, attribute_names=["upi_ids"])
-    _audit(database, admin, prospect, "prospect.created", after={
-        "version": 1, "upi_count": len(ids), "status": "new",
-    })
-    database.commit()
+    try:
+        database.add(prospect)
+        database.flush()
+        for raw in ids:
+            _attach_upi(database, admin, prospect, raw)
+        database.flush()
+        database.refresh(prospect, attribute_names=["upi_ids"])
+        _audit(database, admin, prospect, "prospect.created", after={
+            "version": 1, "upi_count": len(ids), "status": "new",
+        })
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        if payload.request_id:
+            same = database.scalars(
+                select(Prospect).where(
+                    Prospect.organization_id == admin.organization_id,
+                    Prospect.registration_request_id == payload.request_id,
+                )
+            ).one_or_none()
+            if same is not None and same.registration_payload_hash == payload_hash:
+                response.status_code = 200
+                response.headers["Cache-Control"] = "no-store"
+                return _read(same)
+        raise HTTPException(status_code=409, detail="Prospect registration conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect)
-
 
 @router.get("/{prospect_id}", response_model=ProspectRead)
 def get_prospect(

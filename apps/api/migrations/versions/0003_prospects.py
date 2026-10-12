@@ -27,6 +27,8 @@ def upgrade() -> None:
         sa.Column("area_city", sa.String(120), nullable=False),
         sa.Column("monthly_contribution_paise", sa.BigInteger(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column("registration_request_id", sa.Uuid()),
+        sa.Column("registration_payload_hash", sa.String(64)),
         sa.Column("next_followup_on", sa.Date(), nullable=True),
         sa.Column("last_contact_on", sa.Date(), nullable=True),
         sa.Column("notes", sa.String(1500), nullable=True),
@@ -47,6 +49,7 @@ def upgrade() -> None:
             server_default=sa.func.now(), nullable=False,
         ),
         sa.UniqueConstraint("organization_id", "id", name="uq_prospects_org_id"),
+        sa.UniqueConstraint("organization_id", "registration_request_id", name="uq_prospect_registration"),
         sa.CheckConstraint(
             "monthly_contribution_paise > 0", name="ck_prospect_amount_positive"
         ),
