@@ -1,9 +1,8 @@
 """Admin-only authentication API: persistent sessions, CSRF, and throttled sign-in."""
 
-import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session

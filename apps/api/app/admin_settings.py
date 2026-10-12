@@ -1,7 +1,7 @@
 """Validated, audited, organization-scoped Admin configuration endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,12 @@ class SettingsPatch(BaseModel):
     sponsor_reminder_day: int | None = Field(None, ge=1, le=28)
     promoter_reminder_day: int | None = Field(None, ge=1, le=28)
     inactivity_months: int | None = Field(None, ge=1, le=24)
+
+    @model_validator(mode="after")
+    def prohibit_null_updates(self) -> "SettingsPatch":
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("Settings cannot be null")
+        return self
 
 
 def settings_body(row: OrganizationSettings) -> dict:
