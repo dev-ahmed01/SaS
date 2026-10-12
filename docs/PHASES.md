@@ -24,7 +24,7 @@ No login that could be mistaken for real authentication; no Admin user seeds; no
 
 ## Open technical hardening before production
 
-- Pin GitHub Actions to verified immutable commit SHAs.
-- Generate and commit a frontend package lock, switch CI to `npm ci`.
+- Keep GitHub Actions pinned to verified immutable commit SHAs and periodically review updates.
+- Keep the frontend `package-lock.json` current through reviewed dependency-update PRs.
 - Integrate secret scanning, dependency audit, lint/accessibility/browser tests, PostgreSQL integration tests and migrations drift check.
 - Introduce structured authorization tests, append-only audit protections, encrypted backups with restoration evidence, and incident/runbook documentation.
