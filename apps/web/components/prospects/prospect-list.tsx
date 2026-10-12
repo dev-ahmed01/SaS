@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ProspectEditor } from "./prospect-editor";
 import type { Prospect, ProspectPage } from "./prospects-types";
 import { Icon } from "../ui/icon";
@@ -37,6 +37,34 @@ export function ProspectList({view}:{view:"inactive"|"all"}) {
   const [error,setError]=useState("");
   const [operation,setOperation]=useState(false);
   const [editing,setEditing]=useState<Prospect|null>(null);
+  const modalRef=useRef<HTMLDivElement>(null);
+
+  useEffect(()=>{
+    if(!editing)return;
+    const previousFocus=document.activeElement as HTMLElement | null;
+    const modal=modalRef.current;
+    modal?.querySelector<HTMLButtonElement>('button[aria-label="Close edit"]')?.focus();
+    function handleKey(event:KeyboardEvent){
+      if(event.key==="Escape"){
+        event.preventDefault();
+        setEditing(null);
+        return;
+      }
+      if(event.key!=="Tab"||!modal)return;
+      const elements=Array.from(modal.querySelectorAll<HTMLElement>(
+        'button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]'
+      )).filter(node=>node.getClientRects().length>0);
+      if(elements.length===0)return;
+      const first=elements[0],last=elements[elements.length-1];
+      if(event.shiftKey && document.activeElement===first){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey && document.activeElement===last){
+        event.preventDefault();first.focus();
+      }
+    }
+    document.addEventListener("keydown",handleKey);
+    return ()=>{document.removeEventListener("keydown",handleKey);previousFocus?.focus();};
+  },[editing]);
 
   useEffect(()=>{
     const timer=setTimeout(()=>{setDebounced(q);setOffset(0);},250);
@@ -122,7 +150,7 @@ export function ProspectList({view}:{view:"inactive"|"all"}) {
       <div className="paging-actions"><button className="btn btn-secondary" disabled={loading||offset===0} onClick={()=>setOffset(n=>Math.max(0,n-20))}>Previous</button><button className="btn btn-secondary" disabled={loading||!records||offset+20>=records.total} onClick={()=>setOffset(n=>n+20)}>Next</button></div>
     </div>
     {editing&&<div className="modal-scrim" role="presentation">
-      <div className="edit-modal" role="dialog" aria-modal="true" aria-label={"Edit "+editing.full_name}>
+      <div ref={modalRef} className="edit-modal" role="dialog" aria-modal="true" aria-label={"Edit "+editing.full_name}>
         <div className="modal-topline"><span>Prospect details</span><button className="icon-button" type="button" aria-label="Close edit" onClick={()=>setEditing(null)}><Icon name="close"/></button></div>
         <ProspectEditor initial={editing} onSaved={()=>{setEditing(null);setRevision(n=>n+1);}} onCancel={()=>setEditing(null)}/>
       </div>
