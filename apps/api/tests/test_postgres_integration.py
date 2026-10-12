@@ -8,7 +8,14 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import AdminUser, AuditEvent, Organization, OrganizationSettings
+from app.models import (
+    AdminUser,
+    AuditEvent,
+    Organization,
+    OrganizationSettings,
+    Prospect,
+    ProspectUpiIdentifier,
+)
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("DATABASE_URL", "").startswith("postgresql+psycopg://"),
@@ -81,6 +88,52 @@ def test_postgres_rejects_invalid_reminder_day() -> None:
                 automation_enabled=False,
             )
         )
+        with pytest.raises(IntegrityError):
+            session.flush()
+        session.rollback()
+    engine.dispose()
+
+
+def test_postgres_prospect_upi_enforces_same_organization() -> None:
+    """A UPI identifier cannot point across organization boundaries at database level."""
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as session:
+        org1 = Organization(name="Prospect integrity A")
+        org2 = Organization(name="Prospect integrity B")
+        session.add_all([org1, org2])
+        session.flush()
+        candidate = Prospect(
+            organization_id=org1.id, full_name="Synthetic Candidate",
+            mobile_number="+919876543210", area_city="Bengaluru",
+            monthly_contribution_paise=25000, whatsapp_opt_in=False,
+            lifecycle_status="new", version=1,
+        )
+        session.add(candidate)
+        session.commit()
+        session.refresh(candidate)
+        wrong_org = ProspectUpiIdentifier(
+            organization_id=org2.id, prospect_id=candidate.id,
+            digest="a" * 64, masked_vpa="s***@upi", is_verified=False,
+        )
+        session.add(wrong_org)
+        with pytest.raises(IntegrityError):
+            session.flush()
+        session.rollback()
+    engine.dispose()
+
+
+def test_postgres_enforces_prospect_status_and_amount_constraints() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as session:
+        org = Organization(name="Prospect status validation")
+        session.add(org)
+        session.flush()
+        session.add(Prospect(
+            organization_id=org.id, full_name="Synthetic Candidate",
+            mobile_number="+919876543210", area_city="Bengaluru",
+            monthly_contribution_paise=0, whatsapp_opt_in=False,
+            lifecycle_status="unknown", version=1,
+        ))
         with pytest.raises(IntegrityError):
             session.flush()
         session.rollback()
