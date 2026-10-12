@@ -252,3 +252,23 @@ def test_upi_key_missing_fails_closed_and_audits_omit_personal_values(system, mo
         assert "Sensitive Test Candidate" not in audit_values
         assert "private" not in audit_values
         assert "payer@oksbi" not in audit_values
+
+
+def test_retried_registration_is_idempotent_and_conflicting_payload_rejected(system):
+    client, engine = system
+    csrf = login(client)
+    registration_key = str(uuid.uuid4())
+    payload = {**BASE, "request_id": registration_key, "upi_ids": ["payer@oksbi"]}
+    first = client.post("/v1/prospects", headers=csrf, json=payload)
+    assert first.status_code == 201, first.text
+    repeat = client.post("/v1/prospects", headers=csrf, json=payload)
+    assert repeat.status_code == 200, repeat.text
+    assert repeat.json()["id"] == first.json()["id"]
+    assert len(repeat.json()["upi_ids"]) == 1
+    tampered = client.post(
+        "/v1/prospects", headers=csrf,
+        json={**payload, "full_name": "Different Person"},
+    )
+    assert tampered.status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 1
