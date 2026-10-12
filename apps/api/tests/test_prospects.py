@@ -12,7 +12,12 @@ from sqlalchemy.pool import StaticPool
 from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
-    AdminUser, AuditEvent, Base, Organization, OrganizationSettings, Prospect,
+    AdminUser,
+    AuditEvent,
+    Base,
+    Organization,
+    OrganizationSettings,
+    Prospect,
     ProspectUpiIdentifier,
 )
 from app.security import hash_password
