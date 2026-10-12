@@ -1,0 +1,1 @@
+"""Sponsor a Salah API."""

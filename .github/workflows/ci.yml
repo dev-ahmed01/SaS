@@ -1,0 +1,48 @@
+name: Phase 1 quality checks
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'phase/**']
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check .
+      - run: python -m pytest -q
+      - name: Migration smoke test
+        env:
+          APP_ENV: test
+          DATABASE_URL: sqlite+pysqlite:///./migration-smoke.sqlite
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
