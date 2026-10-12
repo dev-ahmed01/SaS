@@ -49,7 +49,9 @@ def upgrade() -> None:
             server_default=sa.func.now(), nullable=False,
         ),
         sa.UniqueConstraint("organization_id", "id", name="uq_prospects_org_id"),
-        sa.UniqueConstraint("organization_id", "registration_request_id", name="uq_prospect_registration"),
+        sa.UniqueConstraint(
+            "organization_id", "registration_request_id", name="uq_prospect_registration"
+        ),
         sa.CheckConstraint(
             "monthly_contribution_paise > 0", name="ck_prospect_amount_positive"
         ),

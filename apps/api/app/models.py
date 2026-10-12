@@ -134,7 +134,9 @@ class Prospect(Base):
     __tablename__ = "prospects"
     __table_args__ = (
         UniqueConstraint("organization_id", "id", name="uq_prospects_org_id"),
-        UniqueConstraint("organization_id", "registration_request_id", name="uq_prospect_registration"),
+        UniqueConstraint(
+            "organization_id", "registration_request_id", name="uq_prospect_registration"
+        ),
         CheckConstraint("monthly_contribution_paise > 0", name="ck_prospect_amount_positive"),
         CheckConstraint(
             "lifecycle_status IN ('new', 'active', 'inactive')",

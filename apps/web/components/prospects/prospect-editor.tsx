@@ -27,7 +27,7 @@ function toRupees(paise: number): string {
 }
 
 function toPaise(amount: string): number | null {
-  if (!/^\d{1,7}(?:\.\d{1,2})?$/.test(amount.trim())) return null;
+  if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(amount.trim())) return null;
   const [whole, fraction = ""] = amount.trim().split(".");
   const paise = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   return Number.isSafeInteger(paise) && paise > 0 && paise <= 1000000000 ? paise : null;
