@@ -28,7 +28,7 @@ def environment(monkeypatch: pytest.MonkeyPatch):
     with Session(engine) as database:
         provision_admin(
             database, organization_name="Emlen Foundation",
-            email="admin@foundation.test", password="test-only-very-long-password",
+            email="admin@foundation.org", password="test-only-very-long-password",
         )
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
     monkeypatch.setattr(
@@ -40,7 +40,7 @@ def environment(monkeypatch: pytest.MonkeyPatch):
     engine.dispose()
 
 
-def sign_in(client: TestClient, email: str = "admin@foundation.test") -> str:
+def sign_in(client: TestClient, email: str = "admin@foundation.org") -> str:
     response = client.post(
         "/v1/auth/login", json={"email": email, "password": "test-only-very-long-password"}
     )
@@ -57,7 +57,7 @@ def test_bootstrap_never_seeds_default_password_and_denies_duplicate(environment
     _client, engine = environment
     with Session(engine) as database:
         admin = database.scalars(select(AdminUser)).one()
-        assert admin.email == "admin@foundation.test"
+        assert admin.email == "admin@foundation.org"
         assert admin.password_hash.startswith("$argon2id$")
         assert verify_password(admin.password_hash, "test-only-very-long-password")
         assert "very-long-password" not in admin.password_hash
@@ -81,7 +81,7 @@ def test_signed_out_session_denies_settings_and_user_details(environment) -> Non
 
 def test_login_uses_generic_failures_and_tracks_throttle(environment) -> None:
     client, _engine = environment
-    for email in ["nobody@example.invalid", "admin@foundation.test"]:
+    for email in ["nobody@samplemail.org", "admin@foundation.org"]:
         response = client.post("/v1/auth/login", json={"email": email, "password": "wrong-pass"})
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid email or password"
@@ -93,11 +93,11 @@ def test_login_rate_limit_is_enforced_across_multiple_requests(environment) -> N
     for _ in range(8):
         assert client.post(
             "/v1/auth/login",
-            json={"email": "admin@foundation.test", "password": "wrong-pass"},
+            json={"email": "admin@foundation.org", "password": "wrong-pass"},
         ).status_code == 401
     assert client.post(
         "/v1/auth/login",
-        json={"email": "admin@foundation.test", "password": "test-only-very-long-password"},
+        json={"email": "admin@foundation.org", "password": "test-only-very-long-password"},
     ).status_code == 429
 
 

@@ -5,10 +5,11 @@ import { backendOrigin } from "./admin-backend";
 /** Every module view is server-gated. Merely possessing a cookie does not grant access. */
 export async function requireAdminSession(): Promise<void> {
   const token = (await cookies()).get("sas_session")?.value;
-  if (!token || !backendOrigin()) redirect("/login");
+  const backend = backendOrigin();
+  if (!token || !backend) redirect("/login");
   let authenticated = false;
   try {
-    const response = await fetch(backendOrigin() + "/v1/auth/session", {
+    const response = await fetch(backend + "/v1/auth/session", {
       method: "GET",
       headers: { Cookie: "sas_session=" + encodeURIComponent(token) },
       cache: "no-store",

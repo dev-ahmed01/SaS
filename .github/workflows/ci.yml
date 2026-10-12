@@ -18,8 +18,7 @@ jobs:
           POSTGRES_USER: sas_ci
           POSTGRES_PASSWORD: sas_ci_ephemeral_password
           POSTGRES_DB: sas_ci
-        ports:
-          - 5432:5432
+        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U sas_ci -d sas_ci"
           --health-interval 5s
@@ -55,8 +54,27 @@ jobs:
           python -m alembic upgrade head
           python -m alembic check
           python -m pytest -q tests/test_postgres_integration.py
+
   frontend:
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://sas_ci:sas_ci_ephemeral_password@localhost:5432/sas_ci
+      AUTH_SECRET: ci-only-ephemeral-secret-session-value-1234567890
+      API_INTERNAL_URL: http://127.0.0.1:8000
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sas_ci
+          POSTGRES_PASSWORD: sas_ci_ephemeral_password
+          POSTGRES_DB: sas_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sas_ci -d sas_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     defaults:
       run:
         working-directory: apps/web
@@ -65,10 +83,44 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - name: Install backend for browser integration
+        working-directory: apps/api
+        run: python -m pip install -r requirements-dev.txt
+      - name: Migrate test PostgreSQL
+        working-directory: apps/api
+        run: python -m alembic upgrade head
+      - name: Provision synthetic Admin for browser tests
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          from sqlalchemy.orm import Session
+          from app.bootstrap_admin import provision_admin
+          from app.db import get_engine
+          with Session(get_engine()) as db:
+              provision_admin(
+                  db,
+                  email="admin@foundation.org",
+                  password="integration-only-long-password-123",
+                  organization_name="CI Test Foundation"
+              )
+          PY
+      - name: Start API for browser integration
+        working-directory: apps/api
+        run: |
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/sas-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health/ready; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sas-api.log
+          exit 1
       - name: Install browser testing tools (CI-only)
         run: npm install --no-save --no-package-lock @playwright/test@1.56.1
       - name: Install Chromium
