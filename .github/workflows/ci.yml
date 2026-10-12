@@ -44,5 +44,14 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - name: Bootstrap lockfile artifact for initial repository
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const content = fs.readFileSync('package-lock.json').toString('base64');
+          for (let i = 0; i < content.length; i += 2000) {
+            console.log('SASLOCK:' + String(i / 2000).padStart(3, '0') + ':' + content.slice(i, i + 2000));
+          }
+          NODE
       - run: npm run typecheck
       - run: npm run build
