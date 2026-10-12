@@ -37,7 +37,7 @@ npm run dev
 
 Open `http://localhost:3000`; API liveness: `http://localhost:8000/health/live`; database readiness: `http://localhost:8000/health/ready`.
 
-**Local-only bootstrap:** Phase 03 will introduce Admin provisioning and secure login. No default credentials are installed. `npm install` currently resolves from pinned package versions; commit an npm lockfile before a production deployment to enable `npm ci` and dependency reproducibility.
+**Local-only bootstrap:** Phase 03 will introduce Admin provisioning and secure login. No default credentials are installed. A committed `package-lock.json` enables reproducible `npm ci` installs in CI and deployments.
 
 ## Test
 
