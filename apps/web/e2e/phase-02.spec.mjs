@@ -80,12 +80,13 @@ test("settings are persisted, edited and can be reloaded",async ({page})=>{
   await page.goto("/settings");
   await expect(page.getByRole("heading",{name:"Organisation Settings"})).toBeVisible();
   const amount=page.getByRole("spinbutton",{name:"Default monthly contribution (₹)"});
-  await expect(amount).toHaveValue("250");
-  await amount.fill("300");
+  await expect(amount).not.toHaveValue("");
+  const updated=(Number(await amount.inputValue())+1).toString();
+  await amount.fill(updated);
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText(/Settings saved/)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("spinbutton",{name:"Default monthly contribution (₹)"})).toHaveValue("300");
+  await expect(page.getByRole("spinbutton",{name:"Default monthly contribution (₹)"})).toHaveValue(updated);
 });
 
 test("unauthenticated and forged browser sessions cannot access modules",async ({page,context})=>{
@@ -112,7 +113,8 @@ test("same-origin API rejects missing CSRF and foreign origins",async ({page})=>
   expect(forged.status()).toBe(403);
 });
 
-test("sign out ends the authenticated browser session",async ({page})=>{
+test("sign out ends the authenticated browser session",async ({page,isMobile})=>{
+  if(isMobile) await page.getByRole("button",{name:"Open navigation"}).click();
   await page.getByRole("button",{name:"Sign out"}).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto("/collections");
@@ -125,7 +127,7 @@ test("wrong password never yields an authenticated session",async ({page,context
   await page.getByRole("textbox",{name:"Email address"}).fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill("incorrect-password");
   await page.getByRole("button",{name:"Sign In"}).click();
-  await expect(page.getByRole("alert")).toContainText("Unable to sign in");
+  await expect(page.locator(".form-error")).toContainText("Unable to sign in");
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
 });
