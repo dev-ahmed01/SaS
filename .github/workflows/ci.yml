@@ -15,8 +15,8 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: '3.12'
           cache: pip
@@ -39,19 +39,10 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - name: Bootstrap lockfile artifact for initial repository
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const content = fs.readFileSync('package-lock.json').toString('base64');
-          for (let i = 0; i < content.length; i += 2000) {
-            console.log('SASLOCK:' + String(i / 2000).padStart(3, '0') + ':' + content.slice(i, i + 2000));
-          }
-          NODE
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build
