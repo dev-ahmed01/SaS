@@ -24,7 +24,24 @@ async function forward(request: NextRequest, context: { params: Promise<{ action
     // Reject cross-origin requests before forwarding session cookies or issuing login cookies.
     // Browser JS automatically sets the Origin header for JSON mutations.
     const origin = request.headers.get("origin");
-    if (!origin || origin !== request.nextUrl.origin) {
+    const host = request.headers.get("host");
+    const configuredOrigin = process.env.APP_PUBLIC_ORIGIN;
+    let trustedOrigin = false;
+    try {
+      const submitted = new URL(origin ?? "");
+      // Match the actual inbound Host header: NextRequest.nextUrl may be
+      // internally normalized to localhost behind a proxy or in CI.
+      // APP_PUBLIC_ORIGIN adds an exact production-origin restriction.
+      trustedOrigin = Boolean(
+        host &&
+        submitted.host === host &&
+        (submitted.protocol === "https:" || submitted.protocol === "http:") &&
+        (!configuredOrigin || submitted.origin === configuredOrigin)
+      );
+    } catch {
+      trustedOrigin = false;
+    }
+    if (!trustedOrigin) {
       return NextResponse.json({detail:"Origin verification failed"}, {status:403,headers:noStore});
     }
     const contentType = request.headers.get("content-type") ?? "";
