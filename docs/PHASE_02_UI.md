@@ -8,18 +8,19 @@ This phase creates the shared, responsive Next.js presentation layer based on th
 
 ## Architecture
 
-- `components/ui/icon.tsx`: accessible decorative icon library.
+- `components/ui/icon.tsx`: decorative icon set.
 - `components/ui/primitives.tsx`: shared page header, horizontal tabs, form controls, panels, empty data tables, inactive buttons.
-- `components/app-shell.tsx`: coherent desktop sidebar, collapse, accessible mobile drawer, focusable skip link.
-- `components/module-workspace.tsx`: declared module layouts from tab/form/table definitions. Avoid independent copies of the same controls.
+- `components/app-shell.tsx`: coherent desktop sidebar, collapse, mobile drawer, focusable skip link.
+- `components/module-workspace.tsx`: declared module layouts from tab/form/table definitions.
 - `app/[module]/[[...view]]/page.tsx`: Next.js route validation.
-- `app/globals.css`: fonts, tokens and responsive visual patterns.
+- `app/globals.css`: fonts, tokens and responsive design.
+- `e2e/phase-02.spec.ts`: browser checks for real navigation, responsive behavior and disabled controls.
 
 ## Visual lock
 
 Use Bricolage Grotesque 700 for page headings, 600 for section/card headings, Poppins 400 for descriptions, 500 for navigation/labels/buttons, 400–500 for tables, 600 for financial figures. Deep forest green `#075943`, warm white, pale mint, quiet grey boundaries. No bottom navigation. Mosque motifs remain limited to decorative sidebar/login CSS silhouettes.
 
-## Financial/authenticity safety
+## Safety of preview
 
 No real Admin sign-in, message sending, bank uploads, or collection saves exist in Phase 02. These controls are visibly disabled and preview notices are present. Dashboard figures use em dashes, not invented monetary totals. Production data integration belongs in phases 03–12.
 
@@ -31,9 +32,12 @@ npm ci
 npm test
 npm run typecheck
 npm run build
+npm install --no-save --no-package-lock @playwright/test@1.56.1
+npx playwright install chromium
+npx playwright test
 ```
 
-A full pixel-level screenshot comparison and assisted-technology/browser audit require Playwright/axe installation and are a follow-up quality gate before the UI is accepted for production. Do not claim these audits passed based on source-only tests.
+CI runs Chromium browser smoke tests for desktop and mobile. Pixel-perfect snapshot comparison with the approved graphic boards and assistive-technology audits still require stakeholder visual review before production.
 
 ## Exit criteria
 
@@ -41,4 +45,4 @@ A full pixel-level screenshot comparison and assisted-technology/browser audit r
 - Single shared design system and desktop/mobile navigation.
 - Keyboard-accessible navigation, proper link active state, skip link, responsive CSS and reduced-motion support.
 - No misleading functional financial or sign-in actions.
-- CI passes. Screens receive stakeholder visual review before Phase 03.
+- CI passes; stakeholder visual review before Phase 03.

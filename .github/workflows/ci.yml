@@ -69,3 +69,9 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - name: Install browser testing tools (CI-only)
+        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run desktop and mobile browser tests
+        run: npx playwright test
