@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "staging", "production"] = "development"
     database_url: str
+    auth_secret: str | None = None
 
     @model_validator(mode="after")
     def validate_production_database(self) -> "Settings":
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
             "postgresql+psycopg://"
         ):
             raise ValueError("Staging and production require PostgreSQL via psycopg")
+        if self.app_env in ("staging", "production") and (not self.auth_secret or len(self.auth_secret) < 32):
+            raise ValueError("Staging and production require AUTH_SECRET of at least 32 characters")
         return self
 
 
