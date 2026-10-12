@@ -4,16 +4,20 @@ Financial and sponsor entities arrive in reviewed, versioned migrations in later
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Date,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     String,
+    Index,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -122,3 +126,78 @@ class AdminLoginAttempt(Base):
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+
+class Prospect(Base):
+    """Sponsor candidate. Status is payment-derived in Phase 06, never editable in Phase 04."""
+
+    __tablename__ = "prospects"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_prospects_org_id"),
+        CheckConstraint("monthly_contribution_paise > 0", name="ck_prospect_amount_positive"),
+        CheckConstraint(
+            "lifecycle_status IN ('new', 'active', 'inactive')",
+            name="ck_prospect_lifecycle_status",
+        ),
+        Index("ix_prospects_org_status", "organization_id", "lifecycle_status", "archived_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
+    whatsapp_number: Mapped[str | None] = mapped_column(String(16))
+    area_city: Mapped[str] = mapped_column(String(120), nullable=False)
+    monthly_contribution_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    next_followup_on: Mapped[date | None] = mapped_column(Date)
+    last_contact_on: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str | None] = mapped_column(String(1500))
+    whatsapp_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(12), nullable=False, default="new")
+    last_verified_payment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        onupdate=func.now(),
+    )
+    upi_ids: Mapped[list["ProspectUpiIdentifier"]] = relationship(
+        back_populates="prospect", cascade="save-update, merge", lazy="selectin"
+    )
+
+
+class ProspectUpiIdentifier(Base):
+    """Only a keyed digest and a masked VPA are stored, never its raw value."""
+
+    __tablename__ = "prospect_upi_ids"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="CASCADE",
+            name="fk_prospect_upi_same_org",
+        ),
+        UniqueConstraint("prospect_id", "digest", name="uq_prospect_upi_digest"),
+        Index("ix_prospect_upi_org_digest", "organization_id", "digest"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    masked_vpa: Mapped[str] = mapped_column(String(130), nullable=False)
+    # Always false until a bank/provider verification flow is implemented.
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    prospect: Mapped[Prospect] = relationship(back_populates="upi_ids")

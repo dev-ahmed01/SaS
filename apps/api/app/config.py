@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "staging", "production"] = "development"
     database_url: str
     auth_secret: str | None = None
+    upi_match_secret: str | None = None
 
     @model_validator(mode="after")
     def validate_production_database(self) -> "Settings":
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
             not self.auth_secret or len(self.auth_secret) < 32
         ):
             raise ValueError("Staging and production require AUTH_SECRET of at least 32 characters")
+        if self.app_env in ("staging", "production") and (
+            not self.upi_match_secret or len(self.upi_match_secret) < 32
+        ):
+            raise ValueError("Staging and production require UPI_MATCH_SECRET of 32+ characters")
         return self
 
 

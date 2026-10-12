@@ -7,11 +7,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.admin_settings import router as settings_router
 from app.auth import router as auth_router
+from app.prospects import router as prospects_router
 from app.db import get_engine
 
 app = FastAPI(title="Sponsor a Salah API", version="0.3.0", docs_url=None, redoc_url=None)
 app.include_router(auth_router)
 app.include_router(settings_router)
+app.include_router(prospects_router)
 
 
 @app.get("/health/live", tags=["health"])
