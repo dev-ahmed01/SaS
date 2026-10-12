@@ -12,7 +12,7 @@ async function logIn(page) {
   await page.goto("/login");
   await page.getByRole("textbox",{name:"Email address"}).fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
-  const loginResponse = page.waitForResponse(r => r.url().endsWith("/api/admin/login"));
+  const loginResponse = page.waitForResponse(r => r.url().endsWith("/api/admin/login"),{timeout:5000});
   await page.getByRole("button",{name:"Sign In"}).click();
   const response=await loginResponse;
   if(response.status()!==200) {
