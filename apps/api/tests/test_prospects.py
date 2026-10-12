@@ -1,5 +1,6 @@
 """Tenant-bound Prospects API acceptance tests, using synthetic data."""
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -118,7 +119,7 @@ def test_search_filter_soft_delete_restore_and_version_conflict(system):
         client, csrf, full_name="Sana Sheikh", mobile_number="+919888877766"
     ).json()
     with Session(engine) as db:
-        record = db.get(Prospect, first["id"])
+        record = db.get(Prospect, uuid.UUID(first["id"]))
         record.lifecycle_status = "inactive"
         db.commit()
     assert client.get("/v1/prospects?status=inactive").json()["total"] == 1
