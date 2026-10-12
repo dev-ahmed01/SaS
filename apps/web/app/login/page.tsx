@@ -12,7 +12,7 @@ export default function LoginPage() {
   useEffect(()=>{
     let active=true;
     fetch("/api/admin/session",{cache:"no-store"}).then(r=>{
-      if(active && r.ok){router.replace("/prospects");router.refresh();}
+      if(active && r.ok){router.replace("/prospects");}
     }).catch(()=>{});
     return ()=>{active=false;};
   },[router]);
@@ -30,7 +30,7 @@ export default function LoginPage() {
         return;
       }
       router.replace("/prospects");
-      router.refresh();
+      
     } catch {
       setError("Connection problem. Please try again.");
     } finally {setBusy(false);}
