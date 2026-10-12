@@ -1,4 +1,4 @@
-"""Minimal operational probes. Business endpoints require Phase-3 authentication first."""
+"""Operational probes and authenticated Sponsor a Salah business endpoints."""
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -10,7 +10,7 @@ from app.auth import router as auth_router
 from app.db import get_engine
 from app.prospects import router as prospects_router
 
-app = FastAPI(title="Sponsor a Salah API", version="0.3.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="Sponsor a Salah API", version="0.4.0", docs_url=None, redoc_url=None)
 app.include_router(auth_router)
 app.include_router(settings_router)
 app.include_router(prospects_router)

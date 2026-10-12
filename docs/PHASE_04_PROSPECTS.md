@@ -14,7 +14,7 @@ A candidate can register before paying, so the initial lifecycle status is **New
 - Status and first-payment history columns reserved for the future accounting engine
 - Optional multiple UPI identifiers (up to five), stored as **HMAC-SHA256 digests** with **masked display only**; IDs are **unverified** until bank/statement reconciliation
 
-The full payer UPI ID is never persisted in this module. Reconciliation in Phase 08 can apply the same digest to the normalized incoming bank VPA and compare equality. **A shared payer ID does not establish which sponsor paid**: where a payer funds two sponsors, the match will remain ambiguous and require Admin review.
+Registration uses an optional UUID request ID so client retries return the same record rather than duplicating a donor; conflicting reuse is rejected.\n\nThe full payer UPI ID is never persisted in this module. Reconciliation in Phase 08 can apply the same digest to the normalized incoming bank VPA and compare equality. **A shared payer ID does not establish which sponsor paid**: where a payer funds two sponsors, the match will remain ambiguous and require Admin review.
 
 **UPI_MATCH_SECRET** must remain stable across deployments. Set a unique 32+ character secret for staging/production, separately from AUTH_SECRET. A key change requires a controlled re-registration or multi-key rotation strategy. Never commit real secrets or bank statements.
 
