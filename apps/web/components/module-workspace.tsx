@@ -36,7 +36,7 @@ function FormPreview({definition}:{definition:typeof definitions[Module]}) {
   const fields=definition.fields;
   return <Panel title={"Add "+definition.singular}>
     <p className="panel-description">Enter the details for this {definition.singular.toLowerCase()}.</p>
-    <form aria-label={"Add "+definition.singular+" form preview"} onSubmit={e=>e.preventDefault()}>
+    <form aria-label={"Add "+definition.singular+" form preview"}>
       <fieldset className="preview-fieldset" disabled><legend className="sr-only">Form preview — cannot submit</legend>
         <div className="form-grid">{fields.map(field=><div key={field.label} className={"form-cell"+(field.kind==="textarea"?" full":"")}>
           {field.kind==="textarea"?<label className="field"><span className="field-label">{field.label}</span><textarea disabled rows={3} placeholder={field.placeholder}/></label>
