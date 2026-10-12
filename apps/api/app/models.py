@@ -86,4 +86,6 @@ class AuditEvent(Base):
     entity_id: Mapped[str] = mapped_column(String(80), nullable=False)
     before_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     after_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
