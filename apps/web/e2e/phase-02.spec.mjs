@@ -40,7 +40,7 @@ test("all seven approved modules have a secure navigable destination",async ({pa
 });
 
 test("approved tabs remain functional and preview saves stay disabled",async ({page})=>{
-  await expect(page.getByRole("button",{name:"Save Prospect"})).toBeDisabled();
+  await expect(page.getByRole("button",{name:"Add Prospect"})).toBeEnabled();
   await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Inactive"}).click();
   await expect(page.getByRole("heading",{name:"Inactive Prospects"})).toBeVisible();
   await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"All Prospects"}).click();
@@ -130,4 +130,49 @@ test("wrong password never yields an authenticated session",async ({page,context
   await expect(page.locator(".form-error")).toContainText("Unable to sign in");
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
+});
+
+test("Admin registers and searches a new prospect without fake payment status",async ({page})=>{
+  const label="Phase4 Browser Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(label);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+  const search=page.getByRole("textbox",{name:"Search prospects"});
+  await search.fill(label);
+  const row=page.getByRole("row",{name:new RegExp(label)});
+  await expect(row).toBeVisible();
+  await expect(row.getByText("New",{exact:true})).toBeVisible();
+  await expect(row.getByText("+919876543210")).toBeVisible();
+  await row.getByRole("button",{name:"Edit"}).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("dialog").getByRole("textbox",{name:"Notes"}).fill("Synthetic test note");
+  await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await search.fill(label);
+  await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
+});
+
+test("Admin can archive and restore a prospect without deleting its record",async ({page})=>{
+  const label="Archive Browser Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(label);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543201");
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+  const search=page.getByRole("textbox",{name:"Search prospects"});
+  await search.fill(label);
+  let row=page.getByRole("row",{name:new RegExp(label)});
+  await expect(row).toBeVisible();
+  page.once("dialog",dialog=>dialog.accept());
+  await row.getByRole("button",{name:"Archive"}).click();
+  await expect(row).toHaveCount(0);
+  await page.getByRole("checkbox",{name:"Show archived"}).check();
+  row=page.getByRole("row",{name:new RegExp(label)});
+  await expect(row).toBeVisible();
+  await row.getByRole("button",{name:"Restore"}).click();
+  await expect(row.getByRole("button",{name:"Archive"})).toBeVisible();
 });

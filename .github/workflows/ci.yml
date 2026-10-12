@@ -61,6 +61,7 @@ jobs:
       APP_ENV: test
       DATABASE_URL: postgresql+psycopg://sas_ci:sas_ci_ephemeral_password@localhost:5432/sas_ci
       AUTH_SECRET: ci-only-ephemeral-secret-session-value-1234567890
+      UPI_MATCH_SECRET: ci-only-ephemeral-upi-match-key-long-enough-1234567890
       API_INTERNAL_URL: http://127.0.0.1:8000
     services:
       postgres:
