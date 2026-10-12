@@ -125,6 +125,22 @@ jobs:
         run: npm install --no-save --no-package-lock @playwright/test@1.56.1
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Verify browser gateway origin routing
+        run: |
+          npm run start -- -p 3001 -H 127.0.0.1 > /tmp/sas-gateway-probe.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:3001/login >/dev/null; then break; fi
+            sleep 1
+          done
+          code=$(curl --silent --show-error --output /tmp/sas-invalid-login-body --write-out '%{http_code}' \
+            --header 'Content-Type: application/json' \
+            --header 'Origin: http://127.0.0.1:3001' \
+            --data '{"email":"nobody@samplemail.org","password":"wrong"}' \
+            http://127.0.0.1:3001/api/admin/login)
+          echo "Invalid-login gateway HTTP status: $code (expected 401)"
+          if [ "$code" != "401" ]; then cat /tmp/sas-invalid-login-body; exit 1; fi
       - name: Fail-fast authenticated browser smoke
         run: npx playwright test --grep "all seven approved modules"
       - name: Run desktop and mobile browser tests
