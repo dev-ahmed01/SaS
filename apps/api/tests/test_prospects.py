@@ -1,0 +1,168 @@
+"""Tenant-bound Prospects API acceptance tests, using synthetic data."""
+
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from app.bootstrap_admin import provision_admin
+from app.main import app
+from app.models import Base, Prospect, ProspectUpiIdentifier
+
+BASE = {
+    "full_name": "Ayesha Khan",
+    "mobile_number": "+919876543210",
+    "area_city": "Bengaluru",
+}
+
+
+@pytest.fixture
+def system(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org", password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="synthetic-auth-secret-more-than-thirty-two-characters",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(
+            upi_match_secret="synthetic-independent-upi-hmac-key-for-tests",
+        ),
+    )
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
+
+
+def login(client):
+    response = client.post(
+        "/v1/auth/login",
+        json={"email": "office@foundation.org", "password": "synthetic-long-admin-password"},
+    )
+    assert response.status_code == 200
+    return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+
+
+def create(client, csrf, **changes):
+    return client.post("/v1/prospects", json={**BASE, **changes}, headers=csrf)
+
+
+def test_requires_admin_csrf_and_starts_new(system):
+    client, engine = system
+    assert client.get("/v1/prospects").status_code == 401
+    assert client.post("/v1/prospects", json=BASE).status_code == 401
+    csrf = login(client)
+    assert client.post("/v1/prospects", json=BASE).status_code == 403
+    r = create(client, csrf)
+    assert r.status_code == 201, r.text
+    item = r.json()
+    assert item["lifecycle_status"] == "new"
+    assert item["monthly_contribution_paise"] == 25000
+    assert item["version"] == 1
+    assert not item["upi_ids"]
+    assert client.patch(
+        "/v1/prospects/" + item["id"],
+        headers=csrf, json={"version": 1, "lifecycle_status": "active"},
+    ).status_code == 422
+    with Session(engine) as db:
+        assert db.scalars(select(Prospect)).one().lifecycle_status == "new"
+
+
+def test_upi_is_not_stored_in_plaintext_and_can_be_revoked(system):
+    client, engine = system
+    csrf = login(client)
+    r = create(client, csrf, upi_ids=["Ahmed123@oksbi"])
+    assert r.status_code == 201, r.text
+    item = r.json()
+    assert len(item["upi_ids"]) == 1
+    assert not item["upi_ids"][0]["is_verified"]
+    assert "Ahmed123" not in r.text
+    with Session(engine) as db:
+        rec = db.scalars(select(ProspectUpiIdentifier)).one()
+        assert len(rec.digest) == 64
+        assert "ahmed123" not in str(rec.__dict__).lower()
+    path = "/v1/prospects/" + item["id"] + "/upi-ids"
+    uid = item["upi_ids"][0]["id"]
+    revoked = client.delete(path + "/" + uid, headers={**csrf, "If-Match": "1"})
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["upi_ids"] == []
+    restored = client.post(
+        path, headers=csrf, json={"upi_id": "ahmed123@oksbi", "version": 2}
+    )
+    assert restored.status_code == 201, restored.text
+    assert restored.json()["upi_ids"][0]["id"] == uid
+
+
+def test_search_filter_soft_delete_restore_and_version_conflict(system):
+    client, engine = system
+    csrf = login(client)
+    first = create(client, csrf).json()
+    second = create(
+        client, csrf, full_name="Sana Sheikh", mobile_number="+919888877766"
+    ).json()
+    with Session(engine) as db:
+        record = db.get(Prospect, first["id"])
+        record.lifecycle_status = "inactive"
+        db.commit()
+    assert client.get("/v1/prospects?status=inactive").json()["total"] == 1
+    assert client.get("/v1/prospects?q=sheikh").json()["items"][0]["id"] == second["id"]
+    assert client.get("/v1/prospects?limit=1").json()["total"] == 2
+    assert client.get("/v1/prospects?q=%25").json()["total"] == 0
+    assert client.get("/v1/prospects?limit=101").status_code == 422
+    edit = client.patch(
+        "/v1/prospects/" + second["id"],
+        headers=csrf, json={"version": 1, "notes": "Call next week"},
+    )
+    assert edit.status_code == 200
+    assert edit.json()["version"] == 2
+    assert client.patch(
+        "/v1/prospects/" + second["id"],
+        headers=csrf, json={"version": 1, "notes": "stale"},
+    ).status_code == 409
+    assert client.delete(
+        "/v1/prospects/" + first["id"], headers={**csrf, "If-Match": "1"}
+    ).status_code == 204
+    assert client.get("/v1/prospects?status=inactive").json()["total"] == 0
+    assert client.get("/v1/prospects?include_archived=true").json()["total"] == 2
+    assert client.post(
+        "/v1/prospects/" + first["id"] + "/restore",
+        headers={**csrf, "If-Match": "2"},
+    ).status_code == 200
+    assert client.get("/v1/prospects?status=inactive").json()["total"] == 1
+
+
+def test_input_validation_and_no_unverified_status_setting(system):
+    client, engine = system
+    csrf = login(client)
+    assert create(client, csrf, mobile_number="invalid").status_code == 422
+    assert create(client, csrf, upi_ids=["bad-UPI"]).status_code == 422
+    assert create(client, csrf, upi_ids=["payer@oksbi", "PAYER@oksbi"]).status_code == 422
+    item = create(client, csrf).json()
+    path = "/v1/prospects/" + item["id"]
+    assert client.patch(path, headers=csrf, json={"version": 1}).status_code == 422
+    assert client.patch(
+        path, headers=csrf, json={"version": 1, "full_name": None}
+    ).status_code == 422
+    assert client.patch(
+        path, headers=csrf, json={"version": 1, "mobile_number": "111"}
+    ).status_code == 422
+    assert client.delete(path, headers=csrf).status_code == 428
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 1
