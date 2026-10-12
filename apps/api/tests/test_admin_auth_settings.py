@@ -73,7 +73,10 @@ def test_signed_out_session_denies_settings_and_user_details(environment) -> Non
     client, _engine = environment
     assert client.get("/v1/settings").status_code == 401
     assert client.get("/v1/auth/session").status_code == 401
-    assert client.patch("/v1/settings", json={"default_contribution_paise": 30000}).status_code == 401
+    assert (
+        client.patch("/v1/settings", json={"default_contribution_paise": 30000}).status_code
+        == 401
+    )
 
 
 def test_login_uses_generic_failures_and_tracks_throttle(environment) -> None:
@@ -136,10 +139,16 @@ def test_settings_changes_are_audited_and_other_keys_cannot_be_set(environment) 
     assert response.json()["sponsor_reminder_day"] == 6
     assert response.json()["automation_enabled"] is False
     with Session(engine) as database:
-        events = database.scalars(select(AuditEvent).where(AuditEvent.action == "settings.updated")).all()
+        events = database.scalars(
+            select(AuditEvent).where(AuditEvent.action == "settings.updated")
+        ).all()
         assert len(events) == 1
-        assert events[0].before_data == {"default_contribution_paise": 25000, "sponsor_reminder_day": 5}
-        assert events[0].after_data == {"default_contribution_paise": 30000, "sponsor_reminder_day": 6}
+        assert events[0].before_data == {
+            "default_contribution_paise": 25000, "sponsor_reminder_day": 5
+        }
+        assert events[0].after_data == {
+            "default_contribution_paise": 30000, "sponsor_reminder_day": 6
+        }
         assert events[0].actor_admin_id is not None
     for invalid in [
         {"currency_code": "USD"},

@@ -6,7 +6,7 @@ There are no JWTs in browser storage, no default passwords, and no ambient Admin
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
@@ -19,11 +19,13 @@ _UNKNOWN_ADMIN_HASH = PASSWORD_HASHER.hash(secrets.token_urlsafe(28))
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def as_utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def hash_password(password: str) -> str:

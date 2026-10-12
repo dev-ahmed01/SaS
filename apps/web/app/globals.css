@@ -209,3 +209,16 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(prefers-reduced-motion:reduce) {
   *, *::before, *::after { scroll-behavior:auto!important; transition:none!important; }
 }
+
+/* Phase 03: authenticated administrative controls; retains locked palette and type scales. */
+.form-error { margin:12px 0; border-radius:6px; padding:9px 12px; background:#fff2f3; color:#a62135; font-size:12px; text-align:left; }
+.form-success { margin:14px 0; padding:10px 12px; color:#075943; background:#eef9f1; border:1px solid #cde9d5; border-radius:6px; font-size:12px; }
+.sidebar-logout { display:flex; gap:10px; align-items:center; margin:8px 4px 0; padding:9px 11px; border:0; background:transparent; color:#335c4b; border-radius:7px; font:500 12px var(--font-body); text-align:left; }
+.sidebar-logout:hover { background:var(--mint); }
+.logout-error { font-size:10px; color:var(--danger); }
+.readonly-settings { display:grid; gap:7px; margin-top:23px; padding:18px; border-radius:7px; background:var(--mint-light); }
+.readonly-settings div { display:flex; align-items:center; justify-content:space-between; gap:15px; font-size:12px; }
+.readonly-settings strong { font-weight:500; }
+.readonly-settings span { color:var(--muted); text-align:right; }
+.settings-help { display:flex; align-items:flex-start; gap:8px; margin:19px 0 0; font-size:11px; color:var(--muted); }
+.settings-help svg { flex:0 0 auto; }

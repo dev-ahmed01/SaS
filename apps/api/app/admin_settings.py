@@ -1,5 +1,7 @@
 """Validated, audited, organization-scoped Admin configuration endpoints."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
@@ -49,8 +51,8 @@ def settings_body(row: OrganizationSettings) -> dict:
 @router.get("")
 def read_settings(
     response: Response,
-    context: tuple[AdminUser, AdminSession, str] = Depends(get_admin),
-    database: Session = Depends(db_session),
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
 ) -> dict:
     admin = context[0]
     row = database.get(OrganizationSettings, admin.organization_id)
@@ -63,8 +65,8 @@ def read_settings(
 @router.patch("")
 def update_settings(
     patch: SettingsPatch, response: Response,
-    context: tuple[AdminUser, AdminSession, str] = Depends(require_csrf),
-    database: Session = Depends(db_session),
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
 ) -> dict:
     admin = context[0]
     row = database.scalars(

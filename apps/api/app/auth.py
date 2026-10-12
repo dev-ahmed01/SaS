@@ -1,6 +1,7 @@
 """Admin-only authentication API: persistent sessions, CSRF, and throttled sign-in."""
 
 from datetime import timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -45,7 +46,7 @@ def auth_secret() -> str:
 
 
 def get_admin(
-    request: Request, database: Session = Depends(db_session)
+    request: Request, database: Annotated[Session, Depends(db_session)]
 ) -> tuple[AdminUser, AdminSession, str]:
     raw_token = request.cookies.get(COOKIE_NAME)
     if not raw_token or len(raw_token) > 120:
@@ -63,7 +64,7 @@ def get_admin(
 
 def require_csrf(
     request: Request,
-    context: tuple[AdminUser, AdminSession, str] = Depends(get_admin),
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
 ) -> tuple[AdminUser, AdminSession, str]:
     if not compare_csrf(request.headers.get("x-csrf-token"), context[2], auth_secret()):
         raise HTTPException(status_code=403, detail="CSRF verification failed")
@@ -85,7 +86,7 @@ def _audit(database: Session, admin: AdminUser, action: str) -> None:
 @router.post("/login", status_code=200)
 def login(
     payload: Credentials, request: Request, response: Response,
-    database: Session = Depends(db_session),
+    database: Annotated[Session, Depends(db_session)],
 ) -> dict[str, str]:
     secret = auth_secret()
     email = payload.email.strip().lower()
@@ -146,8 +147,8 @@ def login(
 @router.get("/session")
 def current_session(
     response: Response,
-    context: tuple[AdminUser, AdminSession, str] = Depends(get_admin),
-    database: Session = Depends(db_session),
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
 ) -> dict[str, str]:
     admin, _record, token = context
     organization = database.get(Organization, admin.organization_id)
@@ -162,8 +163,8 @@ def current_session(
 @router.post("/logout")
 def logout(
     response: Response,
-    context: tuple[AdminUser, AdminSession, str] = Depends(require_csrf),
-    database: Session = Depends(db_session),
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
 ) -> dict[str, str]:
     admin, record, _token = context
     record.revoked_at = utc_now()

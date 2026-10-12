@@ -41,7 +41,9 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_admin_login_attempts_email_hash", "admin_login_attempts", ["email_hash"])
-    op.create_index("ix_admin_login_attempts_network_hash", "admin_login_attempts", ["network_hash"])
+    op.create_index(
+        "ix_admin_login_attempts_network_hash", "admin_login_attempts", ["network_hash"]
+    )
     op.create_index("ix_admin_login_attempts_occurred_at", "admin_login_attempts", ["occurred_at"])
 
 

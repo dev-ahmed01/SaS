@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "./app-shell";
 import { EmptyTable, ModuleTabs, PageHeading, Panel, PhaseNotice, PreviewButton, SelectField, TextField } from "./ui/primitives";
 import { Icon } from "./ui/icon";
+import { AdminSettingsForm } from "./admin-settings-form";
 
 type Field = {label:string; placeholder:string; required?:boolean; kind?:"text"|"date"|"number"|"tel"|"email"|"select"|"textarea"};
 type Module = "prospects" | "promoters" | "collections" | "payouts";
@@ -91,10 +92,8 @@ function Dashboard() {
 }
 
 function Settings() {
-  const options=[["Profile","Admin account and sign-in settings"],["Organisation","Masjid identity and payment details"],["Reminder Settings","Schedules, templates and messaging preferences"],["Users","Admin provisioning"],["Data & Security","Imports, audit and backups"],["Help & Support","Support and product information"]];
   return <AppShell><PageHeading title="Settings" description="Manage organisation preferences and administrative configuration."/>
-    <PhaseNotice phase="03" text="Settings will be editable only after backend-enforced Admin authentication is in place."/>
-    <div className="settings-list">{options.map(([title,desc])=><div className="setting-row" key={title}><span className="setting-icon"><Icon name={title==="Data & Security"?"shield":"settings"}/></span><div><strong>{title}</strong><p>{desc}</p></div><span className="setting-phase">Coming soon</span></div>)}</div>
+    <AdminSettingsForm/>
   </AppShell>;
 }
 

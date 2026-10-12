@@ -19,7 +19,24 @@ export function AppShell({children}:{children:React.ReactNode}) {
   const pathname = usePathname();
   const [mobileOpen,setMobileOpen] = useState(false);
   const [collapsed,setCollapsed] = useState(false);
+  const [signOutError,setSignOutError] = useState("");
+  const [signingOut,setSigningOut] = useState(false);
   const closeDrawer = () => setMobileOpen(false);
+  async function signOut(){
+    if(signingOut)return;
+    setSigningOut(true);setSignOutError("");
+    try {
+      const response=await fetch("/api/admin/session",{cache:"no-store"});
+      if(!response.ok){window.location.assign("/login");return;}
+      const identity=await response.json();
+      const result=await fetch("/api/admin/logout",{
+        method:"POST",headers:{"X-CSRF-Token":identity.csrf_token},credentials:"same-origin"
+      });
+      if(!result.ok)throw new Error("Sign out failed");
+      window.location.assign("/login");
+    }catch{setSignOutError("Could not sign out. Please try again.");}
+    finally{setSigningOut(false);}
+  }
 
   return <div className={"app-frame"+(collapsed?" sidebar-collapsed":"")}>
     <a href="#main-content" className="skip-link">Skip to content</a>
@@ -42,14 +59,16 @@ export function AppShell({children}:{children:React.ReactNode}) {
         })}
       </nav>
       <div className="sidebar-art" aria-hidden="true"><span className="minaret minaret-one"/><span className="dome dome-one"/><span className="minaret minaret-two"/><span className="dome dome-two"/></div>
-      <div className="sidebar-bottom"><span className="avatar">A</span><span className="account-copy"><strong>Admin preview</strong><small>Authentication in Phase 03</small></span></div>
+      <div className="sidebar-bottom"><span className="avatar">A</span><span className="account-copy"><strong>Admin</strong><small>Masjid Management</small></span></div>
+      <button className="sidebar-logout" type="button" onClick={signOut} disabled={signingOut} aria-label="Sign out"><Icon name="logout" size={17}/><span>{signingOut?"Signing out…":"Sign out"}</span></button>
+      {signOutError&&<p role="alert" className="logout-error">{signOutError}</p>}
     </aside>
     <div className="app-content">
       <header className="topbar">
         <button className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
         <span className="topbar-name">Sponsor a Salah</span>
         <span className="topbar-spacer"/>
-        <span className="environment-tag">Design preview</span>
+        <span className="environment-tag">Admin workspace</span>
         <span className="avatar top-avatar">A</span>
       </header>
       <main id="main-content" className="page-content">{children}</main>

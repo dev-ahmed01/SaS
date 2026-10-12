@@ -5,9 +5,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.db import get_engine
-from app.auth import router as auth_router
 from app.admin_settings import router as settings_router
+from app.auth import router as auth_router
+from app.db import get_engine
 
 app = FastAPI(title="Sponsor a Salah API", version="0.3.0", docs_url=None, redoc_url=None)
 app.include_router(auth_router)
