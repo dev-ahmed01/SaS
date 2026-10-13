@@ -2,10 +2,8 @@
 <defs>
  <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c5ead6"/><stop offset="1" stop-color="#65b38b"/></linearGradient>
  <linearGradient id="temple" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#99d0b0"/><stop offset="1" stop-color="#399569"/></linearGradient>
- <linearGradient id="veil" x1="0" y1="0" x2="0" y2="1"><stop stop-color="white" stop-opacity="0"/><stop offset=".34" stop-color="white" stop-opacity=".7"/><stop offset=".58" stop-color="white"/><stop offset="1" stop-color="white"/></linearGradient>
- <mask id="m"><path fill="url(#veil)" d="M0 0h320v300H0z"/></mask>
 </defs>
-<g mask="url(#m)">
+<g>
  <path d="M0 203q85-74 155-32 91-71 165-19v148H0Z" fill="#e1f3e8"/>
  <path d="M0 236q65-64 135-25 79-74 185-27v116H0Z" fill="#bee6d0"/>
  <g opacity=".5" fill="#8ccbad">
