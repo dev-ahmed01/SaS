@@ -22,8 +22,15 @@ from sqlalchemy.orm import Session
 
 from app.accounting import effective_credits
 from app.models import (
-    AuditEvent, ManualCollection, ManualCollectionReversal, MessageOutbox,
-    Organization, OrganizationSettings, PayoutPlan, Prospect, SponsorshipRate,
+    AuditEvent,
+    ManualCollection,
+    ManualCollectionReversal,
+    MessageOutbox,
+    Organization,
+    OrganizationSettings,
+    PayoutPlan,
+    Prospect,
+    SponsorshipRate,
     VerifiedCredit,
 )
 

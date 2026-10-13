@@ -1,7 +1,7 @@
 """Destructive recovery tooling must categorically reject non-CI scope."""
 import pytest
 
-from app.synthetic_restore_ci import validate_ci_scope, postgres_client
+from app.synthetic_restore_ci import postgres_client, validate_ci_scope
 
 LOCAL = (
     "postgresql+psycopg://sas_ci:synthetic-only-password@"
