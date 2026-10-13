@@ -28,6 +28,7 @@ from app.models import (
     VerifiedCredit,
 )
 from app.security import as_utc, utc_now
+from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE
 
 router = APIRouter(prefix="/v1/collections", tags=["Manual collections"])
 REFERENCE = re.compile(r"^[A-Z0-9][A-Z0-9._:/-]{5,99}$")
@@ -39,7 +40,11 @@ class CollectionInput(BaseModel):
     prospect_id: uuid.UUID
     period_month: date
     received_on: date
-    amount_paise: int = Field(ge=1, le=1_000_000_000)
+    amount_paise: int = Field(
+        ge=SPONSORSHIP_STEP_PAISE,
+        le=1_000_000_000,
+        multiple_of=SPONSORSHIP_STEP_PAISE,
+    )
     payment_method: Literal["upi", "bank_transfer", "cash"]
     receipt_reference: str = Field(min_length=6, max_length=100)
     funds_confirmed: Literal[True]

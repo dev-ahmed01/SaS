@@ -18,7 +18,7 @@
 | UI review | Approved light sidebar hierarchy, Bricolage/Poppins, responsive/accessible screens; empty/errors with no fabricated financials | Foundation stakeholder | **Pending stakeholder UAT** |
 | Final approval | Dated written Foundation approval and named rollback operator | Foundation authorized signatory | **Not granted** |
 
-**Approved on 13 October 2026:** new recurring sponsorship commitments are positive multiples of ₹250 and newly provisioned organizations default to ₹250. Existing effective-dated rates do not change. Two completed IST months with zero net recorded receipt activity cause inactivity. Any positive net recorded receipt, including partial entries for an earlier billing month, reactivates; credit reversals negate that activity. Other operational and messaging policies still need explicit approval. The payment method remains Admin-attested manual entry, NOT a bank importer. Until sign-off, postpone decisions that would alter sponsor lifecycle, obligations, reminders or launch data.
+**Approved on 13 October 2026:** new recurring sponsorship commitments are positive multiples of ₹250 and newly provisioned organizations default to ₹250. Existing effective-dated rates do not change. Two completed IST months with zero net recorded receipt activity cause inactivity. Any positive net recorded receipt, including valid ₹250-tier entries for an earlier billing month, reactivates; credit reversals negate that activity. Other operational and messaging policies still need explicit approval. The payment method remains Admin-attested manual entry, NOT a bank importer. Until sign-off, postpone decisions that would alter sponsor lifecycle, obligations, reminders or launch data.
 
 ## Deploy topology and control boundaries
 
@@ -56,12 +56,12 @@ The proposed vendors (Vercel web, Render API, managed PostgreSQL) are design sug
 
 Use isolated synthetic sponsor/promoter identities and distinct cash/UPI transaction references. Test each against ledger AND six-month Dashboard:
 
-- New sponsor without a payment; real manually attested partial, full and excess payments; payment month effective rate (never assume current sponsor rate matches past period); two monthly boundaries including year-end IST.
+- New sponsor without a payment; ₹250-tier contributions, full and excess payments (reject below-minimum and off-tier entries); payment month effective rate (never assume current sponsor rate matches past period); two monthly boundaries including year-end IST.
 - Duplicate click/reference across changed payment methods; late entry with distinct `received_on`, target month and `created_at`; past before-enrollment/future-month rejection.
 - Full audited reversal, including correct net outstanding and unsent confirmation suppression; verify previous original credit still exists.
 - Archive and restore across calendar months with **no retrospective dues for paused periods**; the unresolved historical-interval issue must be fixed and proven before launch.
 - Recurring payout scheduled/paused/resumed/closed, one-time planned vs actually attested paid, early one-time disbursement blocked, unique outgoing reference, wrong-tenant rejection and plan/outgoing distinction.
-- Exact sponsor New/Active/Inactive transitions under the approved October 13 rule, with partial late-allocated receipt reactivation and reversal suppression.
+- Exact sponsor New/Active/Inactive transitions under the approved October 13 rule, with valid ₹250-tier late-allocated receipt reactivation and reversal suppression.
 - Empty Foundation with zero real activity must show zero, never fictitious donations/notifications.
 
 ## Messaging UAT with explicit opt-in test phone only

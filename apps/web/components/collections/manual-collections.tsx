@@ -69,11 +69,12 @@ export function ManualCollections(){
     if(saving)return;
     if(!selected){setError("Select an existing sponsor.");return;}
     const trimmed=rupees.trim();
-    if(!/^\d{1,8}(?:\.\d{1,2})?$/.test(trimmed)){setError("Enter a valid amount in rupees.");return;}
+    if(!/^\d{1,8}(?:\.\d{1,2})?$/.test(trimmed)){setError("Enter a valid amount in rupees, in ₹250 steps.");return;}
     const [whole,fraction=""]=trimmed.split(".");
     const paise=Number(whole)*100+Number(fraction.padEnd(2,"0"));
-    if(!Number.isSafeInteger(paise)||paise<1||paise>1_000_000_000){
-      setError("Enter a positive amount within the allowed limit.");return;
+    if(!Number.isSafeInteger(paise)||paise<25000||paise>1_000_000_000
+      ||paise%25000!==0){
+      setError("Record ₹250, ₹500, ₹750, or another positive multiple of ₹250.");return;
     }
     if(!confirmed){setError("Please confirm that the Foundation has actually received the funds.");return;}
     setSaving(true);setError("");setSuccess("");
@@ -96,7 +97,7 @@ export function ManualCollections(){
         if(result.status===409){
           setError("This receipt or request may already be recorded. Check the recent collections before trying again.");
         }else if(result.status===422){
-          setError("Check the billing month, receipt date, reference and amount.");
+          setError("Check the billing month, receipt date and reference. Amount must be ₹250 or a multiple of ₹250.");
         }else{
           setError("The collection was not confirmed. Check the recent list before retrying.");
         }
@@ -118,7 +119,7 @@ export function ManualCollections(){
   return <div className="manual-collections-workspace">
     <section className="content-panel" aria-label="Record a manual collection">
       <h2>Record Collection</h2>
-      <p className="panel-description">Only enter money already received and checked by the Foundation. Saving records the payment and prepares a confirmation if WhatsApp consent exists.</p>
+      <p className="panel-description">Only enter money already received and checked by the Foundation. Accepted contributions start at ₹250 and increase in ₹250 increments. Record funds only after the Foundation confirms receipt; this prepares a WhatsApp confirmation intent when consent exists.</p>
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="form-cell full">
@@ -137,9 +138,9 @@ export function ManualCollections(){
             </div>}
           </div>
           <label className="field"><span className="field-label">Amount received (₹) *</span>
-            <input aria-label="Amount received (₹)" required type="text" inputMode="decimal" value={rupees}
-              placeholder="Enter the exact funds received" onChange={e=>{setRupees(e.target.value);update();}}/></label>
-          <p className="dashboard-caption form-cell full">Enter the exact amount received. The sponsor's agreed monthly rate may differ for the selected period.</p>
+            <input aria-label="Amount received (₹)" required type="number" inputMode="numeric" min="250" step="250" max="10000000" value={rupees}
+              placeholder="250, 500, 750..." onChange={e=>{setRupees(e.target.value);update();}}/></label>
+          <p className="dashboard-caption form-cell full">Only enter confirmed incoming amounts of ₹250, ₹500, ₹750, and so on. The sponsor's agreed monthly rate may differ for the selected billing period.</p>
           <label className="field"><span className="field-label">Payment method *</span>
             <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
