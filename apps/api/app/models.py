@@ -607,3 +607,110 @@ class PayoutPayment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
     )
+
+
+class ReminderBatch(Base):
+    """An Admin-prepared monthly candidate batch; never delivery authorization."""
+
+    __tablename__ = "reminder_batches"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_reminder_batch_org_id"),
+        UniqueConstraint(
+            "organization_id", "kind", "period_month",
+            name="uq_reminder_one_batch_kind_month",
+        ),
+        UniqueConstraint(
+            "organization_id", "request_id", name="uq_reminder_batch_request",
+        ),
+        CheckConstraint(
+            "kind IN ('sponsor', 'promoter')", name="ck_reminder_batch_kind",
+        ),
+        CheckConstraint("recipient_count >= 0", name="ck_reminder_batch_count"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_on: Mapped[date] = mapped_column(Date, nullable=False)
+    recipient_count: Mapped[int] = mapped_column(nullable=False)
+    created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ReminderIntent(Base):
+    """One consent-gated recipient per monthly batch, never sent in Phase 10."""
+
+    __tablename__ = "reminder_intents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "batch_id"],
+            ["reminder_batches.organization_id", "reminder_batches.id"],
+            ondelete="RESTRICT", name="fk_reminder_intent_batch_org",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_reminder_intent_prospect_org",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "promoter_id"],
+            ["promoters.organization_id", "promoters.id"],
+            ondelete="RESTRICT", name="fk_reminder_intent_promoter_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "kind", "prospect_id", "period_month",
+            name="uq_reminder_once_sponsor_month",
+        ),
+        UniqueConstraint(
+            "organization_id", "kind", "promoter_id", "period_month",
+            name="uq_reminder_once_promoter_month",
+        ),
+        CheckConstraint(
+            "kind IN ('sponsor', 'promoter')",
+            name="ck_reminder_intent_kind",
+        ),
+        CheckConstraint(
+            "(kind = 'sponsor' AND prospect_id IS NOT NULL AND promoter_id IS NULL)"
+            " OR (kind = 'promoter' AND promoter_id IS NOT NULL AND prospect_id IS NULL)",
+            name="ck_reminder_recipient_exclusive",
+        ),
+        CheckConstraint(
+            "status IN ('prepared', 'cancelled')",
+            name="ck_reminder_preintegration_state",
+        ),
+        CheckConstraint(
+            "outstanding_paise > 0 AND sponsor_count > 0",
+            name="ck_reminder_positive_outstanding",
+        ),
+        Index(
+            "ix_reminder_org_period_kind",
+            "organization_id", "period_month", "kind",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    batch_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    prospect_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    promoter_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_on: Mapped[date] = mapped_column(Date, nullable=False)
+    sponsor_count: Mapped[int] = mapped_column(nullable=False)
+    outstanding_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sponsor_snapshot: Mapped[list] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="prepared"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
