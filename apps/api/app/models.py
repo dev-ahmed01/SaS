@@ -20,6 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -206,3 +207,75 @@ class ProspectUpiIdentifier(Base):
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     prospect: Mapped[Prospect] = relationship(back_populates="upi_ids")
+
+
+
+class Promoter(Base):
+    """Volunteer liaison. Activity is an Admin decision, not a financial status."""
+
+    __tablename__ = "promoters"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_promoters_org_id"),
+        UniqueConstraint("organization_id", "mobile_number", name="uq_promoters_org_mobile"),
+        CheckConstraint("version > 0", name="ck_promoters_version_positive"),
+        Index("ix_promoters_org_active", "organization_id", "is_active"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
+    whatsapp_number: Mapped[str | None] = mapped_column(String(16))
+    area_city: Mapped[str] = mapped_column(String(120), nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(1500))
+    whatsapp_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class PromoterAssignment(Base):
+    """One current promoter per prospect. Historical assignments stay auditable."""
+
+    __tablename__ = "promoter_assignments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "promoter_id"],
+            ["promoters.organization_id", "promoters.id"],
+            ondelete="RESTRICT", name="fk_assignment_promoter_org",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_assignment_prospect_org",
+        ),
+        Index(
+            "uq_assignment_current_prospect", "organization_id", "prospect_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+            sqlite_where=text("ended_at IS NULL"),
+        ),
+        Index("ix_assignments_promoter_current", "promoter_id", "ended_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    promoter_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    assigned_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    ended_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
