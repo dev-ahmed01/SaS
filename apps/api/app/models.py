@@ -334,6 +334,7 @@ class VerifiedCredit(Base):
         UniqueConstraint(
             "organization_id", "source_key", name="uq_credit_org_source"
         ),
+        UniqueConstraint("organization_id", "id", name="uq_credits_org_id"),
         Index(
             "ix_credit_prospect_month",
             "organization_id", "prospect_id", "period_month",
