@@ -126,8 +126,7 @@ export function ProspectList({view}:{view:"inactive"|"all"}) {
           :!records || records.items.length===0?<tr><td colSpan={4}><div className="empty-state"><Icon name="users" size={30}/><h3>No prospects found</h3><p>{view==="inactive"?"Inactive prospects will appear once the payment history engine identifies two consecutive missed months.":"Try a different search or use Add Prospect to register a new contributor."}</p></div></td></tr>
           :records.items.map(record=><tr key={record.id}>
             <td><strong className="table-name">{record.full_name}</strong><span className="table-subtitle">{amount(record.monthly_contribution_paise)} / month</span></td>
-            <td>{record.mobile_number}</td><td>{record.area_city}</td>
-            <td>{localDate(record.last_contact_on)}</td>
+            <td>{record.mobile_number}</td>
             <td><span className={"status-pill "+record.lifecycle_status}>{record.archived_at?"Archived":record.lifecycle_status==="new"?"New":record.lifecycle_status==="active"?"Active":"Inactive"}</span></td>
             <td><div className="row-actions">
               {!record.archived_at&&<button type="button" className="text-action" onClick={()=>setEditing(record)}>Edit</button>}
