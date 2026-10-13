@@ -348,5 +348,5 @@ def test_location_is_optional_for_new_sponsor_without_fake_placeholder(system):
     assert response.json()["area_city"] == ""
     with Session(engine) as db:
         assert db.scalars(select(Prospect).where(
-            Prospect.id == response.json()["id"]
+            Prospect.id == uuid.UUID(response.json()["id"])
         )).one().area_city == ""
