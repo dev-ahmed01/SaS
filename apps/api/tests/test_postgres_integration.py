@@ -656,3 +656,41 @@ def test_postgres_prevents_multiple_batches_same_kind_month() -> None:
             db.flush()
         db.rollback()
     engine.dispose()
+
+
+def test_postgres_enforces_250_tier_on_direct_manual_receipts() -> None:
+    """Database must reject a new off-tier receipt even if the API is bypassed."""
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Strict receipts test " + uuid.uuid4().hex)
+        db.add(org)
+        db.flush()
+        sponsor = Prospect(
+            organization_id=org.id, full_name="Synthetic tier sponsor",
+            mobile_number="+919876500789", area_city="Bengaluru",
+            monthly_contribution_paise=50000, start_month=date(2026, 10, 1),
+            whatsapp_opt_in=False, lifecycle_status="new", version=1,
+        )
+        db.add(sponsor)
+        db.flush()
+        credit = VerifiedCredit(
+            organization_id=org.id, prospect_id=sponsor.id,
+            period_month=date(2026, 10, 1), amount_paise=12500,
+            source_type="manual_attested",
+            source_key="manual:test-offtier-" + uuid.uuid4().hex,
+            verified_at=datetime(2026, 10, 13, 10, tzinfo=UTC),
+        )
+        db.add(credit)
+        db.flush()
+        db.add(ManualCollection(
+            organization_id=org.id, prospect_id=sponsor.id,
+            verified_credit_id=credit.id, request_id=uuid.uuid4(),
+            request_payload_hash="c" * 64, reference_digest="d" * 64,
+            reference_mask="****0789", received_on=date(2026, 10, 13),
+            period_month=date(2026, 10, 1), payment_method="upi",
+            amount_paise=12500,
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
