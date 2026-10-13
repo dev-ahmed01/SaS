@@ -66,18 +66,17 @@ test("responsive design, focus visibility, and reduced motion present", () => {
 });
 
 test("premium mosque illustrations remain scalable, unobstructed, and softly integrated", () => {
-  assert.match(css,/masjid-sidebar-premium\\.svg/);
-  assert.match(css,/masjid-landscape-premium\\.svg/);
   for (const name of ["masjid-sidebar-premium.svg","masjid-landscape-premium.svg"]) {
+    assert.ok(css.includes(name), name);
     assert.ok(existsSync(new URL("../public/art/"+name,import.meta.url)));
     const drawing=read("../public/art/"+name);
     assert.match(drawing,/<svg[^>]*viewBox=/);
     assert.match(drawing,/linearGradient/);
     assert.doesNotMatch(drawing,/<image/);
   }
-  assert.match(css,/mask-image:linear-gradient/);
-  assert.match(shell,/className="sidebar-art"/);
-  assert.match(shell,/aria-label="Admin account"/);
-  assert.match(shell,/aria-expanded=\\{profileOpen\\}/);
-  assert.match(shell,/aria-label="Sign out"/);
+  assert.ok(css.includes("mask-image:linear-gradient"));
+  assert.ok(shell.includes('className="sidebar-art"'));
+  assert.ok(shell.includes('aria-label="Admin account"'));
+  assert.ok(shell.includes('aria-expanded={profileOpen}'));
+  assert.ok(shell.includes('aria-label="Sign out"'));
 });
