@@ -92,6 +92,11 @@ def period_balance(
     start = prospect.start_month
     if start is None or period < start:
         return (0, 0, 0, False)
+    if prospect.archived_at is not None:
+        final_month = month_start(_utc(prospect.archived_at).astimezone(IST).date())
+        if period > final_month:
+            # Archival ends new recurring dues without erasing past statements.
+            return (0, _verified_sum(credits, period, now), 0, False)
     due = _monthly_amount(rates, period)
     if due is None:
         # Fail closed rather than silently charging an invented amount.
@@ -137,7 +142,7 @@ class AccountingRow(BaseModel):
     prospect_id: str
     name: str
     period_month: date
-    status: Literal["new", "active", "inactive"]
+    status: Literal["new", "active", "inactive", "archived"]
     due_paise: int
     verified_paise: int
     outstanding_paise: int
@@ -157,6 +162,7 @@ class AccountingOverview(BaseModel):
     new_sponsors: int
     active_sponsors: int
     inactive_sponsors: int
+    archived_sponsors: int
     items: list[AccountingRow]
     offset: int
     limit: int
@@ -174,7 +180,6 @@ def _load_account(
     sponsors = db.scalars(
         select(Prospect).where(
             Prospect.organization_id == admin.organization_id,
-            Prospect.archived_at.is_(None),
         ).order_by(Prospect.full_name, Prospect.id)
     ).all()
     rates = defaultdict(list)
@@ -211,19 +216,24 @@ def overview(
         database, context[0], now
     )
     rows: list[AccountingRow] = []
-    totals = dict(due=0, verified=0, outstanding=0, paid=0, new=0, active=0, inactive=0)
+    totals = dict(due=0, verified=0, outstanding=0, paid=0, new=0, active=0, inactive=0, archived=0)
     for sponsor in sponsors:
         pid = str(sponsor.id)
         rates, credits = rates_by_id[pid], credits_by_id[pid]
-        status = evaluate_status(
-            sponsor, rates, credits, today, now, settings.inactivity_months
-        )
+        status = ("archived" if sponsor.archived_at is not None else
+                  evaluate_status(
+                      sponsor, rates, credits, today, now, settings.inactivity_months
+                  ))
         due, verified, outstanding, paid = period_balance(
             sponsor, rates, credits, period, now
         )
         # Exclude not-yet-registered sponsors from older statements.
         if sponsor.start_month is None or sponsor.start_month > period:
             continue
+        if sponsor.archived_at is not None:
+            final_month = month_start(_utc(sponsor.archived_at).astimezone(IST).date())
+            if period > final_month and verified == 0:
+                continue
         totals["due"] += due
         totals["verified"] += verified
         totals["outstanding"] += outstanding
@@ -242,6 +252,7 @@ def overview(
         outstanding_paise=totals["outstanding"], fully_paid_sponsors=totals["paid"],
         new_sponsors=totals["new"], active_sponsors=totals["active"],
         inactive_sponsors=totals["inactive"],
+        archived_sponsors=totals["archived"],
         items=rows[offset:offset + limit], limit=limit, offset=offset,
     )
 
