@@ -5,10 +5,8 @@
  <linearGradient id="mosque" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c5ebd5"/><stop offset="1" stop-color="#75b895"/></linearGradient>
  <linearGradient id="foreground" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#69b18c"/><stop offset="1" stop-color="#267954"/></linearGradient>
  <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f0fcf5" stop-opacity=".6"/><stop offset="1" stop-color="#f0fcf5" stop-opacity="0"/></linearGradient>
- <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="white" stop-opacity="0"/><stop offset=".18" stop-color="white" stop-opacity=".45"/><stop offset=".52" stop-color="white"/><stop offset="1" stop-color="white"/></linearGradient>
- <mask id="reveal"><path fill="url(#fade)" d="M0 0h1280v590H0z"/></mask>
 </defs>
-<g mask="url(#reveal)">
+<g>
  <path fill="url(#sky)" d="M0 0h1280v590H0z"/>
  <circle cx="947" cy="182" r="79" fill="#f9fff8" opacity=".38"/>
  <path d="M0 355C158 275 244 322 370 282c119-37 195-89 313-59 130 35 201 4 301-38 97-40 194-24 296 38v367H0Z" fill="#d4eedf" opacity=".92"/>
