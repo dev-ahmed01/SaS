@@ -9,13 +9,6 @@ function amount(paise:number):string {
   return (paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 }
 
-function localDate(value:string | null):string {
-  if(!value)return "—";
-  // Calendar-only values must not shift date due to the viewer's browser timezone.
-  const [year,month,day]=value.slice(0,10).split("-");
-  return [day,month,year].join("/");
-}
-
 async function mutate(path:string, method:string, version:number):Promise<Response> {
   const session=await fetch("/api/admin/session",{cache:"no-store"});
   if(!session.ok)throw Error("Session expired. Please sign in again.");
@@ -118,7 +111,7 @@ export function ProspectList({view}:{view:"inactive"|"all"}) {
 
   return <section className="list-panel" aria-label={view==="inactive"?"Inactive Prospects":"All Prospects"}>
     <div className="list-tools prospect-tools">
-      <label className="search-control"><Icon name="search" size={17}/><span className="sr-only">Search prospects</span><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, number or area…"/></label>
+      <label className="search-control"><Icon name="search" size={17}/><span className="sr-only">Search prospects</span><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name or number…"/></label>
       {view==="all"&&<label className="archive-toggle"><input type="checkbox" checked={includeArchived} onChange={e=>setIncludeArchived(e.target.checked)}/> Show archived</label>}
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
@@ -126,12 +119,11 @@ export function ProspectList({view}:{view:"inactive"|"all"}) {
       <table className="data-table prospects-table">
         <thead><tr>
           <th scope="col">Name</th><th scope="col">Mobile Number</th>
-          <th scope="col">Area / City</th><th scope="col">Last Contact</th>
           <th scope="col">Status</th><th scope="col">Actions</th>
         </tr></thead>
         <tbody>
-          {loading?<tr><td colSpan={6}><div className="empty-state" role="status">Loading prospects…</div></td></tr>
-          :!records || records.items.length===0?<tr><td colSpan={6}><div className="empty-state"><Icon name="users" size={30}/><h3>No prospects found</h3><p>{view==="inactive"?"Inactive prospects will appear once the payment history engine identifies two consecutive missed months.":"Try a different search or use Add Prospect to register a new contributor."}</p></div></td></tr>
+          {loading?<tr><td colSpan={4}><div className="empty-state" role="status">Loading prospects…</div></td></tr>
+          :!records || records.items.length===0?<tr><td colSpan={4}><div className="empty-state"><Icon name="users" size={30}/><h3>No prospects found</h3><p>{view==="inactive"?"Inactive prospects will appear once the payment history engine identifies two consecutive missed months.":"Try a different search or use Add Prospect to register a new contributor."}</p></div></td></tr>
           :records.items.map(record=><tr key={record.id}>
             <td><strong className="table-name">{record.full_name}</strong><span className="table-subtitle">{amount(record.monthly_contribution_paise)} / month</span></td>
             <td>{record.mobile_number}</td><td>{record.area_city}</td>
