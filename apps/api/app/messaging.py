@@ -90,6 +90,10 @@ def delivery_status(
         awaiting_confirmation_intents=count(
             MessageOutbox,MessageOutbox.organization_id==organization_id,
             MessageOutbox.status=="awaiting_integration",
+            ~select(MessageDispatch.id).where(
+                MessageDispatch.organization_id==MessageOutbox.organization_id,
+                MessageDispatch.outbox_id==MessageOutbox.id,
+            ).exists(),
         ),
         prepared_reminder_intents=count(
             ReminderIntent,ReminderIntent.organization_id==organization_id,

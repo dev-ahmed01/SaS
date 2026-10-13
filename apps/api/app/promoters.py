@@ -341,7 +341,7 @@ def _edit_assignment(
     prospect = db.scalars(select(Prospect).where(
         Prospect.id == prospect_id,
         Prospect.organization_id == admin.organization_id,
-        Prospect.archived_at.is_(None),
+        *([] if remove else [Prospect.archived_at.is_(None)]),
     ).with_for_update()).one_or_none()
     if prospect is None:
         raise HTTPException(status_code=404, detail="Prospect not found")

@@ -212,6 +212,10 @@ def overview(
         acknowledgments_awaiting_setup=count(
             MessageOutbox, MessageOutbox.organization_id == org,
             MessageOutbox.status == "awaiting_integration",
+            ~select(MessageDispatch.id).where(
+                MessageDispatch.organization_id == MessageOutbox.organization_id,
+                MessageDispatch.outbox_id == MessageOutbox.id,
+            ).exists(),
         ),
         whatsapp_deliveries_confirmed=count(
             MessageDispatch, MessageDispatch.organization_id == org,

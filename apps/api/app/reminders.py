@@ -26,6 +26,7 @@ from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
+    MessageDispatch,
     OrganizationSettings,
     Promoter,
     PromoterAssignment,
@@ -83,8 +84,8 @@ class BatchRead(BaseModel):
     period_month: date
     scheduled_on: date
     recipient_count: int
-    status: Literal["prepared"]
-    delivered_count: Literal[0]
+    status: Literal["prepared", "partially_delivered", "delivered"]
+    delivered_count: int
 
 
 class BatchPage(BaseModel):
@@ -236,11 +237,27 @@ def _build_preview(
     )
 
 
-def _batch_read(row: ReminderBatch) -> BatchRead:
+def _batch_read(db: Session, row: ReminderBatch) -> BatchRead:
+    """Count only dispatches confirmed by authenticated delivery callbacks."""
+    delivered = db.scalar(
+        select(func.count(MessageDispatch.id)).join(
+            ReminderIntent,
+            (ReminderIntent.organization_id == MessageDispatch.organization_id)
+            & (ReminderIntent.id == MessageDispatch.reminder_intent_id),
+        ).where(
+            ReminderIntent.organization_id == row.organization_id,
+            ReminderIntent.batch_id == row.id,
+            MessageDispatch.status == "delivered",
+        )
+    ) or 0
+    status = (
+        "delivered" if row.recipient_count and delivered == row.recipient_count
+        else "partially_delivered" if delivered > 0 else "prepared"
+    )
     return BatchRead(
         id=row.id, kind=row.kind, period_month=row.period_month,
         scheduled_on=row.scheduled_on, recipient_count=row.recipient_count,
-        status="prepared", delivered_count=0,
+        status=status, delivered_count=delivered,
     )
 
 
@@ -307,7 +324,7 @@ def prepare(
             raise HTTPException(status_code=409, detail="Request ID belongs to another batch")
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
-        return _batch_read(existing)
+        return _batch_read(database, existing)
     # Only *new* batches are subject to the no-catch-up configured-day gate.
     if today != scheduled:
         raise HTTPException(
@@ -363,7 +380,7 @@ def prepare(
             status_code=409, detail="Reminder batch already exists. Refresh before retrying"
         ) from exc
     response.headers["Cache-Control"] = "no-store"
-    return _batch_read(batch)
+    return _batch_read(database, batch)
 
 
 @router.get("/batches", response_model=BatchPage)
@@ -385,6 +402,6 @@ def list_batches(
     ).all()
     response.headers["Cache-Control"] = "no-store"
     return BatchPage(
-        items=[_batch_read(row) for row in batches],
+        items=[_batch_read(database, row) for row in batches],
         total=total, limit=limit, offset=offset,
     )
