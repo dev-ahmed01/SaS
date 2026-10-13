@@ -296,3 +296,58 @@ test("Accounting rejects forged requests and never exposes payment write actions
   });
   expect(unsupported.status()).toBe(404);
 });
+
+test("Admin records a manual contribution without claiming WhatsApp delivery",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
+  const name="Manual Pay Sponsor "+id;
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9826"+id);
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await page.goto("/collections");
+  await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
+  await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
+  await page.getByRole("option",{name:new RegExp(name)}).click();
+  const payment=page.getByRole("textbox",{name:"Amount received (₹)"});
+  await expect(payment).not.toHaveValue("");
+  await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
+  const save=page.getByRole("button",{name:"Save Collection"});
+  await expect(save).toBeDisabled();
+  await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  await save.click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
+  await expect(page.getByText(/has not been sent/)).toBeVisible();
+  await expect(page.getByRole("region",{name:"Recent manual collections"}).getByText(name)).toBeVisible();
+  await page.goto("/collections/all");
+  await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
+  const row=page.getByRole("row",{name:new RegExp(name)});
+  await expect(row).toBeVisible();
+  await expect(row.getByText("Active",{exact:true})).toBeVisible();
+  await expect(row.getByText("Yes",{exact:true})).toBeVisible();
+});
+
+test("Duplicate manual reference cannot create a second contribution",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
+  const name="Receipt Retry Sponsor "+id;
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9836"+id);
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await page.goto("/collections");
+  await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
+  await page.getByRole("option",{name:new RegExp(name)}).click();
+  await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
+  await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  await page.getByRole("button",{name:"Save Collection"}).click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
+  await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
+  await page.getByRole("option",{name:new RegExp(name)}).click();
+  await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
+  await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  await page.getByRole("button",{name:"Save Collection"}).click();
+  await expect(page.getByRole("alert")).toContainText(/already recorded/);
+});
