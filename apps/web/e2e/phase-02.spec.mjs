@@ -314,7 +314,8 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
   const payment=page.getByRole("textbox",{name:"Amount received (₹)"});
-  await expect(payment).not.toHaveValue("");
+  await expect(payment).toHaveValue("");
+  await payment.fill("125.00");
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
   const save=page.getByRole("button",{name:"Save Collection"});
   await expect(save).toBeDisabled();
@@ -756,6 +757,7 @@ test("mobile collection form stays clickable with populated recent history",asyn
   }).toBeLessThanOrEqual(413);
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(data.name);
   await page.getByRole("option",{name:new RegExp(data.name)}).click();
+  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill("125.00");
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("FINALHISTORY"+suffix);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   const save=page.getByRole("button",{name:"Save Collection"});
