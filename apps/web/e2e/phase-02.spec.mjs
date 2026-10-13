@@ -89,6 +89,9 @@ test("desktop branding and landscape artwork have the right proportions",async (
 });
 
 test("login hero and sidebar decode the shared illustration on desktop and mobile",async ({page})=>{
+  // These browser suites authenticate in beforeEach; end that session so the
+  // login route can be inspected without its intended redirect.
+  await page.context().clearCookies();
   await page.goto("/login");
   const loginArt=page.locator(".login-mosque");
   await expect(loginArt).toBeVisible();
