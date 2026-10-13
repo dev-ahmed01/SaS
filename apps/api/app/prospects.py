@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -301,7 +301,7 @@ def _project_statuses(
         raise HTTPException(status_code=503, detail="Accounting settings unavailable")
     now = utc_now()
     today = ist_today(now)
-    sponsor_ids = [p.id for p in current]
+    sponsor_ids = {p.id for p in current}
     rates = defaultdict(list)
     for item in db.scalars(select(SponsorshipRate).where(
         SponsorshipRate.organization_id == admin.organization_id,
