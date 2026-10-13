@@ -13,10 +13,10 @@ from app.models import (
     AuditEvent,
     Organization,
     OrganizationSettings,
-    Prospect,
-    ProspectUpiIdentifier,
     Promoter,
     PromoterAssignment,
+    Prospect,
+    ProspectUpiIdentifier,
 )
 
 pytestmark = pytest.mark.skipif(
