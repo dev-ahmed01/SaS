@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 590" role="img" aria-label="Layered mint hills with a masjid skyline">
+<defs>
+ <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f5fcf7" stop-opacity="0"/><stop offset=".25" stop-color="#eaf9ef" stop-opacity=".2"/><stop offset="1" stop-color="#bce8ce"/></linearGradient>
+ <linearGradient id="near" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#88c9a6"/><stop offset="1" stop-color="#3c926d"/></linearGradient>
+ <linearGradient id="mosque" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c5ebd5"/><stop offset="1" stop-color="#75b895"/></linearGradient>
+ <linearGradient id="foreground" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#69b18c"/><stop offset="1" stop-color="#267954"/></linearGradient>
+ <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f0fcf5" stop-opacity=".6"/><stop offset="1" stop-color="#f0fcf5" stop-opacity="0"/></linearGradient>
+ <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="white" stop-opacity="0"/><stop offset=".18" stop-color="white" stop-opacity=".45"/><stop offset=".52" stop-color="white"/><stop offset="1" stop-color="white"/></linearGradient>
+ <mask id="reveal"><path fill="url(#fade)" d="M0 0h1280v590H0z"/></mask>
+</defs>
+<g mask="url(#reveal)">
+ <path fill="url(#sky)" d="M0 0h1280v590H0z"/>
+ <circle cx="947" cy="182" r="79" fill="#f9fff8" opacity=".38"/>
+ <path d="M0 355C158 275 244 322 370 282c119-37 195-89 313-59 130 35 201 4 301-38 97-40 194-24 296 38v367H0Z" fill="#d4eedf" opacity=".92"/>
+ <path d="M0 412C123 381 226 329 334 346c131 20 237-73 350-46 125 29 204 51 313-16 109-65 180-59 283-6v312H0Z" fill="#bde2cf" opacity=".9"/>
+ <path d="M0 454c179-76 239 31 394-45 111-53 159-96 270-55 139 51 245-57 356-18 81 28 183 29 260-25v279H0Z" fill="#9bcfb1" opacity=".77"/>
+ <g fill="#9ecdb3" opacity=".46">
+  <path d="M85 397h13v85H85zM78 395q12-35 25 0Z"/><path d="M110 429h9v60h-9zM105 427q10-27 18 0Z"/>
+  <path d="M1054 365h15v135h-15zM1045 367q17-44 33 0Z"/><path d="M1074 415h9v81h-9zM1068 414q11-27 22 0Z"/>
+  <path d="M876 429h14v62h-14zM865 430q19-51 35 0Z"/>
+ </g>
+ <g fill="url(#mosque)" stroke="#76b797" stroke-width="2" stroke-linejoin="round">
+  <path d="M255 440h455v145H255z"/>
+  <path d="M302 442q29-95 79-111 50-21 97 0 46 28 78 111Z"/>
+  <path d="M319 443q25-71 61-86 41-13 78 0 36 20 65 86Z" fill="#afdcc0" stroke="#a1d0b4"/>
+  <path d="M400 329v-23h9v23z" fill="#83bb9d"/><path d="M404 307q-11-17 2-27-6 14 11 14-9 13-13 13Z" fill="#629f7b" stroke="none"/>
+  <path d="M267 440q26-60 58-64 33 11 55 64Z" fill="#b3dcc1"/>
+  <path d="M545 442q26-67 62-72 33 18 53 72Z" fill="#afdcc0"/>
+  <path d="M210 443h31v132h-31zM205 430h42l-5 13h-32zM206 428q18-41 36 0Z" fill="#8ec6a8"/>
+  <path d="M217 377h13v47h-13zM212 373h23l-5 8h-13zM216 371q8-25 16 0Z" fill="#aedec2"/>
+  <path d="M222 341v24" fill="none" stroke="#649e7d" stroke-width="4"/>
+  <path d="M731 422h33v165h-33zM727 411h40l-5 11h-31zM729 409q19-44 37 0Z" fill="#8bc5a3"/>
+  <path d="M739 355h17v54h-17zM735 348h25l-6 10h-14zM739 345q8-26 17 0Z" fill="#a8d8b9"/>
+  <path d="M746 317v23" fill="none" stroke="#649e7d" stroke-width="4"/>
+  <path d="M180 482h620v105H180z" fill="#8dc6a5" opacity=".75"/>
+ </g>
+ <g fill="#e7f5e8" opacity=".96" stroke="#77b292" stroke-width="1.8">
+  <path d="M280 512v75h44v-75c0-29-44-29-44 0Z"/>
+  <path d="M345 512v75h44v-75c0-29-44-29-44 0Z"/>
+  <path d="M410 512v75h44v-75c0-29-44-29-44 0Z"/>
+  <path d="M475 512v75h44v-75c0-29-44-29-44 0Z"/>
+  <path d="M540 512v75h44v-75c0-29-44-29-44 0Z"/>
+  <path d="M605 512v75h44v-75c0-29-44-29-44 0Z"/>
+  <path d="M670 512v75h20v-75c0-23-20-23-20 0Z"/>
+ </g>
+ <g fill="#8fbea3" opacity=".68">
+  <path d="M915 467h183v102H915z"/><path d="M929 465q18-58 49-67 35 11 55 67Z"/>
+  <path d="M978 397v-15h6v15z"/><path d="M981 382q-7-10 2-16-3 10 8 8-4 8-10 8Z"/>
+  <path d="M892 432h16v126h-16zM889 431q11-34 23 0Z"/>
+  <path d="M1096 438h19v130h-19zM1091 435q15-41 27 0Z"/>
+  <path d="M940 505v65h23v-65q-11-24-23 0ZM981 505v65h23v-65q-11-24-23 0ZM1022 505v65h23v-65q-11-24-23 0Z" fill="#d8eedf"/>
+ </g>
+ <path d="M0 533c170-64 282 18 418-11 127-27 207-64 340-24 113 34 225-54 331-39 73 10 143 46 191 36v95H0Z" fill="url(#near)" opacity=".83"/>
+ <path d="M0 569c149-38 251 6 378 3 131-4 180-56 335-19 168 38 266-20 385-8 87 9 123 14 182-13v58H0Z" fill="url(#foreground)" opacity=".8"/>
+ <g fill="#4b9f76" opacity=".74">
+  <path d="M17 590v-62l-23-20 24 9 18-32-12 37 32-16-32 26v58Z"/>
+  <ellipse cx="17" cy="518" rx="49" ry="17"/><ellipse cx="-6" cy="501" rx="32" ry="20"/><ellipse cx="39" cy="500" rx="32" ry="19"/>
+  <path d="M1234 590v-63l-24-19 25 7 17-31-10 37 33-15-29 25v59Z"/>
+  <ellipse cx="1236" cy="516" rx="54" ry="20"/><ellipse cx="1212" cy="499" rx="37" ry="18"/><ellipse cx="1263" cy="499" rx="38" ry="18"/>
+ </g>
+ <path d="M0 320h1280v130H0z" fill="url(#mist)" opacity=".35"/>
+</g></svg>
