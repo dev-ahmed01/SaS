@@ -84,7 +84,6 @@ export function DashboardLive(){
     <div className="dashboard-topline">
       <div>
         <h2>Overview <span className="dashboard-period">· {monthLabel(data.period_month)}</span></h2>
-        <p>Figures are calculated from recorded Foundation activity, as of {data.as_of_ist} (IST).</p>
       </div>
       <button className="btn btn-secondary" type="button"
         onClick={()=>setRevision(x=>x+1)}>Refresh figures</button>
@@ -110,7 +109,6 @@ export function DashboardLive(){
           <div><dt>Admin-recorded contributions</dt><dd>{money(data.recorded_contributions_paise)}</dd></div>
           <div><dt>Fully paid sponsors</dt><dd>{data.fully_paid_sponsors}</dd></div>
         </dl>
-        <p className="dashboard-caption">An unpaid commitment can remain outstanding after a valid ₹250-tier receipt. These are Admin-attested entries, not independently reconciled bank balances.</p>
       </section>
       <section className="dashboard-panel" aria-label="Outgoing payouts">
         <div className="dashboard-section-head">
@@ -121,7 +119,6 @@ export function DashboardLive(){
           <div><dt>Disbursements attested</dt><dd>{money(data.payout_disbursed_paise)}</dd></div>
           <div><dt>Not yet recorded as paid</dt><dd>{money(data.payout_outstanding_paise)}</dd></div>
         </dl>
-        <p className="dashboard-caption">Creating a payout plan does not send funds. Payments are recorded separately by Admin.</p>
       </section>
     </div>
     <section className="dashboard-panel dashboard-trends" aria-label="Six-month financial trends">
@@ -153,7 +150,6 @@ export function DashboardLive(){
           <strong>{money(item.contributions_paise)}</strong>
         </div>)}
       </div>
-      <p className="dashboard-caption">Bars use one consistent scale; the right column shows recorded incoming contributions.</p>
     </section>
     <div className="dashboard-dual dashboard-bottom">
       <section className="dashboard-panel" aria-label="Recent activity">
@@ -179,12 +175,10 @@ export function DashboardLive(){
           <div><dt>Provider-confirmed WhatsApp deliveries (all time)</dt>
             <dd>{data.whatsapp_deliveries_confirmed}</dd></div>
         </dl>
-        <p className="dashboard-caption">Preparing a reminder or a confirmation is not equivalent to delivery.</p>
         <Link className="dashboard-reminder-link" href="/reminders/whatsapp">
           Review reminders and delivery →
         </Link>
       </section>
     </div>
-    <p className="dashboard-disclaimer">{data.notice}</p>
   </section>;
 }

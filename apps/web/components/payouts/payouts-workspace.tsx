@@ -84,7 +84,7 @@ export function PayoutAdd(){
   }
   return <section className="content-panel payouts-form" aria-label="Add payout plan">
     <div className="payout-panel-heading">
-      <div><h2>Add payout</h2><p className="panel-description">Record a planned outgoing commitment. This does not send money.</p></div>
+      <div><h2>Add payout</h2></div>
       <button type="button" className="text-action" onClick={()=>router.push("/payouts/all")}>All payouts →</button>
     </div>
     <form onSubmit={submit}>
@@ -105,23 +105,25 @@ export function PayoutAdd(){
           <input required aria-label="Payout purpose" minLength={3} maxLength={240}
             value={purpose} placeholder="e.g. Facility support"
             onChange={e=>{setPurpose(e.target.value);change();}}/></label>
-        {kind==="recurring"
-          ?<label className="field"><span className="field-label">First payment month (IST) *</span>
-            <input required type="month" aria-label="First payment month (IST)" value={start}
-              onChange={e=>{setStart(e.target.value);change();}}/></label>
-          :<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
-            <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
-              onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
-        <label className="field form-cell full"><span className="field-label">Notes (optional)</span>
-          <textarea rows={3} aria-label="Payout notes" maxLength={800} value={notes}
-            onChange={e=>{setNotes(e.target.value);change();}}/></label>
+        {kind==="one_time"&&<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
+          <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
+            onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
+        <details className="optional-details"><summary>Schedule and notes (optional)</summary>
+          <div className="optional-fields">
+            {kind==="recurring"&&<label className="field"><span className="field-label">First payment month (IST) *</span>
+              <input required type="month" aria-label="First payment month (IST)" value={start}
+                onChange={e=>{setStart(e.target.value);change();}}/></label>}
+            <label className="field full"><span className="field-label">Notes</span>
+              <textarea rows={2} aria-label="Payout notes" maxLength={800} value={notes}
+                onChange={e=>{setNotes(e.target.value);change();}}/></label>
+          </div>
+        </details>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
       <div className="form-actions"><button className="btn btn-primary" type="submit" disabled={saving}>
         {saving?"Saving…":"Save payout plan"}</button></div>
     </form>
-    <p className="accounting-footnote">The plan only creates an obligation. Actual disbursement is separately confirmed in All Payouts with a unique payment reference.</p>
   </section>;
 }
 

@@ -12,7 +12,7 @@ const tabs=[
 
 export function PromotersWorkspace({view}:{view:"add"|"active"|"all"}){
   return <AppShell>
-    <PageHeading title="Promoters" description="Manage community promoters and the sponsors they support."/>
+    <PageHeading title="Promoters"/>
     <ModuleTabs current={view} tabs={tabs}/>
     <div className="prospects-workspace">
       {view==="add"

@@ -104,7 +104,7 @@ export function AdminSettingsForm(){
     finally{setAutomationSaving(false);}
   }
   return <section className="content-panel" aria-label="Organization configuration">
-    <h2>Organisation Settings</h2><p className="panel-description">Control monthly contributions and reminder policies. Changes are audited.</p>
+    <h2>Organisation Settings</h2>
     {loading&&<p role="status">Loading settings…</p>}
     {!loading&&!form&&<p role="alert">{error||"Settings unavailable."}</p>}
     {form&&current&&<form onSubmit={submit}>
@@ -114,10 +114,9 @@ export function AdminSettingsForm(){
           required value={form.monthly_amount_rupees} onChange={e=>update("monthly_amount_rupees",e.target.value)}/></label>
         <label className="field"><span className="field-label">Sponsor reminder day of month</span><input type="number" min="1" max="28" step="1" required value={form.sponsor_day} onChange={e=>update("sponsor_day",e.target.value)}/></label>
         <label className="field"><span className="field-label">Promoter follow-up day of month</span><input type="number" min="1" max="28" step="1" required value={form.promoter_day} onChange={e=>update("promoter_day",e.target.value)}/></label>
-        <label className="field"><span className="field-label">Consecutive completed zero-contribution months (fixed)</span><input type="number" min="2" max="2" readOnly value="2"/></label>
+        <label className="field"><span className="field-label">Inactive after (months)</span><input type="number" min="2" max="2" readOnly value="2"/></label>
       </div>
       <div className="readonly-settings"><div><strong>Accounting currency</strong><span>{current.currency_code}</span></div><div><strong>Accounting timezone</strong><span>{current.timezone}</span></div><div><strong>Automatic WhatsApp sending</strong><span>{current.automation_enabled?"Enabled for approved sender":"Disabled"}</span></div></div>
-      <p className="settings-help"><Icon name="info" size={17}/> Changing these defaults does not rewrite any sponsor's historical payments or existing agreement.</p>
       <div className="field">
         <label htmlFor="automation-confirmation" className="field-label">
           WhatsApp safety control — type {current.automation_enabled?"DISABLE WHATSAPP":"ENABLE WHATSAPP"} to confirm
@@ -125,7 +124,6 @@ export function AdminSettingsForm(){
         <input id="automation-confirmation" type="text" autoComplete="off"
           aria-label="WhatsApp automation confirmation" value={automationConfirmation}
           onChange={event=>setAutomationConfirmation(event.target.value)} />
-        <p className="settings-help">This controls only the approved provider worker. Payment recording never directly sends WhatsApp messages. Production sender setup and consent are required.</p>
         <button className="btn btn-secondary" type="button"
           onClick={changeAutomation}
           disabled={automationSaving||saving||
