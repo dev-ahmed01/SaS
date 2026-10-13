@@ -329,3 +329,30 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:540px) {
   .collection-review {padding:12px;} .reversal-facts {grid-template-columns:1fr;}
 }
+
+/* Phase 09: clean payout forms, obligations and attested disbursements. */
+.payouts-form {margin-top:25px;max-width:785px;}
+.payout-panel-heading {display:flex;align-items:start;justify-content:space-between;gap:15px;}
+.payout-panel-heading h2 {font-size:19px;margin:0 0 7px;}
+.payouts-workspace {margin:25px 0 40px;padding:22px;max-width:1120px;
+  background:#fff;border:1px solid var(--line);border-radius:10px;}
+.payout-list-title {display:flex;align-items:flex-end;justify-content:space-between;
+  gap:18px;flex-wrap:wrap;margin-bottom:22px;}
+.payout-list-title h2 {margin:0 0 6px;font-size:19px;}
+.payout-list-title p {margin:0;color:var(--muted);font-size:11px;}
+.payout-month {width:175px;}
+.payout-actions {display:flex;gap:9px;flex-wrap:wrap;min-width:140px;}
+.payout-future {display:block;font-size:9px;color:var(--muted);margin-top:4px;}
+.payout-history {margin-top:26px;border-top:1px solid var(--line);padding-top:20px;}
+.payout-history h3 {margin:0 0 15px;font-size:17px;}
+.payout-dialog {width:min(100%,570px);}
+.payout-dialog .field {margin-bottom:16px;}
+.status-pill.paused {color:#865c26;background:#fbf2db;}
+.status-pill.closed {color:#5b6670;background:#edf0f1;}
+.status-pill.paid {color:#127344;background:#e3f7e9;}
+.status-pill.overdue {color:#aa3447;background:#fae9ec;}
+.status-pill.scheduled {color:#4b6587;background:#e9f1f9;}
+@media(max-width:540px){
+  .payouts-workspace {padding:12px;}
+  .payout-panel-heading {flex-wrap:wrap;}
+}

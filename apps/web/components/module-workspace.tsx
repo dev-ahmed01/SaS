@@ -5,6 +5,7 @@ import { Icon } from "./ui/icon";
 import { AdminSettingsForm } from "./admin-settings-form";
 import { ManualCollections } from "./collections/manual-collections";
 import { CollectionsAllWorkspace } from "./collections/collections-all-workspace";
+import { PayoutAdd, PayoutList } from "./payouts/payouts-workspace";
 import { ProspectsWorkspace } from "./prospects/prospects-workspace";
 import { PromotersWorkspace } from "./promoters/promoters-workspace";
 
@@ -109,6 +110,8 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
   if(module==="collections" && view==="add") return <AppShell><PageHeading title="Collections" description="Record received contributions with an audit trail."/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
   if(module==="collections" && view==="all") return <AppShell><PageHeading title="Collections" description="Monthly commitments and verified contributions."/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace/></AppShell>;
+  if(module==="payouts" && view==="add") return <AppShell><PageHeading title="Payouts" description="Plan and document outgoing Foundation payments."/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
+  if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Payouts" description="Recurring obligations, one-time payouts, and verified Admin records."/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;
 }
