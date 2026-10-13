@@ -27,7 +27,7 @@ outstanding = max(0, due - verified)
 fully_paid = verified >= due
 ```
 
-A sponsor only has dues from the agreement start month. All report totals use **integer paise** until presentation, never binary floating-point money. A verified credit may reference a past month, but its `verified_at` timestamp must not be later than the report's evaluation time. The selected month identifies the due period; the sponsor status displayed is the status **as of today IST**.
+Archiving a sponsor stops new recurring dues after the archive month while retaining previous months and their verified credits in historical reports.\n\nA sponsor only has dues from the agreement start month. All report totals use **integer paise** until presentation, never binary floating-point money. A verified credit may reference a past month, but its `verified_at` timestamp must not be later than the report's evaluation time. The selected month identifies the due period; the sponsor status displayed is the status **as of today IST**.
 
 ## Screens and API
 

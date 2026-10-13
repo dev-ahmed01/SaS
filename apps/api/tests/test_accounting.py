@@ -81,7 +81,7 @@ CURRENT_UTC = NOW.astimezone(UTC)
 
 
 def sponsor(start: date) -> SimpleNamespace:
-    return SimpleNamespace(start_month=start)
+    return SimpleNamespace(start_month=start, archived_at=None)
 
 
 def rate(start: date, amount: int = 50000) -> SimpleNamespace:
@@ -248,3 +248,24 @@ def test_next_month_rate_change_does_not_rewrite_current_due(accounting_system, 
         assert [(r.effective_month, r.amount_paise) for r in schedule] == [
             (date(2026, 11, 1), 50000), (date(2026, 12, 1), 70000)
         ]
+
+
+def test_archiving_preserves_old_months_but_stops_future_commitments(
+    accounting_system, monkeypatch,
+):
+    client, engine = accounting_system
+    csrf = login(client)
+    prospect = _make_history(client, engine, csrf)
+    monkeypatch.setattr("app.accounting.utc_now", lambda: CURRENT_UTC)
+    archived = client.delete(
+        "/v1/prospects/" + prospect["id"],
+        headers={**csrf, "If-Match": "1"},
+    )
+    assert archived.status_code == 204
+    previous = client.get("/v1/accounting/overview?month=2026-09").json()
+    assert previous["total_sponsors"] == 1
+    assert previous["due_paise"] == 50000
+    assert previous["items"][0]["status"] == "archived"
+    future = client.get("/v1/accounting/overview?month=2026-11").json()
+    assert future["due_paise"] == 0
+    assert future["total_sponsors"] == 0

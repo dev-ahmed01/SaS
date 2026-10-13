@@ -78,7 +78,7 @@ export function AccountingOverview(){
           <td><strong className="table-name">{row.name}</strong></td>
           <td>{money(row.due_paise)}</td><td>{money(row.verified_paise)}</td>
           <td>{money(row.outstanding_paise)}</td>
-          <td><span className={"status-pill "+row.status}>{row.status==="new"?"New":row.status==="active"?"Active":"Inactive"}</span></td>
+          <td><span className={"status-pill "+row.status}>{row.status==="new"?"New":row.status==="active"?"Active":row.status==="archived"?"Archived":"Inactive"}</span></td>
           <td>{row.fully_paid?"Yes":"No"}</td>
         </tr>)}</tbody>
       </table></div>
