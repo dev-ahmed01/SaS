@@ -9,10 +9,9 @@ import getpass
 import os
 
 from sqlalchemy import select
-
-from app.config import get_settings
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_engine
 from app.models import AdminUser, AuditEvent, Organization, OrganizationSettings
 from app.security import PASSWORD_HASHER, hash_password
