@@ -432,3 +432,39 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .manual-collections-workspace .manual-collections-submit { display:block; }
   .manual-collections-workspace .manual-collections-submit .btn { width:100%; }
 }
+
+
+/* Phase 12: real-data Dashboard in the locked Foundation visual language. */
+.dashboard-live{max-width:1160px;display:grid;gap:22px;margin:20px 0 34px}
+.dashboard-topline,.dashboard-section-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.dashboard-topline h2{margin:0 0 5px;font-size:19px}.dashboard-period{font:500 13px var(--font-body);color:var(--muted)}
+.dashboard-topline p,.dashboard-caption,.dashboard-disclaimer{font-size:10px;color:var(--muted);line-height:1.7;margin:7px 0 0}
+.dashboard-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.dashboard-metric,.dashboard-panel{border:1px solid var(--line);background:#fff;border-radius:10px;box-shadow:var(--shadow);min-width:0}
+.dashboard-metric{display:flex;flex-direction:column;gap:8px;padding:18px 16px;min-height:130px}
+.dashboard-metric:hover{background:var(--mint-light);border-color:var(--mint-strong)}
+.dashboard-metric>span,.dashboard-metric>small{font-size:10px;color:var(--muted)}
+.dashboard-metric>strong{font:600 clamp(18px,2vw,25px) var(--font-body);color:var(--forest-deep);overflow-wrap:anywhere}
+.dashboard-dual{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.dashboard-panel{padding:20px}.dashboard-section-head{margin-bottom:15px}
+.dashboard-section-head h3{font-size:17px;margin:0}
+.dashboard-section-head a,.dashboard-section-head span,.dashboard-reminder-link{font-size:11px;font-weight:500;color:var(--forest)}
+.dashboard-facts{margin:0}.dashboard-facts>div{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.dashboard-facts>div:last-child{border-bottom:0}.dashboard-facts dt{font-size:11px;color:var(--muted)}.dashboard-facts dd{font:600 13px var(--font-body);margin:0;text-align:right}
+.dashboard-legend{display:flex;flex-wrap:wrap;gap:8px 17px;font-size:10px;color:var(--muted);margin:0 0 18px}
+.dashboard-legend span{display:inline-flex;gap:6px;align-items:center}.dashboard-dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+.dashboard-dot.due,.dashboard-bar.due{background:#b4d2c0}.dashboard-dot.collected,.dashboard-bar.collected{background:#176849}
+.dashboard-dot.planned,.dashboard-bar.planned{background:#bbd3ee}.dashboard-dot.disbursed,.dashboard-bar.disbursed{background:#4879a8}
+.dashboard-trend-rows{display:grid;gap:14px}
+.dashboard-trend-row{display:grid;grid-template-columns:75px minmax(0,1fr) 100px;gap:11px;align-items:center}
+.dashboard-trend-row>span{font-size:10px;color:var(--muted)}.dashboard-trend-row>strong{font:500 11px var(--font-body);text-align:right}
+.dashboard-bars{display:grid;gap:3px}.dashboard-track{background:#f1f5f3;height:5px;border-radius:3px;overflow:hidden}
+.dashboard-bar{height:100%;border-radius:3px;display:block}
+.dashboard-activity{list-style:none;padding:0;margin:0}.dashboard-activity li+li{border-top:1px solid var(--line)}
+.dashboard-activity a{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0}
+.dashboard-activity a>span{display:flex;flex-direction:column;gap:4px}.dashboard-activity strong{font-size:11px;font-weight:500}
+.dashboard-activity small,.dashboard-empty{font-size:10px;color:var(--muted)}.dashboard-activity b{font:600 11px var(--font-body);white-space:nowrap}
+.dashboard-reminder-link{display:inline-flex;margin-top:15px}.dashboard-loading,.dashboard-error{padding:22px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:20px}
+@media(max-width:1100px){.dashboard-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:750px){.dashboard-dual{grid-template-columns:1fr}.dashboard-panel{padding:15px}}
+@media(max-width:480px){.dashboard-metrics{grid-template-columns:1fr}.dashboard-trend-row{grid-template-columns:55px minmax(0,1fr) 76px;gap:6px}.dashboard-trend-row>strong{font-size:10px}}
