@@ -327,6 +327,9 @@ def dispatch(
             # Never auto-retry uncertain sends, even across future worker runs.
             status="unknown"
             failure="provider_unknown"
+        # The provider may callback before its HTTP response returns.
+        # Reload under a row lock, preserving a confirmed sent/delivered receipt.
+        db.refresh(dispatch_record,with_for_update=True)
         if dispatch_record.status=="claimed":
             dispatch_record.status=status
             dispatch_record.failure_code=failure
@@ -376,11 +379,14 @@ async def callback(
     ).with_for_update()).one_or_none()
     if record is None:
         raise HTTPException(status_code=404,detail="Dispatch not found")
-    duplicate=db.scalar(select(MessageDeliveryEvent.id).where(
+    duplicate=db.scalars(select(MessageDeliveryEvent).where(
         MessageDeliveryEvent.organization_id==record.organization_id,
         MessageDeliveryEvent.event_id==payload.event_id,
-    ))
+    )).one_or_none()
     if duplicate is not None:
+        if (duplicate.dispatch_id!=record.id or duplicate.status!=payload.status
+                or duplicate.provider_message_id!=payload.provider_message_id):
+            raise HTTPException(status_code=409,detail="Callback event ID conflict")
         return {"status":"already_recorded"}
     if record.status=="cancelled":
         raise HTTPException(status_code=409,detail="Cancelled dispatch cannot receive a callback")
