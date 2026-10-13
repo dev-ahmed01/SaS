@@ -1,0 +1,246 @@
+"""Admin attestation of received funds, not automated bank verification."""
+import hashlib
+import json
+import re
+import uuid
+from datetime import date
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.accounting import evaluate_status, ist_today, month_start
+from app.auth import db_session, get_admin, require_csrf
+from app.models import (
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    ManualCollection,
+    MessageOutbox,
+    OrganizationSettings,
+    Prospect,
+    SponsorshipRate,
+    VerifiedCredit,
+)
+from app.security import utc_now
+
+router = APIRouter(prefix="/v1/collections", tags=["Manual collections"])
+REFERENCE = re.compile(r"^[A-Z0-9][A-Z0-9._:/-]{5,99}$")
+
+
+class CollectionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: uuid.UUID
+    prospect_id: uuid.UUID
+    period_month: date
+    received_on: date
+    amount_paise: int = Field(ge=1, le=1_000_000_000)
+    payment_method: Literal["upi", "bank_transfer", "cash"]
+    receipt_reference: str = Field(min_length=6, max_length=100)
+    funds_confirmed: Literal[True]
+
+    @field_validator("receipt_reference")
+    @classmethod
+    def normalize_reference(cls, value: str) -> str:
+        ref = value.strip().upper()
+        if not REFERENCE.fullmatch(ref):
+            raise ValueError("Use a unique transaction or receipt reference (6-100 characters)")
+        return ref
+
+    @field_validator("period_month")
+    @classmethod
+    def month_only(cls, value: date) -> date:
+        if value != month_start(value):
+            raise ValueError("Month must be its first day")
+        return value
+
+
+class CollectionOutput(BaseModel):
+    id: uuid.UUID
+    prospect_id: uuid.UUID
+    sponsor_name: str
+    amount_paise: int
+    period_month: date
+    received_on: date
+    payment_method: str
+    reference_mask: str
+    evidence: Literal["admin_attested"]
+    message_status: Literal["awaiting_integration", "suppressed"]
+    sponsor_status: str
+
+
+class CollectionPage(BaseModel):
+    items: list[CollectionOutput]
+    total: int
+    limit: int
+    offset: int
+
+
+def _payload_hash(payload: CollectionInput) -> str:
+    body = payload.model_dump(mode="json", exclude={"request_id"})
+    return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+
+
+def _reference_hash(method: str, ref: str) -> str:
+    return hashlib.sha256((method + ":" + ref).encode()).hexdigest()
+
+
+def _view(db: Session, row: ManualCollection) -> CollectionOutput:
+    sponsor = db.get(Prospect, row.prospect_id)
+    event = db.scalars(select(MessageOutbox).where(
+        MessageOutbox.organization_id == row.organization_id,
+        MessageOutbox.collection_id == row.id,
+    )).one()
+    return CollectionOutput(
+        id=row.id, prospect_id=row.prospect_id, sponsor_name=sponsor.full_name,
+        amount_paise=row.amount_paise, period_month=row.period_month,
+        received_on=row.received_on, payment_method=row.payment_method,
+        reference_mask=row.reference_mask, evidence="admin_attested",
+        message_status=event.status, sponsor_status=sponsor.lifecycle_status,
+    )
+
+
+@router.post("", response_model=CollectionOutput, status_code=201)
+def add_collection(
+    payload: CollectionInput,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    db: Annotated[Session, Depends(db_session)],
+) -> CollectionOutput:
+    admin = context[0]
+    settings = db.scalars(select(OrganizationSettings).where(
+        OrganizationSettings.organization_id == admin.organization_id
+    ).with_for_update()).one_or_none()
+    if settings is None or settings.timezone != "Asia/Kolkata" or settings.currency_code != "INR":
+        raise HTTPException(status_code=503, detail="Accounting settings unavailable")
+
+    payload_hash = _payload_hash(payload)
+    old = db.scalars(select(ManualCollection).where(
+        ManualCollection.organization_id == admin.organization_id,
+        ManualCollection.request_id == payload.request_id,
+    )).one_or_none()
+    if old is not None:
+        if old.request_payload_hash != payload_hash:
+            raise HTTPException(status_code=409, detail="Request ID used for different payment")
+        response.status_code = 200
+        response.headers["Cache-Control"] = "no-store"
+        return _view(db, old)
+
+    today = ist_today()
+    if payload.received_on > today or payload.period_month > month_start(today):
+        raise HTTPException(status_code=422, detail="Cannot record a future payment")
+    if payload.received_on < payload.period_month:
+        raise HTTPException(status_code=422, detail="Received date predates billing month")
+    sponsor = db.scalars(select(Prospect).where(
+        Prospect.organization_id == admin.organization_id,
+        Prospect.id == payload.prospect_id,
+        Prospect.archived_at.is_(None),
+    ).with_for_update()).one_or_none()
+    if sponsor is None:
+        raise HTTPException(status_code=404, detail="Sponsor not found or archived")
+    if sponsor.start_month is None or payload.period_month < sponsor.start_month:
+        raise HTTPException(status_code=422, detail="Billing month predates registration")
+    if payload.received_on < sponsor.start_month:
+        raise HTTPException(status_code=422, detail="Receipt predates sponsor registration")
+    rates = db.scalars(select(SponsorshipRate).where(
+        SponsorshipRate.organization_id == admin.organization_id,
+        SponsorshipRate.prospect_id == sponsor.id,
+    )).all()
+    if not any(rate.effective_month <= payload.period_month for rate in rates):
+        raise HTTPException(status_code=409, detail="Contribution agreement missing")
+    digest = _reference_hash(payload.payment_method, payload.receipt_reference)
+    if db.scalars(select(ManualCollection.id).where(
+        ManualCollection.organization_id == admin.organization_id,
+        ManualCollection.reference_digest == digest,
+    )).first() is not None:
+        raise HTTPException(status_code=409, detail="Receipt or transaction already recorded")
+    now = utc_now()
+    credit = VerifiedCredit(
+        organization_id=admin.organization_id, prospect_id=sponsor.id,
+        period_month=payload.period_month, amount_paise=payload.amount_paise,
+        source_type="manual_attested", source_key="manual:"+digest, verified_at=now,
+    )
+    db.add(credit)
+    db.flush()
+    row = ManualCollection(
+        organization_id=admin.organization_id, prospect_id=sponsor.id,
+        verified_credit_id=credit.id, request_id=payload.request_id,
+        request_payload_hash=payload_hash, reference_digest=digest,
+        reference_mask="****"+payload.receipt_reference[-4:],
+        received_on=payload.received_on, period_month=payload.period_month,
+        payment_method=payload.payment_method, amount_paise=payload.amount_paise,
+        recorded_by_admin_id=admin.id,
+    )
+    db.add(row)
+    db.flush()
+    can_message = sponsor.whatsapp_opt_in and bool(
+        sponsor.whatsapp_number or sponsor.mobile_number
+    )
+    db.add(MessageOutbox(
+        organization_id=admin.organization_id,
+        prospect_id=sponsor.id, collection_id=row.id,
+        event_type="collection_recorded",
+        status="awaiting_integration" if can_message else "suppressed",
+        suppress_reason=None if can_message else
+        ("consent_missing" if not sponsor.whatsapp_opt_in else "recipient_missing"),
+    ))
+    before = sponsor.lifecycle_status
+    credits = db.scalars(select(VerifiedCredit).where(
+        VerifiedCredit.organization_id == admin.organization_id,
+        VerifiedCredit.prospect_id == sponsor.id,
+    )).all()
+    after = evaluate_status(
+        sponsor, rates, credits, today, now, settings.inactivity_months,
+    )
+    if before != after:
+        sponsor.lifecycle_status = after
+        sponsor.status_updated_at = now
+        sponsor.updated_at = now
+        sponsor.version += 1
+    db.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="collection.manual_recorded", entity_type="manual_collection",
+        entity_id=str(row.id), before_data=None,
+        after_data={
+            "prospect_id": str(sponsor.id), "amount_paise": payload.amount_paise,
+            "period_month": str(payload.period_month), "method": payload.payment_method,
+            "source": "admin_attested", "previous_status": before, "new_status": after,
+        },
+    ))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Duplicate request or transaction. Refresh before retrying"
+        ) from exc
+    response.headers["Cache-Control"] = "no-store"
+    return _view(db, row)
+
+
+@router.get("", response_model=CollectionPage)
+def list_collections(
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    db: Annotated[Session, Depends(db_session)],
+    period_month: date | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CollectionPage:
+    conditions = [ManualCollection.organization_id == context[0].organization_id]
+    if period_month is not None:
+        if period_month != month_start(period_month):
+            raise HTTPException(status_code=422, detail="Invalid billing month")
+        conditions.append(ManualCollection.period_month == period_month)
+    total = db.scalar(select(func.count(ManualCollection.id)).where(*conditions)) or 0
+    rows = db.scalars(select(ManualCollection).where(*conditions)
+        .order_by(ManualCollection.created_at.desc(), ManualCollection.id.desc())
+        .limit(limit).offset(offset)).all()
+    response.headers["Cache-Control"] = "no-store"
+    return CollectionPage(
+        items=[_view(db, row) for row in rows], total=total,
+        limit=limit, offset=offset,
+    )
