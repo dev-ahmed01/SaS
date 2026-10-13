@@ -440,3 +440,45 @@ class MessageOutbox(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ManualCollectionReversal(Base):
+    """Immutable void of an incorrectly recorded collection, NOT a cash refund.
+
+    The original collection and credit remain in the database. Accounting
+    projections exclude the original credit after a reversal is recorded.
+    """
+
+    __tablename__ = "manual_collection_reversals"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "collection_id"],
+            ["manual_collections.organization_id", "manual_collections.id"],
+            ondelete="RESTRICT", name="fk_reversal_collection_same_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "collection_id",
+            name="uq_reversal_one_per_collection",
+        ),
+        UniqueConstraint(
+            "organization_id", "request_id", name="uq_reversal_request_org",
+        ),
+        CheckConstraint(
+            "reason_code IN ("
+            "'duplicate_entry', 'wrong_sponsor', 'wrong_amount', "
+            "'funds_not_received', 'other')",
+            name="ck_reversal_reason",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    collection_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
