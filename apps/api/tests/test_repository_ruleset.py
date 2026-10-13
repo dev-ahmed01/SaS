@@ -7,7 +7,6 @@ import pytest
 from app.repository_ruleset import (
     REPOSITORY,
     configured_policy,
-    installed_policy,
     policy_is_strict,
     run,
 )

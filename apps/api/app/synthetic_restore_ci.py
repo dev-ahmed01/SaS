@@ -22,7 +22,6 @@ from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session
 
 from app.accounting import effective_credits
-from app.restored_staging_audit import audit_database
 from app.models import (
     AuditEvent,
     ManualCollection,
@@ -35,6 +34,7 @@ from app.models import (
     SponsorshipRate,
     VerifiedCredit,
 )
+from app.restored_staging_audit import audit_database
 
 PREFIX = "sas_restore_ci_"
 

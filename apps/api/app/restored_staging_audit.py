@@ -47,7 +47,9 @@ def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
         and approved_name == db_name
         and target.query.get("sslmode") == "verify-full"
     ):
-        raise ValueError("A dedicated TLS-verified, explicitly approved staging restore is required")
+        raise ValueError(
+            "A dedicated TLS-verified, explicitly approved staging restore is required"
+        )
     return target
 
 
