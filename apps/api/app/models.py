@@ -528,7 +528,10 @@ class PayoutDisbursement(Base):
             name="fk_payout_disbursement_same_org", ondelete="RESTRICT",
         ),
         UniqueConstraint("organization_id", "request_id", name="uq_payout_disbursement_request"),
-        UniqueConstraint("organization_id", "reference_digest", name="uq_payout_disbursement_reference"),
+        UniqueConstraint(
+            "organization_id", "reference_digest",
+            name="uq_payout_disbursement_reference",
+        ),
         UniqueConstraint("organization_id", "plan_id", "period_month",
                          name="uq_payout_disbursement_period"),
         CheckConstraint("amount_paise > 0", name="ck_payout_disbursement_positive"),
@@ -551,3 +554,4 @@ class PayoutDisbursement(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

@@ -19,8 +19,12 @@ from sqlalchemy.orm import Session
 from app.accounting import ist_today, month_start
 from app.auth import db_session, get_admin, require_csrf
 from app.models import (
-    AdminSession, AdminUser, AuditEvent, OrganizationSettings,
-    PayoutDisbursement, PayoutPlan,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    OrganizationSettings,
+    PayoutDisbursement,
+    PayoutPlan,
 )
 
 router = APIRouter(prefix="/v1/payouts", tags=["Payouts"])
@@ -177,9 +181,6 @@ def create_plan(
             raise HTTPException(status_code=409, detail="Request ID already used")
         response.status_code = 200
         return _plan_output(db, existing)
-    if payload.start_month > month_start(ist_today()):
-        # Future schedules can be planned, but cannot be marked as paid yet.
-        pass
     plan = PayoutPlan(
         organization_id=admin.organization_id, request_id=payload.request_id,
         payload_hash=digest, payee_name=payload.payee_name,
