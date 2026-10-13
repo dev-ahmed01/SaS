@@ -101,7 +101,12 @@ export function ProspectEditor({
       setError("Use a valid mobile number (10-digit Indian number or international + format).");
       return;
     }
-    if (amount === null) {setError("Monthly sponsorship must be ₹250, ₹500, ₹750, or another positive multiple of ₹250.");return;}
+    const legacyUnchanged = Boolean(current
+      && values.amount_rupees === toRupees(current.monthly_contribution_paise));
+    if (amount === null && !legacyUnchanged) {
+      setError("Monthly sponsorship must be ₹250, ₹500, ₹750, or another positive multiple of ₹250.");
+      return;
+    }
     setSaving(true);setError("");
     try {
       const body: Record<string,unknown> = {
@@ -109,7 +114,9 @@ export function ProspectEditor({
         mobile_number:mobile,
         whatsapp_number:whatsapp,
         area_city:values.area_city.trim(),
-        monthly_contribution_paise:amount,
+        ...(!current || !legacyUnchanged
+          ? {monthly_contribution_paise:amount}
+          : {}),
         next_followup_on:values.next_followup_on || null,
         last_contact_on:values.last_contact_on || null,
         notes:values.notes.trim() || null,
@@ -190,7 +197,9 @@ export function ProspectEditor({
         <label className="field"><span className="field-label">Mobile number <span className="required">*</span></span><input required type="tel" value={values.mobile_number} onChange={e=>update("mobile_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">WhatsApp number (optional)</span><input type="tel" value={values.whatsapp_number} onChange={e=>update("whatsapp_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">Area / City <span className="required">*</span></span><input required minLength={2} maxLength={120} value={values.area_city} onChange={e=>update("area_city",e.target.value)} placeholder="Enter area or city"/></label>
-        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step="250" min="250" max="10000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
+        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step={current && current.monthly_contribution_paise%25000!==0?"any":"250"}
+          min={current && current.monthly_contribution_paise<25000?"0.01":"250"}
+          max="10000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
         <label className="field"><span className="field-label">Next follow-up date</span><input type="date" value={values.next_followup_on} onChange={e=>update("next_followup_on",e.target.value)}/></label>
         <label className="field"><span className="field-label">Last contact date</span><input type="date" value={values.last_contact_on} onChange={e=>update("last_contact_on",e.target.value)}/></label>
         {!current && <label className="field"><span className="field-label">UPI ID (optional)</span><input maxLength={193} value={values.upi_id} onChange={e=>update("upi_id",e.target.value)} placeholder="name@bank"/></label>}

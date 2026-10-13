@@ -59,7 +59,7 @@ export function AdminSettingsForm(){
     const rupees=Number(form.monthly_amount_rupees);
     const paise=Math.round(rupees*100);
     const sponsor_day=Number(form.sponsor_day),promoter_day=Number(form.promoter_day),months=2;
-    if(!Number.isFinite(rupees)||!Number.isSafeInteger(paise)||paise<25000||paise%25000!==0||
+    if(!Number.isFinite(rupees)||!Number.isSafeInteger(paise)||(paise!==current.default_contribution_paise&&(paise<25000||paise%25000!==0))||
       Math.abs(rupees*100-paise)>0.001||![sponsor_day,promoter_day,months].every(Number.isInteger)||
       sponsor_day<1||sponsor_day>28||promoter_day<1||promoter_day>28||months!==2){
       setError("Use a positive monthly commitment in ₹250 increments, reminder days 1–28, and the fixed two-month inactivity rule.");
@@ -69,7 +69,10 @@ export function AdminSettingsForm(){
     try{
       const res=await fetch("/api/admin/settings",{
         method:"PATCH",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},credentials:"same-origin",
-        body:JSON.stringify({default_contribution_paise:paise,sponsor_reminder_day:sponsor_day,promoter_reminder_day:promoter_day,inactivity_months:2})
+        body:JSON.stringify({
+          ...(paise!==current.default_contribution_paise?{default_contribution_paise:paise}:{}),
+          sponsor_reminder_day:sponsor_day,promoter_reminder_day:promoter_day,inactivity_months:2,
+        })
       });
       if(!res.ok){setError(res.status===403?"Your session could not be verified. Sign in again.":"Settings could not be saved. Please check the values.");return;}
       const saved:Values=await res.json();
@@ -106,7 +109,9 @@ export function AdminSettingsForm(){
     {!loading&&!form&&<p role="alert">{error||"Settings unavailable."}</p>}
     {form&&current&&<form onSubmit={submit}>
       <div className="form-grid">
-        <label className="field"><span className="field-label">Default monthly contribution (₹)</span><input type="number" min="250" step="250" required value={form.monthly_amount_rupees} onChange={e=>update("monthly_amount_rupees",e.target.value)}/></label>
+        <label className="field"><span className="field-label">Default monthly contribution (₹)</span><input type="number" min={current.default_contribution_paise<25000?"0.01":"250"}
+          step={current.default_contribution_paise%25000!==0?"any":"250"}
+          required value={form.monthly_amount_rupees} onChange={e=>update("monthly_amount_rupees",e.target.value)}/></label>
         <label className="field"><span className="field-label">Sponsor reminder day of month</span><input type="number" min="1" max="28" step="1" required value={form.sponsor_day} onChange={e=>update("sponsor_day",e.target.value)}/></label>
         <label className="field"><span className="field-label">Promoter follow-up day of month</span><input type="number" min="1" max="28" step="1" required value={form.promoter_day} onChange={e=>update("promoter_day",e.target.value)}/></label>
         <label className="field"><span className="field-label">Consecutive completed zero-contribution months (fixed)</span><input type="number" min="2" max="2" readOnly value="2"/></label>
