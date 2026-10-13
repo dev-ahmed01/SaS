@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,19 @@ class Credentials(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: EmailStr
     password: str = Field(min_length=1, max_length=256)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def local_admin_alias(cls, value: object) -> object:
+        # Explicitly enabled, localhost-only development mode; EmailStr
+        # validation remains mandatory for production and ordinary accounts.
+        if (
+            isinstance(value, str)
+            and value.strip().lower() == "admin"
+            and getattr(get_settings(), "local_demo_login_enabled", False)
+        ):
+            return "admin@localhost.invalid"
+        return value
 
 
 def db_session():

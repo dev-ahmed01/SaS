@@ -9,11 +9,13 @@ import getpass
 import os
 
 from sqlalchemy import select
+
+from app.config import get_settings
 from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.models import AdminUser, AuditEvent, Organization, OrganizationSettings
-from app.security import hash_password
+from app.security import PASSWORD_HASHER, hash_password
 from app.sponsorship_policy import (
     INACTIVITY_COMPLETED_MONTHS,
     SPONSORSHIP_DEFAULT_PAISE,
@@ -25,6 +27,7 @@ def provision_admin(
     database: Session, *, email: str, password: str, organization_name: str,
     amount_paise: int = SPONSORSHIP_DEFAULT_PAISE, sponsor_day: int = 5, promoter_day: int = 20,
     inactivity_months: int = INACTIVITY_COMPLETED_MONTHS,
+    local_demo_short_password: bool = False,
 ) -> None:
     normalized = email.strip().lower()
     if not normalized or "@" not in normalized or len(normalized) > 320:
@@ -41,12 +44,20 @@ def provision_admin(
         raise ValueError("Invalid initial sponsorship configuration")
     if inactivity_months != INACTIVITY_COMPLETED_MONTHS:
         raise ValueError("Invalid initial inactivity threshold")
+    if local_demo_short_password:
+        if not get_settings().local_demo_login_enabled:
+            raise ValueError("Local demo password exception is disabled")
+        if not 8 <= len(password) <= 128:
+            raise ValueError("Local demo password must contain 8–128 characters")
+        password_hash = PASSWORD_HASHER.hash(password)
+    else:
+        password_hash = hash_password(password)
     org = Organization(name=organization_name.strip())
     database.add(org)
     database.flush()
     admin = AdminUser(
         organization_id=org.id, email=normalized,
-        password_hash=hash_password(password), is_active=True,
+        password_hash=password_hash, is_active=True,
     )
     database.add_all(
         [

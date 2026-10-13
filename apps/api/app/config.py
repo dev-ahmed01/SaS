@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     database_url: str
     auth_secret: str | None = None
     upi_match_secret: str | None = None
+    # Never enable for staging/production; local ephemeral DB only.
+    local_demo_login_enabled: bool = False
 
     # Global kill switch, independent of organization settings.
     messaging_delivery_enabled: bool = False
@@ -32,6 +34,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_database(self) -> "Settings":
+        if self.local_demo_login_enabled:
+            parsed = urlsplit(self.database_url)
+            if not (
+                self.app_env == "development"
+                and parsed.scheme == "postgresql+psycopg"
+                and parsed.hostname in ("127.0.0.1", "localhost")
+                and parsed.port == 5432
+                and parsed.username == "sas_dev"
+                and parsed.path == "/sas_dev"
+                and not parsed.query
+            ):
+                raise ValueError(
+                    "Local demo credentials require the loopback-only sas_dev PostgreSQL database"
+                )
         if self.app_env in ("staging", "production") and not self.database_url.startswith(
             "postgresql+psycopg://"
         ):

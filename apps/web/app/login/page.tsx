@@ -8,6 +8,8 @@ export default function LoginPage() {
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [busy,setBusy] = useState(false);
+  const localDemo = process.env.NODE_ENV === "development"
+    && process.env.NEXT_PUBLIC_LOCAL_DEMO_LOGIN_ENABLED === "true";
   const [error,setError] = useState("");
   useEffect(()=>{
     let active=true;
@@ -45,7 +47,7 @@ export default function LoginPage() {
       <h2 id="login-title">Welcome back</h2><p>Sign in to manage your masjid sponsorships.</p>
       <form onSubmit={submit}>
         <div className="login-fields">
-          <label className="field"><span className="field-label">Email address</span><input type="email" autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="Enter your email address"/></label>
+          <label className="field"><span className="field-label">{localDemo?"Email or username":"Email address"}</span><input type={localDemo?"text":"email"} autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)} placeholder={localDemo?"Enter Admin or your email":"Enter your email address"}/></label>
           <label className="field"><span className="field-label">Password</span><input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password"/></label>
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
