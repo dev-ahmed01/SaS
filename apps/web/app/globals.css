@@ -356,3 +356,33 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .payouts-workspace {padding:12px;}
   .payout-panel-heading {flex-wrap:wrap;}
 }
+
+/* Phase 10: eligibility-only WhatsApp preview; restrained locked palette. */
+.reminder-workspace {max-width:1120px;margin-top:23px;}
+.reminder-intro {display:flex;align-items:end;justify-content:space-between;
+  flex-wrap:wrap;gap:18px;}
+.reminder-intro h2 {margin:0 0 7px;font-size:19px;}
+.reminder-intro p {margin:0;max-width:670px;font-size:11px;color:var(--muted);}
+.reminder-kind {display:flex;border:1px solid var(--line);border-radius:8px;
+  overflow:hidden;background:white;}
+.reminder-kind button {border:0;padding:10px 18px;font:500 12px var(--font-body);
+  background:white;color:var(--forest);}
+.reminder-kind button.selected {background:var(--forest);color:white;}
+.reminder-kind button:focus-visible {outline:2px solid #2e9868;outline-offset:-3px;}
+.reminder-no-send {padding:13px 16px;border:1px solid var(--line);
+  background:var(--mint-light);border-radius:8px;margin-top:20px;
+  font-size:11px;color:var(--forest-deep);}
+.reminder-review {margin-top:22px;border:1px solid var(--line);
+  background:white;border-radius:10px;padding:22px;}
+.reminder-review h3 {font-size:18px;margin:0 0 8px;}
+.reminder-review .review-heading h3 {margin:0 0 6px;}
+.reminder-sponsor-list {display:block;max-width:370px;
+  overflow-wrap:anywhere;font-size:11px;color:var(--muted);}
+.reminder-prepare {display:flex;flex-direction:column;align-items:flex-start;
+  gap:13px;border-top:1px solid var(--line);padding-top:22px;margin-top:20px;}
+.reminder-prepare .accounting-footnote {margin:0;}
+@media(max-width:540px){
+  .reminder-review{padding:12px;}
+  .reminder-kind{width:100%;}
+  .reminder-kind button{flex:1;}
+}

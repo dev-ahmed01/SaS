@@ -6,6 +6,7 @@ import { AdminSettingsForm } from "./admin-settings-form";
 import { ManualCollections } from "./collections/manual-collections";
 import { CollectionsAllWorkspace } from "./collections/collections-all-workspace";
 import { PayoutAdd, PayoutList } from "./payouts/payouts-workspace";
+import { WhatsAppEligibility } from "./reminders/whatsapp-eligibility";
 import { ProspectsWorkspace } from "./prospects/prospects-workspace";
 import { PromotersWorkspace } from "./promoters/promoters-workspace";
 
@@ -68,6 +69,16 @@ function BusinessModule({module,view}:{module:Module;view:string}) {
 }
 
 function Reminders({view}:{view:string}) {
+  if(view==="whatsapp"){
+    return <AppShell>
+      <Link className="back-link" href="/reminders">
+        <Icon name="arrow-left" size={17}/> Back to reminders
+      </Link>
+      <PageHeading title="WhatsApp Reminder"
+        description="Preview unpaid-sponsor eligibility and consolidated promoter follow-ups."/>
+      <WhatsAppEligibility/>
+    </AppShell>;
+  }
   if(view==="whatsapp"||view==="email") {
     const wa=view==="whatsapp";
     return <AppShell><Link className="back-link" href="/reminders"><Icon name="arrow-left" size={17}/> Back to reminders</Link>
