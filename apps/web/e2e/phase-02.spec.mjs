@@ -497,7 +497,7 @@ test("One-time payouts stay in All after payment; recurring Active excludes them
   const plans=page.getByRole("region",{name:"All payout plans"}).getByRole("table").first();
   const row=plans.getByRole("row",{name:new RegExp(name)});
   await expect(row).toBeVisible();
-  await expect(row.getByText("One-time")).toBeVisible();
+  await expect(row.getByRole("cell",{name:"One-time",exact:true})).toBeVisible();
   await row.getByRole("button",{name:"Record paid"}).click();
   const modal=page.getByRole("dialog",{name:"Record paid payout"});
   await modal.getByRole("textbox",{name:"Outgoing payment reference"}).fill("ONETIME"+stamp);
