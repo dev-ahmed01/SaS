@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -41,7 +40,6 @@ async function securedPost(path:string,body:unknown):Promise<Response>{
 }
 
 export function PayoutAdd(){
-  const router=useRouter();
   const [payee,setPayee]=useState("");
   const [purpose,setPurpose]=useState("");
   const [notes,setNotes]=useState("");
