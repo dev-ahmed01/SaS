@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     AdminUser,
     AuditEvent,
+    ManualCollection,
     Organization,
     OrganizationSettings,
     Promoter,
@@ -262,6 +263,43 @@ def test_postgres_rejects_duplicate_verified_credit_evidence() -> None:
             ))
             if idx == 0:
                 db.flush()
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_manual_collection_cannot_cross_tenant() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        first = Organization(name="Manual collection org A")
+        second = Organization(name="Manual collection org B")
+        db.add_all([first, second])
+        db.flush()
+        sponsor = Prospect(
+            organization_id=first.id, full_name="Synthetic Manual Sponsor",
+            mobile_number="+919311100103", area_city="Bengaluru",
+            monthly_contribution_paise=50000, start_month=date(2026, 10, 1),
+            whatsapp_opt_in=True, lifecycle_status="new", version=1,
+        )
+        db.add(sponsor)
+        db.flush()
+        credit = VerifiedCredit(
+            organization_id=first.id, prospect_id=sponsor.id,
+            period_month=date(2026, 10, 1), amount_paise=50000,
+            source_type="manual_attested", source_key="manual:cross-org-fixture",
+            verified_at=datetime(2026, 10, 13, 10, 0, tzinfo=UTC),
+        )
+        db.add(credit)
+        db.flush()
+        db.add(ManualCollection(
+            organization_id=second.id, prospect_id=sponsor.id,
+            verified_credit_id=credit.id, request_id=uuid.uuid4(),
+            request_payload_hash="a" * 64, reference_digest="b" * 64,
+            reference_mask="****1003", received_on=date(2026, 10, 13),
+            period_month=date(2026, 10, 1), payment_method="upi",
+            amount_paise=50000,
+        ))
         with pytest.raises(IntegrityError):
             db.flush()
         db.rollback()
