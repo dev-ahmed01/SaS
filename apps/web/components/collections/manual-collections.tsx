@@ -154,11 +154,11 @@ export function ManualCollections(){
           <label className="checkbox-field form-cell full"><input type="checkbox"
             checked={confirmed} onChange={e=>{setConfirmed(e.target.checked);update();}}/>
             <span>I have checked the Foundation's records and confirm these funds were received.</span></label>
+          {error&&<p className="form-error form-cell full" role="alert">{error}</p>}
+          {success&&<p className="form-success form-cell full" role="status">{success}</p>}
+          <div className="form-actions form-cell full"><button type="submit" disabled={saving||!confirmed||!selected}
+            className="btn btn-primary">{saving?"Recording…":"Save Collection"}</button></div>
         </div>
-        {error&&<p className="form-error" role="alert">{error}</p>}
-        {success&&<p className="form-success" role="status">{success}</p>}
-        <div className="form-actions"><button type="submit" disabled={saving||!confirmed||!selected}
-          className="btn btn-primary">{saving?"Recording…":"Save Collection"}</button></div>
       </form>
     </section>
     <section className="content-panel" aria-label="Recent manual collections">

@@ -403,10 +403,13 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:530px) {.delivery-status {padding:13px;}
   .delivery-metrics {grid-template-columns:1fr 1fr;}}
 
-/* Phase 11 mobile regression: keep the manual receipt confirmation action
-   in a hit-testable layer above overlapping form-grid content on small screens. */
-.manual-collections-workspace .form-grid { position:relative; z-index:0; }
-.manual-collections-workspace .form-actions { position:relative; z-index:1; isolation:isolate; }
+/* Phase 11 mobile regression: the submit action occupies an actual grid row,
+   avoiding overlap with earlier form labels during narrow-screen scrolling. */
+.manual-collections-workspace .form-actions.form-cell.full {
+  grid-column:1/-1;
+  justify-self:stretch;
+  margin-top:6px;
+}
 @media(max-width:780px) {
   .manual-collections-workspace .form-grid { grid-template-columns:minmax(0,1fr); }
   .manual-collections-workspace .form-actions { padding-bottom:8px; }
