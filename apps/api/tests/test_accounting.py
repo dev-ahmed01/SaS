@@ -1,26 +1,62 @@
 """Monthly accounting acceptance: precise IST boundaries, partials, credit controls."""
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from app.accounting import evaluate_status, ist_today, period_balance, shift_month
+from app.bootstrap_admin import provision_admin
+from app.main import app
 from app.models import (
     AuditEvent,
+    Base,
     Prospect,
     SponsorshipRate,
     VerifiedCredit,
 )
-from test_prospects import system  # noqa: F401
-from test_prospects import create as create_prospect
-from test_prospects import login
+from test_prospects import create as create_prospect, login
+
+@pytest.fixture
+def accounting_system(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org", password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="synthetic-auth-secret-more-than-thirty-two-characters",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(
+            upi_match_secret="synthetic-independent-upi-hmac-key-for-tests",
+        ),
+    )
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
+
 
 IST = ZoneInfo("Asia/Kolkata")
 NOW = datetime(2026, 11, 1, 0, 15, tzinfo=IST)
-CURRENT_UTC = NOW.astimezone(timezone.utc)
+CURRENT_UTC = NOW.astimezone(UTC)
 
 
 def sponsor(start: date) -> SimpleNamespace:
@@ -40,8 +76,8 @@ def credit(month: date, value: int, verified_at: datetime = CURRENT_UTC) -> Simp
 def test_calendar_arithmetic_and_ist_month_transition():
     assert shift_month(date(2026, 1, 31), -1) == date(2025, 12, 1)
     assert shift_month(date(2024, 2, 29), 1) == date(2024, 3, 1)
-    assert ist_today(datetime(2026, 10, 31, 18, 29, tzinfo=timezone.utc)) == date(2026, 10, 31)
-    assert ist_today(datetime(2026, 10, 31, 18, 30, tzinfo=timezone.utc)) == date(2026, 11, 1)
+    assert ist_today(datetime(2026, 10, 31, 18, 29, tzinfo=UTC)) == date(2026, 10, 31)
+    assert ist_today(datetime(2026, 10, 31, 18, 30, tzinfo=UTC)) == date(2026, 11, 1)
 
 
 def test_two_completed_months_and_reactivation_are_deterministic():
@@ -83,7 +119,7 @@ def test_unverified_or_late_credits_not_counted_in_balance():
     rates = [rate(date(2026, 11, 1))]
     next_day = credit(
         date(2026, 11, 1), 50000,
-        datetime(2026, 11, 2, tzinfo=timezone.utc),
+        datetime(2026, 11, 2, tzinfo=UTC),
     )
     assert period_balance(p, rates, [next_day], date(2026, 11, 1), CURRENT_UTC)[1] == 0
 
@@ -103,8 +139,8 @@ def _make_history(client, engine, csrf):
     return p
 
 
-def test_overview_is_read_only_zero_verified_and_sync_is_audited(system, monkeypatch):
-    client, engine = system
+def test_overview_is_read_only_zero_verified_and_sync_is_audited(accounting_system, monkeypatch):
+    client, engine = accounting_system
     csrf = login(client)
     p = _make_history(client, engine, csrf)
     monkeypatch.setattr("app.accounting.utc_now", lambda: CURRENT_UTC)
@@ -135,8 +171,8 @@ def test_overview_is_read_only_zero_verified_and_sync_is_audited(system, monkeyp
         ).where(AuditEvent.action == "prospect.status_recalculated")) == 1
 
 
-def test_only_verified_evidence_credits_pay_and_reactivate(system, monkeypatch):
-    client, engine = system
+def test_only_verified_evidence_credits_pay_and_reactivate(accounting_system, monkeypatch):
+    client, engine = accounting_system
     csrf = login(client)
     p = _make_history(client, engine, csrf)
     monkeypatch.setattr("app.accounting.utc_now", lambda: CURRENT_UTC)
@@ -168,8 +204,8 @@ def test_only_verified_evidence_credits_pay_and_reactivate(system, monkeypatch):
     assert client.post("/v1/accounting/refresh-statuses", headers=csrf).json()["changed"] == 1
 
 
-def test_next_month_rate_change_does_not_rewrite_current_due(system, monkeypatch):
-    client, engine = system
+def test_next_month_rate_change_does_not_rewrite_current_due(accounting_system, monkeypatch):
+    client, engine = accounting_system
     csrf = login(client)
     monkeypatch.setattr("app.prospects._ist_month", lambda: date(2026, 11, 1))
     monkeypatch.setattr("app.accounting.utc_now", lambda: CURRENT_UTC)

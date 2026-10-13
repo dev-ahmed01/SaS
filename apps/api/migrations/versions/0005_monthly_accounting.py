@@ -4,7 +4,7 @@ Revision ID: 0005_monthly_accounting
 Revises: 0004_promoters
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
@@ -111,7 +111,7 @@ def upgrade() -> None:
         if isinstance(created, str):
             created = datetime.fromisoformat(created)
         if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
+            created = created.replace(tzinfo=UTC)
         local = created.astimezone(ZoneInfo("Asia/Kolkata")).date()
         month = local.replace(day=1)
         conn.execute(

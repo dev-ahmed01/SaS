@@ -4,7 +4,7 @@ Only VerifiedCredit rows are counted as collected. Phase 06 deliberately has no
 credit-creation API: payment evidence will be assessed in Phases 07-08.
 """
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
@@ -79,8 +79,8 @@ def _verified_sum(
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         # SQLite test/runtime fallback: persisted timestamps are UTC.
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def period_balance(
