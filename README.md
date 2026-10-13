@@ -23,6 +23,10 @@ Use `main` for current development, [the integration record](docs/INTEGRATION_RE
 - `apps/api`: Python 3.12, FastAPI, SQLAlchemy, Alembic and PostgreSQL, organization-scoped financial records and audit history.
 - `.github/workflows/ci.yml`: Ruff, pytest, PostgreSQL migrations/integrity checks, Next.js production build and desktop/mobile Playwright.
 
+## Windows VS Code — local Admin demonstration
+
+For an exact local username of `Admin`, use the explicit development-only bootstrap in [Windows VS Code localhost guide](docs/LOCAL_VSCODE_WINDOWS.md). The demo mode must be enabled in an ignored local `.env` file, uses a loopback-only PostgreSQL database, prompts for your chosen password instead of committing it, and never changes production authentication. Normal `bootstrap_admin` still requires 12+ character passwords and an email address. Do not reuse demo credentials with real Foundation records.
+
 ## Local development (synthetic data only)
 
 Requires Node.js 22+, Python 3.12+, PostgreSQL 16+ or Docker:
