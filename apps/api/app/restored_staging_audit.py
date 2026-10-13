@@ -105,6 +105,35 @@ def audit_database(engine) -> dict:
                        AND c.organization_id=m.organization_id
                     WHERE c.id IS NULL
                 """,
+                "payout_to_plan": """
+                    SELECT COUNT(*) FROM payout_payments p
+                    LEFT JOIN payout_plans plan ON plan.id=p.plan_id
+                       AND plan.organization_id=p.organization_id
+                    WHERE plan.id IS NULL
+                """,
+                "promoter_assignment_tenants": """
+                    SELECT COUNT(*) FROM promoter_assignments a
+                    LEFT JOIN promoters p ON p.id=a.promoter_id
+                       AND p.organization_id=a.organization_id
+                    LEFT JOIN prospects s ON s.id=a.prospect_id
+                       AND s.organization_id=a.organization_id
+                    WHERE p.id IS NULL OR s.id IS NULL
+                """,
+                "reminder_batch_tenants": """
+                    SELECT COUNT(*) FROM reminder_intents i
+                    LEFT JOIN reminder_batches b ON b.id=i.batch_id
+                       AND b.organization_id=i.organization_id
+                    WHERE b.id IS NULL
+                """,
+                "dispatch_tenants": """
+                    SELECT COUNT(*) FROM message_dispatches d
+                    LEFT JOIN message_outbox m ON m.id=d.outbox_id
+                       AND m.organization_id=d.organization_id
+                    LEFT JOIN reminder_intents i ON i.id=d.reminder_intent_id
+                       AND i.organization_id=d.organization_id
+                    WHERE (d.outbox_id IS NOT NULL AND m.id IS NULL)
+                       OR (d.reminder_intent_id IS NOT NULL AND i.id IS NULL)
+                """,
             }
             for label, query in tests.items():
                 if connection.execute(text(query)).scalar_one() != 0:
