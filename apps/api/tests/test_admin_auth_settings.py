@@ -120,7 +120,7 @@ def test_settings_changes_are_audited_and_other_keys_cannot_be_set(environment) 
     assert original == {
         "currency_code": "INR",
         "timezone": "Asia/Kolkata",
-        "default_contribution_paise": 25000,
+        "default_contribution_paise": 50000,
         "sponsor_reminder_day": 5,
         "promoter_reminder_day": 20,
         "inactivity_months": 2,
@@ -144,7 +144,7 @@ def test_settings_changes_are_audited_and_other_keys_cannot_be_set(environment) 
         ).all()
         assert len(events) == 1
         assert events[0].before_data == {
-            "default_contribution_paise": 25000, "sponsor_reminder_day": 5
+            "default_contribution_paise": 50000, "sponsor_reminder_day": 5
         }
         assert events[0].after_data == {
             "default_contribution_paise": 30000, "sponsor_reminder_day": 6
@@ -207,7 +207,7 @@ def test_session_scoped_to_admin_organization(environment) -> None:
             )
         )
         database.commit()
-    assert client.get("/v1/settings").json()["default_contribution_paise"] == 25000
+    assert client.get("/v1/settings").json()["default_contribution_paise"] == 50000
 
 
 def test_csrf_is_session_bound(environment) -> None:

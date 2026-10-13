@@ -18,7 +18,7 @@ from app.security import hash_password
 
 def provision_admin(
     database: Session, *, email: str, password: str, organization_name: str,
-    amount_paise: int = 25000, sponsor_day: int = 5, promoter_day: int = 20,
+    amount_paise: int = 50000, sponsor_day: int = 5, promoter_day: int = 20,
     inactivity_months: int = 2,
 ) -> None:
     normalized = email.strip().lower()
@@ -77,7 +77,7 @@ def main() -> None:
     with Session(get_engine()) as database:
         provision_admin(
             database, email=email, password=password, organization_name=org,
-            amount_paise=int(os.environ.get("BOOTSTRAP_AMOUNT_PAISE", "25000")),
+            amount_paise=int(os.environ.get("BOOTSTRAP_AMOUNT_PAISE", "50000")),
             sponsor_day=int(os.environ.get("BOOTSTRAP_SPONSOR_DAY", "5")),
             promoter_day=int(os.environ.get("BOOTSTRAP_PROMOTER_DAY", "20")),
             inactivity_months=int(os.environ.get("BOOTSTRAP_INACTIVITY_MONTHS", "2")),

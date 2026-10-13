@@ -84,7 +84,7 @@ def test_requires_admin_csrf_and_starts_new(system):
     assert r.status_code == 201, r.text
     item = r.json()
     assert item["lifecycle_status"] == "new"
-    assert item["monthly_contribution_paise"] == 25000
+    assert item["monthly_contribution_paise"] == 50000
     assert item["version"] == 1
     assert not item["upi_ids"]
     assert client.patch(
