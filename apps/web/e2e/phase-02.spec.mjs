@@ -60,7 +60,8 @@ test("reminder screens do not send messages before Phase 11",async ({page})=>{
   await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
   await expect(page.getByText(/Delivery is disabled/)).toBeVisible();
   await page.goto("/dashboard");
-  await expect(page.getByText("Waiting for live data").first()).toBeVisible();
+  await expect(page.getByRole("region",{name:"Foundation dashboard"})).toBeVisible();
+  await expect(page.getByText("Recorded contributions",{exact:true}).first()).toBeVisible();
 });
 
 test("responsive layout has no horizontal overflow and drawer controls work",async ({page,isMobile})=>{
@@ -766,4 +767,38 @@ test("mobile collection form stays clickable with populated recent history",asyn
   })).toBe(true);
   await save.click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
+});
+
+
+test("Dashboard shows real six-month metrics and never initiates a payment",async ({page})=>{
+  await page.goto("/dashboard");
+  const container=page.locator(".dashboard-live");
+  await expect(container).toBeVisible();
+  await expect(page.getByRole("heading",{name:/Overview/})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Sponsorship finances"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Outgoing payouts"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Six-month financial trends"})).toBeVisible();
+  await expect(page.locator(".dashboard-trend-row")).toHaveCount(6);
+  await expect(page.getByText(/Creating a payout plan does not send funds/)).toBeVisible();
+  await expect(page.getByText(/not independently reconciled bank balances/)).toBeVisible();
+  await expect.poll(async()=>{
+    return page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
+  }).toBe(true);
+  const endpoint=await page.request.get("/api/admin/dashboard");
+  expect(endpoint.status()).toBe(200);
+  const result=await endpoint.json();
+  expect(result.months).toHaveLength(6);
+  expect(result.recorded_contributions_paise).toBeGreaterThanOrEqual(0);
+  expect(result.payout_disbursed_paise).toBeGreaterThanOrEqual(0);
+  await page.getByRole("button",{name:"Refresh figures"}).click();
+  await expect(page.getByRole("region",{name:"Foundation dashboard"})).toBeVisible();
+});
+
+test("Dashboard browser endpoint rejects unsupported query and cannot record money",async ({page})=>{
+  const unknown=await page.request.get("/api/admin/dashboard?pretend_paid=true");
+  expect(unknown.status()).toBe(400);
+  const rejected=await page.request.post("/api/admin/dashboard",{
+    data:{recorded_contributions_paise:99999999},
+  });
+  expect([404,405]).toContain(rejected.status());
 });
