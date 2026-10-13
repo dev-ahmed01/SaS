@@ -482,3 +482,72 @@ class ManualCollectionReversal(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+
+class PayoutPlan(Base):
+    """Approved schedule/one-off obligation; not proof of an outgoing transfer."""
+
+    __tablename__ = "payout_plans"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_payout_plan_org_id"),
+        UniqueConstraint("organization_id", "request_id", name="uq_payout_plan_request"),
+        CheckConstraint("amount_paise > 0", name="ck_payout_plan_positive"),
+        CheckConstraint("frequency IN ('recurring', 'one_time')", name="ck_payout_frequency"),
+        CheckConstraint("status IN ('active', 'paused', 'closed')", name="ck_payout_plan_status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payee_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(240), nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    frequency: Mapped[str] = mapped_column(String(12), nullable=False)
+    start_month: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="active")
+    notes: Mapped[str | None] = mapped_column(String(1000))
+    created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class PayoutDisbursement(Base):
+    """Admin-attested outgoing payment; no money is moved by this application."""
+
+    __tablename__ = "payout_disbursements"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "plan_id"],
+            ["payout_plans.organization_id", "payout_plans.id"],
+            name="fk_payout_disbursement_same_org", ondelete="RESTRICT",
+        ),
+        UniqueConstraint("organization_id", "request_id", name="uq_payout_disbursement_request"),
+        UniqueConstraint("organization_id", "reference_digest", name="uq_payout_disbursement_reference"),
+        UniqueConstraint("organization_id", "plan_id", "period_month",
+                         name="uq_payout_disbursement_period"),
+        CheckConstraint("amount_paise > 0", name="ck_payout_disbursement_positive"),
+        CheckConstraint("payment_method IN ('upi', 'bank_transfer', 'cash')",
+                        name="ck_payout_disbursement_method"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    paid_on: Mapped[date] = mapped_column(Date, nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    reference_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_mask: Mapped[str] = mapped_column(String(24), nullable=False)
+    recorded_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
