@@ -12,9 +12,10 @@ from app.collections import router as collections_router
 from app.db import get_engine
 from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
+from app.reminders import router as reminders_router
 from app.prospects import router as prospects_router
 
-app = FastAPI(title="Sponsor a Salah API", version="0.9.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="Sponsor a Salah API", version="0.10.0", docs_url=None, redoc_url=None)
 app.include_router(auth_router)
 app.include_router(settings_router)
 app.include_router(prospects_router)
@@ -22,6 +23,7 @@ app.include_router(promoters_router)
 app.include_router(accounting_router)
 app.include_router(collections_router)
 app.include_router(payouts_router)
+app.include_router(reminders_router)
 
 
 @app.get("/health/live", tags=["health"])
