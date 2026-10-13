@@ -22,6 +22,7 @@ from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session
 
 from app.accounting import effective_credits
+from app.restored_staging_audit import audit_database
 from app.models import (
     AuditEvent,
     ManualCollection,
@@ -249,11 +250,16 @@ def run():
                     "Synthetic restore mismatch in tables: " + ", ".join(changed)
                 )
             verify_finance(restored, org)
+            audit_result = audit_database(restored)
         return {
             "synthetic_only": True,
             "tables_reconciled": len(after),
             "row_level_digest_match": True,
             "reversed_ledger_verified": True,
+            "read_only_tenant_integrity_verified": (
+                audit_result["tenant_relationships_verified"]
+                and audit_result["net_manual_ledger_verified"]
+            ),
             "automated_messaging": False,
             "real_payment_or_payout": False,
             "elapsed_seconds": round(time.monotonic() - started, 2),
