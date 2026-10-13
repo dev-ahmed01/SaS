@@ -495,3 +495,61 @@ def test_postgres_rejects_negative_or_zero_payout_obligations() -> None:
             db.flush()
         db.rollback()
     engine.dispose()
+
+
+def test_postgres_rejects_cross_tenant_payout_disbursement() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        a = Organization(name="Disbursement tenant A")
+        b = Organization(name="Disbursement tenant B")
+        db.add_all([a, b])
+        db.flush()
+        plan = PayoutPlan(
+            organization_id=a.id, create_request_id=uuid.uuid4(),
+            create_hash="a" * 64, payee_name="Synthetic payee",
+            purpose="Test recurring payout", cadence="recurring",
+            start_month=date(2026, 10, 1), scheduled_on=None, amount_paise=50000,
+        )
+        db.add(plan)
+        db.flush()
+        db.add(PayoutPayment(
+            organization_id=b.id, plan_id=plan.id,
+            request_id=uuid.uuid4(), request_payload_hash="b" * 64,
+            period_month=date(2026, 10, 1), paid_on=date(2026, 10, 13),
+            amount_paise=50000, payment_method="upi",
+            reference_digest="c" * 64, reference_mask="****1234",
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_duplicate_payout_month_and_invalid_schedule() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Payout integrity months")
+        db.add(org)
+        db.flush()
+        plan = PayoutPlan(
+            organization_id=org.id, create_request_id=uuid.uuid4(),
+            create_hash="a" * 64, payee_name="Synthetic payee",
+            purpose="Test recurring payout", cadence="recurring",
+            start_month=date(2026, 10, 1), scheduled_on=None, amount_paise=50000,
+        )
+        db.add(plan)
+        db.flush()
+        for char in ("a", "b"):
+            db.add(PayoutPayment(
+                organization_id=org.id, plan_id=plan.id,
+                request_id=uuid.uuid4(), request_payload_hash=char * 64,
+                period_month=date(2026, 10, 1), paid_on=date(2026, 10, 13),
+                amount_paise=50000, payment_method="upi",
+                reference_digest=char * 64, reference_mask="****1234",
+            ))
+            if char == "a":
+                db.flush()
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
