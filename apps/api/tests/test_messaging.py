@@ -327,3 +327,76 @@ def test_timeouts_are_unknown_and_never_retried(system,monkeypatch):
     assert send(client).json()["attempted"]==0
     with Session(engine) as db:
         assert db.scalars(select(MessageDispatch)).one().status=="unknown"
+
+
+def test_worker_auto_prepares_one_unpaid_sponsor_batch_only_on_due_day(
+    system,monkeypatch,
+):
+    client,engine=system
+    csrf=login(client)
+    person=sponsor(client,csrf,7)
+    enable_org(engine,sponsor_reminder=True)
+    monkeypatch.setattr("app.messaging.get_settings",lambda:config())
+    transmitted=[]
+    def capture(_url,**kwargs):
+        transmitted.append(json.loads(kwargs["content"]))
+        return SimpleNamespace(status_code=200)
+    monkeypatch.setattr("app.messaging.httpx.post",capture)
+    result=send(client)
+    assert result.status_code==200,result.text
+    assert result.json()["accepted"]==1
+    assert len(transmitted)==1
+    assert transmitted[0]["template"]=="sas_unpaid_sponsor"
+    assert transmitted[0]["recipient_phone"]=="+919876540007"
+    history=client.get("/v1/reminders/batches").json()
+    assert history["total"]==1
+    assert history["items"][0]["kind"]=="sponsor"
+    assert history["items"][0]["recipient_count"]==1
+    assert send(client).json()["attempted"]==0
+    assert client.get("/v1/reminders/batches").json()["total"]==1
+
+
+def test_auto_promoter_followup_is_one_consolidated_message(
+    system,monkeypatch,
+):
+    client,engine=system
+    csrf=login(client)
+    first=sponsor(client,csrf,8)
+    second=sponsor(client,csrf,9)
+    enable_org(engine,promoter_reminder=True)
+    with Session(engine) as db:
+        persons=[
+            db.get(Prospect,uuid.UUID(first["id"])),
+            db.get(Prospect,uuid.UUID(second["id"])),
+        ]
+        messenger=Promoter(
+            organization_id=persons[0].organization_id,
+            full_name="Synthetic Coordinator",
+            mobile_number="+919911224400",area_city="Bengaluru",
+            whatsapp_opt_in=True,is_active=True,version=1,
+        )
+        db.add(messenger)
+        db.flush()
+        for person in persons:
+            db.add(PromoterAssignment(
+                organization_id=person.organization_id,
+                promoter_id=messenger.id,prospect_id=person.id,
+            ))
+        db.commit()
+    monkeypatch.setattr("app.messaging.get_settings",
+                        lambda:config(disclosure=True))
+    transmitted=[]
+    def capture(_url,**kwargs):
+        transmitted.append(json.loads(kwargs["content"]))
+        return SimpleNamespace(status_code=200)
+    monkeypatch.setattr("app.messaging.httpx.post",capture)
+    result=send(client)
+    assert result.status_code==200,result.text
+    assert result.json()["accepted"]==1
+    assert len(transmitted)==1
+    msg=transmitted[0]
+    assert msg["template"]=="sas_promoter_summary"
+    assert msg["variables"]["sponsor_count"]=="2"
+    assert "Sponsor 08" in msg["variables"]["sponsor_summary"]
+    assert "Sponsor 09" in msg["variables"]["sponsor_summary"]
+    assert send(client).json()["attempted"]==0
