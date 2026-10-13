@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.accounting import evaluate_status, ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
 from app.main import app
-from app.models import Base, OrganizationSettings, Prospect, SponsorshipRate
+from app.models import Base, Prospect, SponsorshipRate
 from app.sponsorship_policy import valid_commitment
 
 
