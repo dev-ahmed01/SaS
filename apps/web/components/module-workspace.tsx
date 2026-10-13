@@ -4,6 +4,7 @@ import { EmptyTable, ModuleTabs, PageHeading, Panel, PhaseNotice, PreviewButton,
 import { Icon } from "./ui/icon";
 import { AdminSettingsForm } from "./admin-settings-form";
 import { AccountingOverview } from "./accounting/accounting-overview";
+import { ManualCollections } from "./collections/manual-collections";
 import { ProspectsWorkspace } from "./prospects/prospects-workspace";
 import { PromotersWorkspace } from "./promoters/promoters-workspace";
 
@@ -106,6 +107,7 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="reminders") return <Reminders view={view}/>;
   if(module==="prospects" && ["add","inactive","all"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"all"}/>;
   if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
+  if(module==="collections" && view==="add") return <AppShell><PageHeading title="Collections" description="Record received contributions with an audit trail."/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
   if(module==="collections" && view==="all") return <AppShell><PageHeading title="Collections" description="Monthly commitments and verified contributions."/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><AccountingOverview/></AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;

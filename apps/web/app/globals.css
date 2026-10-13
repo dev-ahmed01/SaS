@@ -297,3 +297,13 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:540px) { .accounting-metrics { grid-template-columns:1fr; } .accounting-metric { padding:13px; } .accounting-metric strong { font-size:18px; } .accounting-details { padding:12px; } }
 
 .status-pill.archived { color:#62726c; background:#eef1ee; }
+
+/* Phase 07: locked Collections UI, manual confirmation, no new navigation */
+.manual-collections-workspace { margin-top:22px; max-width:1000px; display:grid; gap:18px; }
+.manual-collections-workspace .content-panel { margin:0; }
+.manual-collections-workspace select { width:100%; min-height:39px; border:1px solid var(--line); border-radius:7px; background:white; padding:8px; font:400 12px var(--font-body); }
+.manual-selected { margin:8px 0 0; color:var(--forest-deep); font-size:11px; }
+.manual-search-results { display:grid; border:1px solid var(--line); border-radius:8px; margin-top:5px; max-height:240px; overflow:auto; }
+.manual-search-results button { border:0; padding:10px 12px; background:white; display:flex; justify-content:space-between; gap:8px; cursor:pointer; text-align:left; font:400 12px var(--font-body); }
+.manual-search-results button:hover,.manual-search-results button:focus-visible { background:var(--mint-light); }
+.manual-search-results span { color:var(--muted); }
