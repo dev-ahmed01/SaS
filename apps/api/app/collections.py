@@ -320,8 +320,11 @@ def reverse_collection(
     if receipt is None:
         raise HTTPException(status_code=404, detail="Collection not found")
     if previously is not None:
-        if previously.collection_id != collection_id or previously.reason_code != payload.reason_code:
-            raise HTTPException(status_code=409, detail="Request ID already used for a different reversal")
+        if (previously.collection_id != collection_id or
+                previously.reason_code != payload.reason_code):
+            raise HTTPException(
+                status_code=409, detail="Request ID already used for a different reversal"
+            )
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
         return _reversal_view(db, previously, receipt)
