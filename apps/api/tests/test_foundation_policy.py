@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.accounting import evaluate_status, ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
 from app.main import app
-from app.models import Base, Prospect, SponsorshipRate
+from app.models import Base, OrganizationSettings, Prospect, SponsorshipRate
 from app.sponsorship_policy import valid_commitment
 
 
@@ -222,3 +222,44 @@ def test_existing_500_commitment_stays_historically_effective(policy_api):
         assert len(rates) == 2
         assert rates[0].amount_paise == 50000
         assert rates[1].amount_paise == 75000
+
+
+def test_legacy_sponsorship_can_edit_contacts_without_repricing(policy_api):
+    client, engine, csrf = policy_api
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Older Synthetic",
+        "mobile_number": "+919876500004",
+        "area_city": "Bengaluru",
+        "monthly_contribution_paise": 50000,
+    })
+    assert created.status_code == 201, created.text
+    item = created.json()
+    with Session(engine) as db:
+        person = db.get(Prospect, uuid.UUID(item["id"]))
+        person.monthly_contribution_paise = 37500
+        db.scalars(select(SponsorshipRate).where(
+            SponsorshipRate.prospect_id == person.id,
+        )).one().amount_paise = 37500
+        org = db.get(OrganizationSettings, person.organization_id)
+        org.default_contribution_paise = 37500
+        db.commit()
+
+    changed = client.patch("/v1/prospects/" + item["id"], headers=csrf, json={
+        "version": item["version"], "notes": "Phone verified by Admin",
+    })
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["monthly_contribution_paise"] == 37500
+    day = client.patch("/v1/settings", headers=csrf, json={
+        "sponsor_reminder_day": 6,
+    })
+    assert day.status_code == 200, day.text
+    assert day.json()["default_contribution_paise"] == 37500
+    # No new agreement may inherit an outdated non-tier legacy default.
+    rejected = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "New Synthetic",
+        "mobile_number": "+919876500005", "area_city": "Bengaluru",
+    })
+    assert rejected.status_code == 409, rejected.text
+    with Session(engine) as db:
+        rate = db.scalars(select(SponsorshipRate)).one()
+        assert rate.amount_paise == 37500
