@@ -19,7 +19,6 @@ from app.models import (
     PromoterAssignment,
 )
 from app.security import hash_password
-from test_prospects import create as add_prospect, login
 
 
 @pytest.fixture
@@ -50,6 +49,27 @@ def system(monkeypatch):
     with TestClient(app) as client:
         yield client, engine
     engine.dispose()
+
+
+def login(client):
+    response = client.post(
+        "/v1/auth/login",
+        json={"email": "office@foundation.org", "password": "synthetic-long-admin-password"},
+    )
+    assert response.status_code == 200
+    return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+
+
+def add_prospect(client, csrf):
+    return client.post(
+        "/v1/prospects", headers=csrf,
+        json={
+            "full_name": "Synthetic Sponsor",
+            "mobile_number": "+919876543210",
+            "area_city": "Bengaluru",
+        },
+    )
+
 
 PROMOTER={
     "full_name":"Bilal Ahmed",
