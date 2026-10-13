@@ -116,7 +116,9 @@ export function AdminSettingsForm(){
         <label className="field"><span className="field-label">Inactive after (months)</span><input type="number" min="2" max="2" readOnly value="2"/></label>
       </div>
       <div className="readonly-settings"><div><strong>Accounting currency</strong><span>{current.currency_code}</span></div><div><strong>Accounting timezone</strong><span>{current.timezone}</span></div><div><strong>Automatic WhatsApp sending</strong><span>{current.automation_enabled?"Enabled for approved sender":"Disabled"}</span></div></div>
-      <div className="field">
+      <details className="optional-details settings-advanced">
+        <summary>WhatsApp automation</summary>
+        <div className="field">
         <label htmlFor="automation-confirmation" className="field-label">
           WhatsApp safety control — type {current.automation_enabled?"DISABLE WHATSAPP":"ENABLE WHATSAPP"} to confirm
         </label>
@@ -130,7 +132,8 @@ export function AdminSettingsForm(){
             automationConfirmation!==(current.automation_enabled?"DISABLE WHATSAPP":"ENABLE WHATSAPP")}>
           {automationSaving?"Updating…":current.automation_enabled?"Disable WhatsApp automation":"Enable WhatsApp automation"}
         </button>
-      </div>
+        </div>
+      </details>
       {message&&<p role="status" className="form-success">{message}</p>}
       {error&&<p role="alert" className="form-error">{error}</p>}
       <div className="form-actions"><button className="btn btn-secondary" type="button" disabled={saving} onClick={()=>{setForm(toForm(current));setError("");setMessage("");}}>Reset</button><button className="btn btn-primary" type="submit" disabled={saving}>{saving?"Saving…":"Save Changes"}</button></div>

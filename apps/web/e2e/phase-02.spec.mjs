@@ -79,6 +79,7 @@ test("responsive layout has no horizontal overflow and drawer controls work",asy
 
 test("WhatsApp cannot be enabled by a development Admin",async ({page})=>{
   await page.goto("/settings");
+  await page.getByText("WhatsApp automation",{exact:true}).click();
   await expect(page.getByRole("textbox",{name:"WhatsApp automation confirmation"})).toBeVisible();
   await page.getByRole("textbox",{name:"WhatsApp automation confirmation"}).fill("ENABLE WHATSAPP");
   await expect(page.getByRole("button",{name:"Enable WhatsApp automation"})).toBeDisabled();
