@@ -208,7 +208,7 @@ def test_session_scoped_to_admin_organization(environment) -> None:
             OrganizationSettings(
                 organization_id=other.id, currency_code="INR", timezone="Asia/Kolkata",
                 default_contribution_paise=99900, sponsor_reminder_day=10,
-                promoter_reminder_day=22, inactivity_months=4, automation_enabled=False,
+                promoter_reminder_day=22, inactivity_months=2, automation_enabled=False,
             )
         )
         database.commit()
