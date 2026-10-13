@@ -13,9 +13,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_unique_constraint(
-        "uq_credits_org_id", "verified_credits", ["organization_id", "id"]
-    )
+    with op.batch_alter_table("verified_credits") as batch:
+        batch.create_unique_constraint("uq_credits_org_id", ["organization_id", "id"])
     op.create_table(
         "manual_collections",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -105,4 +104,5 @@ def downgrade() -> None:
     op.drop_index("ix_manual_collections_prospect_id", table_name="manual_collections")
     op.drop_index("ix_manual_collections_organization_id", table_name="manual_collections")
     op.drop_table("manual_collections")
-    op.drop_constraint("uq_credits_org_id", "verified_credits", type_="unique")
+    with op.batch_alter_table("verified_credits") as batch:
+        batch.drop_constraint("uq_credits_org_id", type_="unique")

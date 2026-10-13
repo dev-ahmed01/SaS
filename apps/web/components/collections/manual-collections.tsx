@@ -57,7 +57,7 @@ export function ManualCollections(){
     if(saving)return;
     if(!selected){setError("Select an existing sponsor.");return;}
     const trimmed=rupees.trim();
-    if(!/^\\d{1,8}(?:\\.\\d{1,2})?$/.test(trimmed)){setError("Enter a valid amount in rupees.");return;}
+    if(!/^\d{1,8}(?:\.\d{1,2})?$/.test(trimmed)){setError("Enter a valid amount in rupees.");return;}
     const [whole,fraction=""]=trimmed.split(".");
     const paise=Number(whole)*100+Number(fraction.padEnd(2,"0"));
     if(!Number.isSafeInteger(paise)||paise<1||paise>1_000_000_000){
