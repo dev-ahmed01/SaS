@@ -513,6 +513,7 @@ def test_reminder_history_reflects_confirmed_deliveries(system, monkeypatch):
         first, second = db.scalars(
             select(ReminderIntent).order_by(ReminderIntent.prospect_id)
         ).all()
+        second_org, second_id = second.organization_id, second.id
         db.add(MessageDispatch(
             organization_id=first.organization_id,
             reminder_intent_id=first.id, status="delivered",
@@ -524,8 +525,8 @@ def test_reminder_history_reflects_confirmed_deliveries(system, monkeypatch):
     assert partial["delivered_count"] == 1
     with Session(engine) as db:
         db.add(MessageDispatch(
-            organization_id=second.organization_id,
-            reminder_intent_id=second.id, status="delivered",
+            organization_id=second_org,
+            reminder_intent_id=second_id, status="delivered",
             category="sponsor_reminder",
         ))
         db.commit()
