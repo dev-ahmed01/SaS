@@ -182,6 +182,9 @@ def test_partial_receipt_reactivates_and_full_reversal_deactivates(policy_api):
     })
     assert payment.status_code == 201, payment.text
     assert payment.json()["sponsor_status"] == "active"
+    assert client.get("/v1/prospects/" + profile["id"]).json()[
+        "last_verified_payment_at"
+    ] is not None
     assert client.get("/v1/accounting/overview").json()["items"][0]["status"] == "active"
     current_due = client.get("/v1/accounting/overview").json()
     assert current_due["due_paise"] == 25000
@@ -198,6 +201,9 @@ def test_partial_receipt_reactivates_and_full_reversal_deactivates(policy_api):
     )
     assert reversal.status_code == 201, reversal.text
     assert reversal.json()["sponsor_status"] == "inactive"
+    assert client.get("/v1/prospects/" + profile["id"]).json()[
+        "last_verified_payment_at"
+    ] is None
     assert client.get("/v1/accounting/overview").json()["items"][0]["status"] == "inactive"
 
 

@@ -27,7 +27,7 @@ from app.models import (
     SponsorshipRate,
     VerifiedCredit,
 )
-from app.security import utc_now
+from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/collections", tags=["Manual collections"])
 REFERENCE = re.compile(r"^[A-Z0-9][A-Z0-9._:/-]{5,99}$")
@@ -211,9 +211,17 @@ def add_collection(
     after = evaluate_status(
         sponsor, rates, credits, today, now, settings.inactivity_months,
     )
-    if before != after:
+    latest = max((as_utc(row.verified_at) for row in credits), default=None)
+    changed_receipt = (
+        (as_utc(sponsor.last_verified_payment_at)
+         if sponsor.last_verified_payment_at else None) != latest
+    )
+    if changed_receipt:
+        sponsor.last_verified_payment_at = latest
+    if before != after or changed_receipt:
         sponsor.lifecycle_status = after
-        sponsor.status_updated_at = now
+        if before != after:
+            sponsor.status_updated_at = now
         sponsor.updated_at = now
         sponsor.version += 1
     db.add(AuditEvent(
@@ -380,15 +388,27 @@ def reverse_collection(
     credits = effective_credits(db, admin.organization_id, sponsor_id=receipt.prospect_id)
     now = utc_now()
     before_status = sponsor.lifecycle_status
+    latest = max((as_utc(row.verified_at) for row in credits), default=None)
+    changed_receipt = (
+        (as_utc(sponsor.last_verified_payment_at)
+         if sponsor.last_verified_payment_at else None) != latest
+    )
+    if changed_receipt:
+        sponsor.last_verified_payment_at = latest
     if sponsor.archived_at is None:
         new_status = evaluate_status(
             sponsor, rates, credits, ist_today(now), now, settings.inactivity_months
         )
-        if new_status != before_status:
+        changed_status = new_status != before_status
+        if changed_status:
             sponsor.lifecycle_status = new_status
             sponsor.status_updated_at = now
+        if changed_status or changed_receipt:
             sponsor.updated_at = now
             sponsor.version += 1
+    elif changed_receipt:
+        sponsor.updated_at = now
+        sponsor.version += 1
     db.add(AuditEvent(
         organization_id=admin.organization_id, actor_admin_id=admin.id,
         action="collection.manual_reversed", entity_type="manual_collection",
