@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import { backendOrigin } from "../../../../lib/admin-backend";
 
@@ -56,6 +58,18 @@ async function forward(request: NextRequest, context: { params: Promise<{ action
   if (cookie) headers.set("cookie", "sas_session=" + encodeURIComponent(cookie));
   const csrf = request.headers.get("x-csrf-token");
   if (csrf && csrf.length < 200) headers.set("x-csrf-token", csrf);
+  // Vercel overwrites its managed client-IP header. Never forward a browser-
+  // supplied X-Forwarded-For or sign unknown proxies as trusted sources.
+  if (action === "login" && process.env.VERCEL === "1") {
+    const ip = request.headers.get("x-vercel-forwarded-for")?.trim() ?? "";
+    const secret = process.env.AUTH_SECRET ?? "";
+    if (isIP(ip) !== 0 && secret.length >= 32) {
+      headers.set("x-sas-login-client-ip", ip);
+      headers.set("x-sas-login-client-signature",
+        createHmac("sha256", secret)
+          .update("sas:bff-login-client:v1:" + ip).digest("hex"));
+    }
+  }
   let body: string | undefined;
   if (write) {
     const length = Number(request.headers.get("content-length") ?? 0);

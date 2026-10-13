@@ -1,5 +1,7 @@
 """Phase 03 Admin authorization, CSRF, audited settings and session lifecycle tests."""
 
+import hashlib
+import hmac
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -240,3 +242,46 @@ def test_no_password_or_tokens_in_settings_response(environment) -> None:
     assert result.status_code == 200
     assert "password" not in result.text.lower()
     assert "csrf" not in result.text.lower()
+
+
+def test_shared_gateway_cannot_lock_unrelated_emails_via_unsigned_network(environment):
+    client, _engine = environment
+    for n in range(8):
+        r = client.post("/v1/auth/login", json={
+            "email": f"unknown{n}@example.org", "password": "wrong-pass",
+        }, headers={
+            "X-SaS-Login-Client-IP": "198.51.100.17",
+            "X-SaS-Login-Client-Signature": "0" * 64,
+        })
+        assert r.status_code == 401, r.text
+    sign_in(client)
+
+
+def test_valid_signed_client_ip_enforces_network_anti_spray(environment):
+    client, _engine = environment
+
+    def signed(ip):
+        return {
+            "X-SaS-Login-Client-IP": ip,
+            "X-SaS-Login-Client-Signature": hmac.new(
+                SECRET.encode("utf-8"),
+                ("sas:bff-login-client:v1:" + ip).encode("ascii"),
+                hashlib.sha256,
+            ).hexdigest(),
+        }
+
+    for n in range(8):
+        r = client.post("/v1/auth/login", json={
+            "email": f"spray{n}@example.org", "password": "wrong-pass",
+        }, headers=signed("203.0.113.19"))
+        assert r.status_code == 401, r.text
+    blocked = client.post("/v1/auth/login", json={
+        "email": "admin@foundation.org",
+        "password": "test-only-very-long-password",
+    }, headers=signed("203.0.113.19"))
+    assert blocked.status_code == 429
+    other = client.post("/v1/auth/login", json={
+        "email": "admin@foundation.org",
+        "password": "test-only-very-long-password",
+    }, headers=signed("203.0.113.20"))
+    assert other.status_code == 200, other.text

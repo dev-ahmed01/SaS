@@ -33,3 +33,18 @@ There is **no email-password reset** in Phase 03. Recovery requires a verified, 
 ## Deployment gate
 
 Do not deploy actual sponsor or finance data until independent browser, access-control, backup/restoration, CSRF/origin, and operations reviews are completed.
+
+
+## Trusted Vercel Admin login identity
+
+The Next.js gateway signs Vercel-managed original client IPs using the
+server-only `AUTH_SECRET` shared with FastAPI; the API verifies this signature
+before applying cross-account network throttling. Unsigned or forged headers
+are ignored, and untrusted reverse proxies receive account-scoped throttling
+to prevent shared-proxy lockout. Both deployments need the same secret.
+
+In staging, independently verify that the production edge overwrites incoming
+forwarded IP headers and test abusive requests from two different client
+networks. A platform WAF/rate-limit is still required; non-Vercel
+self-hosted proxies must not be trusted without their own security review.
+Raw client IPs are never persisted in the login attempts table.

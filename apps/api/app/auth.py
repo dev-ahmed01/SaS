@@ -1,5 +1,8 @@
 """Admin-only authentication API: persistent sessions, CSRF, and throttled sign-in."""
 
+import hashlib
+import hmac
+import ipaddress
 from datetime import timedelta
 from typing import Annotated
 
@@ -71,6 +74,24 @@ def require_csrf(
     return context
 
 
+def _trusted_login_network(request: Request, secret: str) -> str | None:
+    """Only a gateway-signed client IP may authorize a shared network throttle."""
+    raw = request.headers.get("x-sas-login-client-ip")
+    signature = request.headers.get("x-sas-login-client-signature")
+    if not raw or not signature or len(raw) > 64 or len(signature) != 64:
+        return None
+    try:
+        normalized = str(ipaddress.ip_address(raw))
+    except ValueError:
+        return None
+    expected = hmac.new(
+        secret.encode("utf-8"),
+        ("sas:bff-login-client:v1:" + normalized).encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    return normalized if hmac.compare_digest(expected, signature) else None
+
+
 def _audit(database: Session, admin: AdminUser, action: str) -> None:
     database.add(
         AuditEvent(
@@ -91,16 +112,22 @@ def login(
     secret = auth_secret()
     email = payload.email.strip().lower()
     now = utc_now()
-    # Email and network-level keys do not retain raw IP addresses in the database.
-    ip = request.client.host if request.client else "unknown"
+    # BFF source IPs can be shared across visitors. Only use a network-wide
+    # throttle if the original client identity is authenticated by the BFF.
+    network = _trusted_login_network(request, secret)
+    raw_peer = request.client.host if request.client else "unknown"
     email_key = throttle_key("email:" + email, secret)
-    ip_key = throttle_key("network:" + ip, secret)
+    ip_key = throttle_key(
+        "network:" + network if network else "untrusted-peer:" + raw_peer,
+        secret,
+    )
     recent = now - timedelta(minutes=15)
+    condition = AdminLoginAttempt.email_hash == email_key
+    if network is not None:
+        condition = condition | (AdminLoginAttempt.network_hash == ip_key)
     failures = database.scalar(
         select(func.count()).select_from(AdminLoginAttempt).where(
-            AdminLoginAttempt.occurred_at >= recent,
-            (AdminLoginAttempt.email_hash == email_key)
-            | (AdminLoginAttempt.network_hash == ip_key),
+            AdminLoginAttempt.occurred_at >= recent, condition,
         )
     ) or 0
     if failures >= 8:
