@@ -454,3 +454,27 @@ def test_ist_midnight_sponsor_day_uses_kolkata_not_utc(
     after=client.get("/v1/reminders/preview?kind=sponsor").json()
     assert after["today_ist"]=="2026-10-05"
     assert after["is_due_today"] is True
+
+
+def test_pre_dispatch_blocks_catchup_after_configured_date(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    set_today(monkeypatch, OCT_5)
+    sponsor(client, csrf, 160)
+    prepared = prepare(client, csrf, "sponsor")
+    assert prepared.status_code == 201, prepared.text
+    with Session(engine) as db:
+        admin = db.scalars(select(AdminUser)).one()
+        intent = db.scalars(select(ReminderIntent)).one()
+        assert current_intent_eligible(db, admin, intent, OCT_5.astimezone(UTC))
+        assert not current_intent_eligible(
+            db, admin, intent, OCT_5.replace(day=6).astimezone(UTC),
+        )
+        db.get(OrganizationSettings, admin.organization_id).sponsor_reminder_day = 6
+        db.commit()
+    with Session(engine) as db:
+        admin = db.scalars(select(AdminUser)).one()
+        intent = db.scalars(select(ReminderIntent)).one()
+        assert not current_intent_eligible(
+            db, admin, intent, OCT_5.replace(day=6).astimezone(UTC),
+        )

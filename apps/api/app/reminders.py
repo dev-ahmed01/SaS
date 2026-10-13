@@ -257,7 +257,11 @@ def current_intent_eligible(
     now = now or utc_now()
     if intent.organization_id != admin.organization_id or intent.status != "prepared":
         return False
-    if intent.period_month != month_start(ist_today(now)):
+    if (
+        intent.period_month != month_start(ist_today(now))
+        or intent.scheduled_on != ist_today(now)
+    ):
+        # Never deliver an old prepared batch on a rescheduled or later day.
         return False
     settings = _settings(database, admin)
     preview = _build_preview(database, admin, settings, intent.kind, now)
