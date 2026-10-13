@@ -206,7 +206,6 @@ export function PayoutList({view}:{view:"all"|"active"}){
   return <section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
     <div className="payout-list-title"><div>
       <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
-      <p>Plans are commitments; only Admin-confirmed outgoing payments count as disbursed.</p>
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
       <input aria-label="Payout accounting month" type="month" value={period}
         onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
@@ -279,7 +278,6 @@ export function PayoutList({view}:{view:"all"|"active"}){
              onClick={()=>setPaymentOffset(n=>n+30)}>Next payments</button>
          </div>
        </div>
-      <p className="accounting-footnote">These entries were recorded by Admin; they are not bank-verified transfers. Corrections to outgoing payment evidence require an audited adjustment workflow before production.</p>
     </section>}
     {chosen&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
@@ -290,10 +288,8 @@ export function PayoutList({view}:{view:"all"|"active"}){
           aria-label="Close payout dialog">Close</button></div>
       <div className="content-panel">
         <h2 id="payout-modal-title">{mode==="paid"?"Record paid payout":"Schedule recurring status"}</h2>
-        <p className="panel-description">
-          {mode==="paid"?"Only record funds that have already left the Foundation's account. No money is transferred from this app."
-            :"This status change begins next calendar month in Asia/Kolkata; past obligations remain unchanged."}
-        </p>
+
+         <p className="panel-description">{mode==="paid"?"Record confirmed payments only.":"Applies from next month."}</p>
         <div className="reversal-facts">
           <div><span>Payee</span><strong>{chosen.payee_name}</strong></div>
           <div><span>Amount</span><strong>{money(chosen.amount_paise)}</strong></div>

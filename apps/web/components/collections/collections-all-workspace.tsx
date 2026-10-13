@@ -126,7 +126,6 @@ export function CollectionsReview({onReversed}:{onReversed:()=>void}) {
     <div className="review-heading">
       <div>
         <h2>Collection history</h2>
-        <p>Review Admin-recorded contributions. Reverse mistaken entries without deleting evidence.</p>
       </div>
       <label className="field review-month">
         <span className="field-label">Filter by month</span>
@@ -169,10 +168,6 @@ export function CollectionsReview({onReversed}:{onReversed:()=>void}) {
           onClick={()=>setOffset(n=>n+20)}>Next</button>
       </div>
     </div>
-    <p className="accounting-footnote">
-      A reversal removes the incorrect receipt from accounting totals, not from the audit history.
-      It does not send money back to a donor. No WhatsApp messages are being delivered yet.
-    </p>
 
     {selected&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
@@ -186,10 +181,8 @@ export function CollectionsReview({onReversed}:{onReversed:()=>void}) {
         </div>
         <div className="content-panel">
           <h2 id="reverse-title">Reverse collection entry</h2>
-          <p className="panel-description">
-            This is for correcting an incorrect Admin entry, not refunding a sponsor.
-            The original record and audit trail will remain.
-          </p>
+
+          <p className="panel-description">Reverses the record only. No refund is issued.</p>
           <div className="reversal-facts">
             <div><span>Sponsor</span><strong>{selected.sponsor_name}</strong></div>
             <div><span>Amount</span><strong>{rupees(selected.amount_paise)}</strong></div>

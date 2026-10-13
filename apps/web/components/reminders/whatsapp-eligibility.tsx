@@ -99,8 +99,6 @@ export function WhatsAppEligibility(){
     <section className="reminder-intro">
       <div>
         <h2>WhatsApp eligibility</h2>
-        <p>Calculated from the live monthly ledger in Asia/Kolkata.
-          Inactive sponsors and recipients without consent are excluded.</p>
       </div>
       <div className="reminder-kind" role="group" aria-label="Reminder audience">
         <button type="button" aria-pressed={kind==="sponsor"}
@@ -117,10 +115,8 @@ export function WhatsAppEligibility(){
         </button>
       </div>
     </section>
-    <p className="reminder-no-send" role="status">
-      Reminder preparation never sends. Provider dispatch requires separate Foundation
-      approval and a protected delivery worker. Prepared is not sent or delivered.
-    </p>
+
+    <p className="reminder-no-send" role="status">WhatsApp sending: off.</p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {message&&<p role="status" className="form-success">{message}</p>}
     <div className="accounting-metrics">
@@ -136,9 +132,6 @@ export function WhatsAppEligibility(){
     <section className="reminder-review" aria-label="Eligible reminder recipients">
       <div className="review-heading"><div>
         <h3>{kind==="sponsor"?"Unpaid sponsor reminders":"Consolidated promoter follow-ups"}</h3>
-        <p>{kind==="sponsor"
-          ?"One possible WhatsApp acknowledgment per eligible unpaid sponsor."
-          :"One possible WhatsApp summary per promoter, regardless of assigned sponsor count."}</p>
       </div></div>
       <div className="table-scroll"><table className="data-table">
         <thead><tr><th scope="col">{kind==="sponsor"?"Sponsor":"Promoter"}</th>
@@ -167,12 +160,8 @@ export function WhatsAppEligibility(){
           onClick={prepare}>
           {saving?"Preparing…":"Prepare batch (do not send)"}
         </button>
-        <p className="accounting-footnote">
-          {isAlreadyPrepared?"A batch for this audience/month has already been prepared. "
-            :preview?.is_due_today?"Today is the configured IST preparation day. "
-            :"Preparation opens only on the configured IST reminder day. "}
-          Recipients will be rechecked before any future provider delivery.
-        </p>
+
+         <p className="accounting-footnote">{isAlreadyPrepared?"Already prepared this month.":preview?.is_due_today?"Ready to prepare.":"Available on the scheduled reminder day."}</p>
       </div>
     </section>
     <section className="reminder-review" aria-label="Reminder preparation history">

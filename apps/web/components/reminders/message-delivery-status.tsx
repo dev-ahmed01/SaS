@@ -35,7 +35,6 @@ export function MessageDeliveryStatus() {
     <div className="review-heading">
       <div>
         <h3>Payment confirmations &amp; delivery</h3>
-        <p>Messages are prepared after manually recorded collections. Provider delivery is independently confirmed.</p>
       </div>
       <button type="button" className="btn btn-secondary" onClick={()=>{setReload(n=>n+1);setError(false);}}>
         Refresh status
@@ -45,8 +44,8 @@ export function MessageDeliveryStatus() {
     {state&&<>
       <p className="delivery-availability" role="status">
         {state.operationally_enabled
-          ?"Provider dispatch is enabled by the Foundation. Only eligible, new messages are sent by the authenticated worker."
-          :"Delivery is disabled or awaiting Foundation approval. Message records are not delivered WhatsApp messages."}
+          ?"WhatsApp sending: enabled."
+          :"WhatsApp sending: off."}
       </p>
       <div className="delivery-metrics">
         {[
@@ -59,7 +58,6 @@ export function MessageDeliveryStatus() {
           <span>{label}</span><strong>{value}</strong>
         </div>)}
       </div>
-      <p className="accounting-footnote">{state.notice}</p>
     </>}
   </section>;
 }

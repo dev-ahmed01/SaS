@@ -1,6 +1,5 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
-import { Icon } from "./ui/icon";
 
 type Values = {
   currency_code:string; timezone:string; default_contribution_paise:number;
