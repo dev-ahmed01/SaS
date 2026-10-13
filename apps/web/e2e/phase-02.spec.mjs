@@ -311,6 +311,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   const name="Manual Pay Sponsor "+id;
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  const agreed=Number(await page.getByRole("spinbutton",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9826"+id);
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
@@ -322,7 +323,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.getByRole("option",{name:new RegExp(name)}).click();
   const payment=page.getByRole("textbox",{name:"Amount received (₹)"});
   await expect(payment).toHaveValue("");
-  await payment.fill("500.00");
+  await payment.fill(agreed.toFixed(2));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
   const save=page.getByRole("button",{name:"Save Collection"});
   await expect(save).toBeDisabled();
