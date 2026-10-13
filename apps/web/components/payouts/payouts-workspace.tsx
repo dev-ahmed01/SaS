@@ -85,7 +85,7 @@ export function PayoutAdd(){
   return <section className="content-panel payouts-form" aria-label="Add payout plan">
     <div className="payout-panel-heading">
       <div><h2>Add payout</h2></div>
-      <button type="button" className="text-action" onClick={()=>router.push("/payouts/all")}>All payouts →</button>
+
     </div>
     <form onSubmit={submit}>
       <div className="form-grid">
