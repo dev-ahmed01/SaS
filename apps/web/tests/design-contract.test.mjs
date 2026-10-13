@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const css = read("../app/globals.css");
@@ -63,4 +63,11 @@ test("responsive design, focus visibility, and reduced motion present", () => {
   assert.match(css,/prefers-reduced-motion/);
   assert.match(shell,/Skip to content/);
   assert.match(ui,/scope="col"/);
+});
+
+test("mosque visuals use the owner-approved board illustration assets", () => {
+  assert.match(css,/approved-mosque-sidebar\.webp/);
+  assert.match(css,/approved-mosque-hills\.webp/);
+  assert.ok(existsSync(new URL("../public/art/approved-mosque-sidebar.webp",import.meta.url)));
+  assert.ok(existsSync(new URL("../public/art/approved-mosque-hills.webp",import.meta.url)));
 });

@@ -525,3 +525,24 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .sidebar-head {padding:0 4px}
   .page-content {padding:24px 17px 55px}
 }
+
+/* Original design-board illustration-only crops (provided by product owner).
+   These raster snippets replace the provisional hand-drawn mosque SVGs.
+   No UI labels, form fields or screen designs are copied from the board. */
+.sidebar-art {
+  background-image:url("/art/approved-mosque-sidebar.webp");
+  background-size:100% auto;
+  background-position:center bottom;
+  background-repeat:no-repeat;
+}
+.login-illustration {
+  background:linear-gradient(170deg,#f9fffb 5%,#e1f7e9 100%);
+}
+.login-mosque {
+  display:block;
+  position:absolute;
+  bottom:0;left:0;width:100%;
+  height:clamp(125px,20vh,205px);
+  background:url("/art/approved-mosque-hills.webp") center bottom / 100% 100% no-repeat;
+  pointer-events:none;
+}
