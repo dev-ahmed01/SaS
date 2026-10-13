@@ -306,3 +306,29 @@ def test_cross_tenant_payouts_not_visible_or_mutable(system):
     }).status_code == 404
     assert client.post(path + "/payments", headers=other, json=pay_input()).status_code == 404
     assert client.get("/v1/payouts/payments").json()["total"] == 0
+
+
+def test_one_time_disbursement_cannot_predate_scheduled_day(system):
+    """An attestation cannot silently become an unapproved advance payment."""
+    client, engine = system
+    csrf = login(client)
+    today = ist_today()
+    if today.day == 1:
+        scheduled = today + timedelta(days=1)
+        attempted = today
+    else:
+        scheduled = today
+        attempted = month_start(today)
+    one = create(client, csrf, "one_time", scheduled_on=scheduled.isoformat())
+    path = "/v1/payouts/plans/" + one["id"] + "/payments"
+    rejected = client.post(path, headers=csrf, json=pay_input(
+        paid_on=attempted.isoformat(),
+    ))
+    assert rejected.status_code == 422, rejected.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(PayoutPayment)) == 0
+    if scheduled <= today:
+        accepted = client.post(path, headers=csrf, json=pay_input(
+            paid_on=scheduled.isoformat(),
+        ))
+        assert accepted.status_code == 201, accepted.text

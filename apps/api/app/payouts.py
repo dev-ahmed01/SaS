@@ -412,6 +412,9 @@ def record_disbursement(
     if plan.cadence == "one_time":
         if payload.period_month != plan.start_month:
             raise HTTPException(status_code=422, detail="Wrong month for a one-time payout")
+        # Advance disbursement is explicitly outside the approved payout policy.
+        if plan.scheduled_on is None or payload.paid_on < plan.scheduled_on:
+            raise HTTPException(status_code=422, detail="Payment predates the scheduled payout")
     elif _term_status(_terms(db, plan), payload.period_month) != "active":
         raise HTTPException(status_code=409, detail="No active payout obligation for this month")
     normalized = payload.payment_reference

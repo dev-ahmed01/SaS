@@ -83,7 +83,10 @@ def delivery_status(
     response.headers["Cache-Control"]="no-store"
     return DeliveryStats(
         delivery_enabled=_ready(),
-        operationally_enabled=bool(_ready() and settings and settings.automation_enabled),
+        operationally_enabled=bool(
+            _ready() and settings and settings.automation_enabled
+            and utc_now() >= as_utc(get_settings().messaging_enable_after)
+        ),
         awaiting_confirmation_intents=count(
             MessageOutbox,MessageOutbox.organization_id==organization_id,
             MessageOutbox.status=="awaiting_integration",
@@ -222,6 +225,30 @@ def _eligible_and_payload(
     }
 
 
+def _enabled_organizations_in_pages(db: Session):
+    """Bound memory while visiting every opted-in organization in stable order.
+
+    Keyset pagination works across the commits made during batch preparation,
+    unlike a cursor or OFFSET that may become invalid as the session commits.
+    """
+    after_id = None
+    while True:
+        query = select(OrganizationSettings).where(
+            OrganizationSettings.automation_enabled.is_(True),
+            OrganizationSettings.timezone == "Asia/Kolkata",
+            OrganizationSettings.currency_code == "INR",
+        )
+        if after_id is not None:
+            query = query.where(OrganizationSettings.organization_id > after_id)
+        page = list(db.scalars(
+            query.order_by(OrganizationSettings.organization_id).limit(20)
+        ).all())
+        if not page:
+            return
+        after_id = page[-1].organization_id
+        yield from page
+
+
 def _prepare_scheduled_reminders(db: Session, now: datetime) -> int:
     """Idempotent IST auto-preparation, behind both separate sending switches.
 
@@ -232,17 +259,8 @@ def _prepare_scheduled_reminders(db: Session, now: datetime) -> int:
         return 0
     today=ist_today(now)
     month=month_start(today)
-    orgs=list(db.scalars(select(OrganizationSettings).where(
-        OrganizationSettings.automation_enabled.is_(True),
-        OrganizationSettings.timezone=="Asia/Kolkata",
-        OrganizationSettings.currency_code=="INR",
-    ).order_by(OrganizationSettings.organization_id).limit(21)).all())
-    if len(orgs)>20:
-        raise HTTPException(
-            status_code=409,detail="Too many organizations for one sender run"
-        )
     prepared=0
-    for settings in orgs:
+    for settings in _enabled_organizations_in_pages(db):
         admin=db.scalars(select(AdminUser).where(
             AdminUser.organization_id==settings.organization_id,
             AdminUser.is_active.is_(True),

@@ -17,6 +17,7 @@ from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
     Base,
+    Organization,
     MessageDispatch,
     OrganizationSettings,
     Promoter,
@@ -400,3 +401,53 @@ def test_auto_promoter_followup_is_one_consolidated_message(
     assert "Sponsor 08" in msg["variables"]["sponsor_summary"]
     assert "Sponsor 09" in msg["variables"]["sponsor_summary"]
     assert send(client).json()["attempted"]==0
+
+
+def test_more_than_twenty_enabled_organizations_do_not_block_confirmations(
+    system, monkeypatch,
+):
+    """A large tenant count must not return 409 before even selecting outbox."""
+    client, engine = system
+    csrf = login(client)
+    record = sponsor(client, csrf)
+    collection(client, csrf, record, ref="LARGEORGS001")
+    enable_org(engine)
+    not_today = 1 if ist_today().day != 1 else 2
+    with Session(engine) as db:
+        for index in range(20):
+            other = Organization(name=f"Synthetic Foundation {index}")
+            db.add(other)
+            db.flush()
+            db.add(OrganizationSettings(
+                organization_id=other.id, currency_code="INR",
+                timezone="Asia/Kolkata", default_contribution_paise=50000,
+                sponsor_reminder_day=not_today,
+                promoter_reminder_day=not_today,
+                inactivity_months=2, automation_enabled=True,
+            ))
+        db.commit()
+    monkeypatch.setattr("app.messaging.get_settings", lambda: config())
+    calls = []
+    def fake_post(url, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(status_code=200)
+    monkeypatch.setattr("app.messaging.httpx.post", fake_post)
+    outcome = send(client)
+    assert outcome.status_code == 200, outcome.text
+    assert outcome.json()["accepted"] == 1
+    assert len(calls) == 1
+    assert send(client).json()["attempted"] == 0
+
+
+def test_messaging_status_respects_future_activation_date(system, monkeypatch):
+    client, engine = system
+    login(client)
+    enable_org(engine)
+    monkeypatch.setattr(
+        "app.messaging.get_settings",
+        lambda: config(cutoff=utc_now() + timedelta(days=1)),
+    )
+    status = client.get("/v1/messaging/status")
+    assert status.status_code == 200, status.text
+    assert status.json()["delivery_enabled"] is True
+    assert status.json()["operationally_enabled"] is False

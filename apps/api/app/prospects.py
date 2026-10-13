@@ -328,11 +328,20 @@ def create_prospect(
     admin = context[0]
     # Optional client-supplied registration ID makes browser retries safe even when
     # a successful response is lost in transit. Never retain the original payload.
-    payload_hash = hashlib.sha256(
-        json.dumps(
-            payload.model_dump(mode="json", exclude={"request_id"}),
-            sort_keys=True, ensure_ascii=True,
-        ).encode("utf-8")
+    # The fingerprint may include a sensitive VPA. Key it so a database copy
+    # cannot be used as an offline dictionary oracle for those identifiers.
+    # A distinct domain prevents correlation with the separately keyed VPA index.
+    fingerprint_secret = get_settings().upi_match_secret
+    if not fingerprint_secret or len(fingerprint_secret) < 32:
+        raise HTTPException(status_code=503, detail="Registration HMAC is not configured")
+    canonical = json.dumps(
+        payload.model_dump(mode="json", exclude={"request_id"}),
+        sort_keys=True, ensure_ascii=True,
+    ).encode("utf-8")
+    payload_hash = hmac.new(
+        fingerprint_secret.encode("utf-8"),
+        b"sas:prospect-registration:v2:" + canonical,
+        hashlib.sha256,
     ).hexdigest()
     if payload.request_id is not None:
         existing = database.scalars(

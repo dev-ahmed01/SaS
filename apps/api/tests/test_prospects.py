@@ -272,3 +272,39 @@ def test_retried_registration_is_idempotent_and_conflicting_payload_rejected(sys
     assert tampered.status_code == 409
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Prospect)) == 1
+
+
+def test_request_fingerprint_is_keyed_even_when_upi_is_supplied(system):
+    """Raw SHA-256 of sensitive request fields would allow offline VPA guesses."""
+    import hashlib
+    import json
+
+    from app.prospects import ProspectCreate
+
+    client, engine = system
+    csrf = login(client)
+    supplied = {
+        **BASE,
+        "upi_ids": ["hidden-user@oksbi"],
+        "request_id": str(uuid.uuid4()),
+    }
+    first = client.post("/v1/prospects", json=supplied, headers=csrf)
+    assert first.status_code == 201, first.text
+    duplicate = client.post("/v1/prospects", json=supplied, headers=csrf)
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["id"] == first.json()["id"]
+    modified = client.post("/v1/prospects", json={
+        **supplied, "upi_ids": ["other-user@oksbi"],
+    }, headers=csrf)
+    assert modified.status_code == 409, modified.text
+
+    canonical = json.dumps(
+        ProspectCreate(**supplied).model_dump(mode="json", exclude={"request_id"}),
+        sort_keys=True, ensure_ascii=True,
+    ).encode("utf-8")
+    plain_digest = hashlib.sha256(canonical).hexdigest()
+    with Session(engine) as db:
+        saved = db.scalars(select(Prospect)).one()
+        assert len(saved.registration_payload_hash) == 64
+        assert saved.registration_payload_hash != plain_digest
+        assert "hidden-user" not in saved.registration_payload_hash
