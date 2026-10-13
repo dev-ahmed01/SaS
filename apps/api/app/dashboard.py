@@ -18,9 +18,17 @@ from app.accounting import (
 )
 from app.auth import db_session, get_admin
 from app.models import (
-    AdminSession, AdminUser, ManualCollection, ManualCollectionReversal,
-    MessageDispatch, MessageOutbox, PayoutPayment,
-    PayoutPlan, PayoutPlanTerm, Promoter, ReminderBatch,
+    AdminSession,
+    AdminUser,
+    ManualCollection,
+    ManualCollectionReversal,
+    MessageDispatch,
+    MessageOutbox,
+    PayoutPayment,
+    PayoutPlan,
+    PayoutPlanTerm,
+    Promoter,
+    ReminderBatch,
 )
 from app.security import as_utc, utc_now
 
