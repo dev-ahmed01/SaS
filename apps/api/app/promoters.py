@@ -32,16 +32,24 @@ class PromoterCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=160)
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
-    area_city: str = Field(min_length=2, max_length=120)
+    area_city: str = Field(default="", max_length=120)
     notes: str | None = Field(default=None, max_length=1500)
     whatsapp_opt_in: bool = False
 
-    @field_validator("full_name", "area_city")
+    @field_validator("full_name")
     @classmethod
     def clean_label(cls, value: str) -> str:
         cleaned = _clean_text(value)
         if len(cleaned) < 2:
             raise ValueError("At least two characters are required")
+        return cleaned
+
+    @field_validator("area_city")
+    @classmethod
+    def clean_area(cls, value: str) -> str:
+        cleaned = _clean_text(value)
+        if cleaned and len(cleaned) < 2:
+            raise ValueError("At least two characters required for a supplied location")
         return cleaned
 
     @field_validator("mobile_number", "whatsapp_number")
