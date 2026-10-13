@@ -323,7 +323,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await expect(page.getByRole("region",{name:"Recent manual collections"}).getByText(name)).toBeVisible();
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
-  const row=page.getByRole("row",{name:new RegExp(name)});
+  const row=page.getByRole("region",{name:"Monthly sponsorship ledger"}).getByRole("row",{name:new RegExp(name)});
   await expect(row).toBeVisible();
   await expect(row.getByText("Active",{exact:true})).toBeVisible();
   await expect(row.getByText("Yes",{exact:true})).toBeVisible();
@@ -366,4 +366,81 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
     return response.status;
   },{receivedOn,month,reference:"DUPEREF"+id});
   expect(outcome).toBe(409);
+});
+
+
+test("Admin reverses a mistaken collection and the net ledger returns to unpaid",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
+  const name="Reversal Browser Sponsor "+id;
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9847"+id);
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+
+  await page.goto("/collections");
+  await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
+  await page.getByRole("option",{name:new RegExp(name)}).click();
+  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill("500.00");
+  await page.getByRole("textbox",{name:"Transaction reference"}).fill("REVERSAL"+id);
+  await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  await page.getByRole("button",{name:"Save Collection"}).click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
+  await page.goto("/collections/all");
+  const review=page.getByRole("region",{name:"Collection review"});
+  const historyRow=review.getByRole("row",{name:new RegExp(name)});
+  await expect(historyRow).toBeVisible();
+  await expect(historyRow.getByText("Recorded",{exact:true})).toBeVisible();
+  await historyRow.getByRole("button",{name:"Reverse entry"}).click();
+
+  const dialog=page.getByRole("dialog",{name:"Reverse collection entry"});
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(name,{exact:true})).toBeVisible();
+  const submit=dialog.getByRole("button",{name:"Confirm reversal"});
+  await expect(submit).toBeDisabled();
+  await dialog.getByRole("combobox",{name:"Reason for reversal"}).selectOption("funds_not_received");
+  await dialog.getByRole("textbox",{name:"Type REVERSE to confirm"}).fill("REVERSE");
+  await submit.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(review.getByRole("status")).toContainText(/Reversed the incorrect/);
+  const reversed=review.getByRole("row",{name:new RegExp(name)});
+  await expect(reversed.getByText("Reversed",{exact:true})).toBeVisible();
+  await expect(reversed.getByText("Suppressed",{exact:true})).toBeVisible();
+  await expect(reversed.getByRole("button",{name:"Reverse entry"})).toHaveCount(0);
+
+  const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
+  const dueRow=ledger.getByRole("row",{name:new RegExp(name)});
+  await expect(dueRow.getByRole("cell").nth(2)).toContainText("0.00");
+  await expect(dueRow.getByRole("cell").nth(3)).toContainText("500.00");
+  await expect(dueRow.getByText("New",{exact:true})).toBeVisible();
+});
+
+test("Reversal gateway rejects unsigned, forged-origin and malformed operations",async ({page})=>{
+  const id="00000000-0000-4000-8000-000000000001";
+  await page.goto("/collections/all");
+  const unverified=await page.evaluate(async(record)=>{
+    const res=await fetch("/api/admin/collections/"+record+"/reverse",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        request_id:crypto.randomUUID(),reason_code:"wrong_amount",confirmation:"REVERSE"
+      }),
+    });
+    return res.status;
+  },id);
+  expect(unverified).toBe(403);
+  const forged=await page.request.post("/api/admin/collections/"+id+"/reverse",{
+    headers:{"Origin":"https://untrusted.example","Content-Type":"application/json"},
+    data:{
+      request_id:"00000000-0000-4000-8000-000000000002",
+      reason_code:"wrong_amount",confirmation:"REVERSE",
+    },
+  });
+  expect(forged.status()).toBe(403);
+  const invalid=await page.request.post("/api/admin/collections/not-a-uuid/reverse",{
+    headers:{"Origin":"http://127.0.0.1:3000","Content-Type":"application/json"},
+    data:{},
+  });
+  expect(invalid.status()).toBe(404);
 });
