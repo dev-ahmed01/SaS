@@ -13,6 +13,7 @@ from app.models import (
     AdminUser,
     AuditEvent,
     ManualCollection,
+    ManualCollectionReversal,
     Organization,
     OrganizationSettings,
     Promoter,
@@ -299,6 +300,93 @@ def test_postgres_manual_collection_cannot_cross_tenant() -> None:
             reference_mask="****1003", received_on=date(2026, 10, 13),
             period_month=date(2026, 10, 1), payment_method="upi",
             amount_paise=50000,
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def _insert_manual_receipt_for_reversal(db, org: Organization) -> ManualCollection:
+    person = Prospect(
+        organization_id=org.id, full_name="Synthetic Correction Sponsor",
+        mobile_number="+919311101990", area_city="Bengaluru",
+        monthly_contribution_paise=50000, start_month=date(2026, 10, 1),
+        whatsapp_opt_in=False, lifecycle_status="new", version=1,
+    )
+    db.add(person)
+    db.flush()
+    credit = VerifiedCredit(
+        organization_id=org.id, prospect_id=person.id,
+        period_month=date(2026, 10, 1), amount_paise=50000,
+        source_type="manual_attested", source_key="manual:correction-pg-sample",
+        verified_at=datetime(2026, 10, 13, 10, 0, tzinfo=UTC),
+    )
+    db.add(credit)
+    db.flush()
+    receipt = ManualCollection(
+        organization_id=org.id, prospect_id=person.id,
+        verified_credit_id=credit.id, request_id=uuid.uuid4(),
+        request_payload_hash="a" * 64, reference_digest="b" * 64,
+        reference_mask="****1990", received_on=date(2026, 10, 13),
+        period_month=date(2026, 10, 1), payment_method="upi",
+        amount_paise=50000,
+    )
+    db.add(receipt)
+    db.flush()
+    return receipt
+
+
+def test_postgres_prevents_two_reversals_for_same_collection() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Reversal uniqueness source")
+        db.add(org)
+        db.flush()
+        receipt = _insert_manual_receipt_for_reversal(db, org)
+        db.add(ManualCollectionReversal(
+            organization_id=org.id, collection_id=receipt.id,
+            request_id=uuid.uuid4(), reason_code="duplicate_entry",
+        ))
+        db.flush()
+        db.add(ManualCollectionReversal(
+            organization_id=org.id, collection_id=receipt.id,
+            request_id=uuid.uuid4(), reason_code="wrong_amount",
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_reversal_cannot_reference_foreign_tenant_collection() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        first = Organization(name="Reversal same-org original")
+        second = Organization(name="Reversal cross-org attacker")
+        db.add_all([first, second])
+        db.flush()
+        receipt = _insert_manual_receipt_for_reversal(db, first)
+        db.add(ManualCollectionReversal(
+            organization_id=second.id, collection_id=receipt.id,
+            request_id=uuid.uuid4(), reason_code="wrong_sponsor",
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_unknown_reversal_reason_code() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Reversal check constraint")
+        db.add(org)
+        db.flush()
+        receipt = _insert_manual_receipt_for_reversal(db, org)
+        db.add(ManualCollectionReversal(
+            organization_id=org.id, collection_id=receipt.id,
+            request_id=uuid.uuid4(), reason_code="erase_all_records",
         ))
         with pytest.raises(IntegrityError):
             db.flush()
