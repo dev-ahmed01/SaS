@@ -35,8 +35,6 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
-      - name: Ruff import-format diagnostics
-        run: python -m ruff check --select I --diff tests/test_accounting.py || true
       - run: python -m ruff check .
       - run: python -m pytest -q
       - name: Migration smoke test

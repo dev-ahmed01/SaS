@@ -21,6 +21,7 @@ from app.models import (
     VerifiedCredit,
 )
 
+
 def login(client):
     response = client.post(
         "/v1/auth/login",
