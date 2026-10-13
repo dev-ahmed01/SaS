@@ -66,6 +66,7 @@ test("reminder screens do not send messages before Phase 11",async ({page})=>{
 
 test("desktop branding and landscape artwork have the right proportions",async ({page,isMobile})=>{
   await page.goto("/dashboard");
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
   const sidebar=page.locator(".site-sidebar");
   const art=page.locator(".sidebar-art");
   await expect(art).toBeVisible();
@@ -97,7 +98,9 @@ test("Admin profile menu closes with Escape and outside interaction",async ({pag
   await expect(button).toHaveAttribute("aria-expanded","false");
   await button.click();
   await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Dashboard"}).click();
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
   await expect(button).toHaveAttribute("aria-expanded","false");
+  await expect(page.getByRole("button",{name:"Sign out"})).toHaveCount(0);
 });
 
 test("responsive layout has no horizontal overflow and drawer controls work",async ({page,isMobile})=>{
