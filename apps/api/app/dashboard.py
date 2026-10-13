@@ -9,8 +9,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.accounting import (
-    _load_account, evaluate_status, ist_today, month_start,
-    period_balance, shift_month,
+    _load_account,
+    evaluate_status,
+    ist_today,
+    month_start,
+    period_balance,
+    shift_month,
 )
 from app.auth import db_session, get_admin
 from app.models import (
