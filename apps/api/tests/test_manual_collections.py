@@ -17,7 +17,6 @@ from app.models import (
     Base,
     ManualCollection,
     MessageOutbox,
-    MessageOutbox,
     Prospect,
     VerifiedCredit,
 )
