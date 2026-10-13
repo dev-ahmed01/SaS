@@ -548,3 +548,110 @@ test("Payout write gateway rejects forged origins, missing CSRF and invalid rout
   }).then(r=>r.status));
   expect(noCsrf).toBe(403);
 });
+
+
+test("Admin plans and confirms a recurring payout with separate payment evidence",async ({page})=>{
+  const token=String(Date.now()%1000000).padStart(6,"0");
+  const payee="Payout Caretaker "+token;
+  await page.goto("/payouts");
+  await expect(page.getByRole("region",{name:"Add payout plan"})).toBeVisible();
+  await page.getByRole("textbox",{name:"Payee name"}).fill(payee);
+  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic building maintenance");
+  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("735.00");
+  await page.getByRole("button",{name:"Save payout plan"}).click();
+  await expect(page.getByRole("status")).toContainText("No money has been transferred.");
+
+  await page.goto("/payouts/active");
+  const active=page.getByRole("region",{name:"Active payout plans"});
+  const row=active.getByRole("row",{name:new RegExp(payee)});
+  await expect(row).toBeVisible();
+  await expect(row.getByText("Active",{exact:true})).toBeVisible();
+  await expect(row.getByRole("cell").nth(4)).toContainText("0.00");
+  await row.getByRole("button",{name:"Record paid"}).click();
+  const dialog=page.getByRole("dialog",{name:"Record paid payout"});
+  await expect(dialog).toBeVisible();
+  const save=dialog.getByRole("button",{name:"Record payment"});
+  await expect(save).toBeDisabled();
+  await dialog.getByRole("textbox",{name:"Outgoing payment reference"}).fill("SYNTHETICPAYOUT"+token);
+  await dialog.getByRole("checkbox",{name:/confirm the funds were disbursed/}).check();
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(active.getByRole("status")).toContainText("No transfer was initiated.");
+  await expect(row.getByRole("cell").nth(4)).toContainText("735.00");
+
+  await page.goto("/payouts/all");
+  const all=page.getByRole("region",{name:"All payout plans"});
+  await expect(all.getByRole("row",{name:new RegExp(payee)})).toBeVisible();
+  const payment=page.getByRole("region",{name:"Recorded payout history"});
+  await expect(payment.getByRole("row",{name:new RegExp(payee)})).toBeVisible();
+  await expect(payment.getByRole("row",{name:new RegExp(payee)})).toContainText("735.00");
+});
+
+test("One-time payouts remain in All and are not recurring Active obligations",async ({page})=>{
+  const token=String(Date.now()%1000000).padStart(6,"0");
+  const payee="One Time Payee "+token;
+  await page.goto("/payouts");
+  await page.getByRole("textbox",{name:"Payee name"}).fill(payee);
+  await page.getByRole("combobox",{name:"Payout type"}).selectOption("one_time");
+  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("1240.00");
+  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic supplies purchase");
+  await page.getByRole("button",{name:"Save payout plan"}).click();
+  await expect(page.getByRole("status")).toContainText("one-time payout commitment");
+  await page.goto("/payouts/active");
+  await expect(page.getByRole("region",{name:"Active payout plans"})
+    .getByRole("row",{name:new RegExp(payee)})).toHaveCount(0);
+  await page.goto("/payouts/all");
+  const row=page.getByRole("region",{name:"All payout plans"}).getByRole("row",{name:new RegExp(payee)});
+  await expect(row).toBeVisible();
+  await expect(row.getByText("Scheduled",{exact:true})).toBeVisible();
+  await row.getByRole("button",{name:"Record paid"}).click();
+  const dialog=page.getByRole("dialog",{name:"Record paid payout"});
+  await dialog.getByRole("textbox",{name:"Outgoing payment reference"}).fill("ONETIMEPAYOUT"+token);
+  await dialog.getByRole("checkbox",{name:/confirm the funds were disbursed/}).check();
+  await dialog.getByRole("button",{name:"Record payment"}).click();
+  await expect(row.getByText("Paid",{exact:true})).toBeVisible();
+  await expect(row.getByRole("button",{name:"Record paid"})).toHaveCount(0);
+});
+
+test("Recurring payout status change is scheduled without rewriting current month",async ({page})=>{
+  const token=String(Date.now()%1000000).padStart(6,"0");
+  const payee="Recurring Pause "+token;
+  await page.goto("/payouts");
+  await page.getByRole("textbox",{name:"Payee name"}).fill(payee);
+  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic monthly caretaker");
+  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("2100.00");
+  await page.getByRole("button",{name:"Save payout plan"}).click();
+  await expect(page.getByRole("status")).toContainText("No money has been transferred.");
+  await page.goto("/payouts/active");
+  const row=page.getByRole("region",{name:"Active payout plans"})
+    .getByRole("row",{name:new RegExp(payee)});
+  await row.getByRole("button",{name:"Pause"}).click();
+  const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
+  await expect(dialog.getByText(/next calendar month/)).toBeVisible();
+  await dialog.getByRole("button",{name:"Confirm status change"}).click();
+  await expect(row.getByText("Active",{exact:true})).toBeVisible();
+  await expect(row.getByText("Next: paused")).toBeVisible();
+  await expect(row.getByRole("button",{name:"Pause"})).toHaveCount(0);
+});
+
+test("Protected payout gateway rejects forged actions or unsupported routes",async ({page})=>{
+  await page.goto("/payouts");
+  const bad=await page.evaluate(async()=>{
+    const res=await fetch("/api/admin/payouts/plans",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({}),
+    });
+    return res.status;
+  });
+  expect(bad).toBe(403);
+  const forged=await page.request.post("/api/admin/payouts/plans",{
+    headers:{"Origin":"https://untrusted.example","Content-Type":"application/json"},
+    data:{},
+  });
+  expect(forged.status()).toBe(403);
+  const invalid=await page.request.post("/api/admin/payouts/plans/not-an-id/payments",{
+    headers:{"Origin":"http://127.0.0.1:3000","Content-Type":"application/json"},
+    data:{},
+  });
+  expect(invalid.status()).toBe(404);
+});
