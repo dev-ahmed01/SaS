@@ -86,34 +86,44 @@ def upgrade() -> None:
     # Existing prospects must not unexpectedly become payable for periods
     # before their real registration; backfill from recorded creation in IST.
     conn = op.get_bind()
-    rows = conn.execute(sa.text(
-        "SELECT id, organization_id, monthly_contribution_paise, created_at "
-        "FROM prospects"
-    )).mappings()
-    for row in rows:
+    prospect_table = sa.table(
+        "prospects",
+        sa.column("id", sa.Uuid()),
+        sa.column("organization_id", sa.Uuid()),
+        sa.column("monthly_contribution_paise", sa.BigInteger()),
+        sa.column("created_at", sa.DateTime(timezone=True)),
+        sa.column("start_month", sa.Date()),
+    )
+    rate_table = sa.table(
+        "sponsorship_rates",
+        sa.column("id", sa.Uuid()),
+        sa.column("organization_id", sa.Uuid()),
+        sa.column("prospect_id", sa.Uuid()),
+        sa.column("effective_month", sa.Date()),
+        sa.column("amount_paise", sa.BigInteger()),
+    )
+    existing = conn.execute(sa.select(
+        prospect_table.c.id, prospect_table.c.organization_id,
+        prospect_table.c.monthly_contribution_paise, prospect_table.c.created_at,
+    ))
+    for row in existing.mappings():
         created = row["created_at"]
         if isinstance(created, str):
             created = datetime.fromisoformat(created)
         if created.tzinfo is None:
             created = created.replace(tzinfo=timezone.utc)
         local = created.astimezone(ZoneInfo("Asia/Kolkata")).date()
-        start = local.replace(day=1)
+        month = local.replace(day=1)
         conn.execute(
-            sa.text("UPDATE prospects SET start_month = :month WHERE id = :id"),
-            {"month": start, "id": str(row["id"])},
+            prospect_table.update()
+            .where(prospect_table.c.id == row["id"])
+            .values(start_month=month)
         )
-        conn.execute(
-            sa.text(
-                "INSERT INTO sponsorship_rates "
-                "(id, organization_id, prospect_id, effective_month, amount_paise) "
-                "VALUES (:id, :organization_id, :prospect_id, :month, :amount)"
-            ),
-            {
-                "id": str(uuid.uuid4()), "organization_id": str(row["organization_id"]),
-                "prospect_id": str(row["id"]), "month": start,
-                "amount": row["monthly_contribution_paise"],
-            },
-        )
+        conn.execute(rate_table.insert().values(
+            id=uuid.uuid4(), organization_id=row["organization_id"],
+            prospect_id=row["id"], effective_month=month,
+            amount_paise=row["monthly_contribution_paise"],
+        ))
     # SQLite batch alterations require special care; nullable columns serve
     # migration compat, and new write APIs always set a start month.
 

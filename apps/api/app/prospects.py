@@ -10,6 +10,7 @@ import json
 import re
 import uuid
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -27,8 +28,14 @@ from app.models import (
     OrganizationSettings,
     Prospect,
     ProspectUpiIdentifier,
+    SponsorshipRate,
 )
 from app.security import utc_now
+
+
+def _ist_month() -> date:
+    return utc_now().astimezone(ZoneInfo("Asia/Kolkata")).date().replace(day=1)
+
 
 router = APIRouter(prefix="/v1/prospects", tags=["Admin prospects"])
 
@@ -151,6 +158,7 @@ class ProspectRead(BaseModel):
     whatsapp_opt_in: bool
     lifecycle_status: Literal["new", "active", "inactive"]
     last_verified_payment_at: datetime | None
+    start_month: date | None
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
@@ -208,6 +216,7 @@ def _read(prospect: Prospect) -> ProspectRead:
         whatsapp_opt_in=prospect.whatsapp_opt_in,
         lifecycle_status=prospect.lifecycle_status,
         last_verified_payment_at=prospect.last_verified_payment_at,
+        start_month=prospect.start_month,
         created_at=prospect.created_at,
         updated_at=prospect.updated_at,
         archived_at=prospect.archived_at,
@@ -364,10 +373,17 @@ def create_prospect(
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
+        start_month=_ist_month(),
     )
     try:
         database.add(prospect)
         database.flush()
+        database.add(SponsorshipRate(
+            organization_id=admin.organization_id,
+            prospect_id=prospect.id,
+            effective_month=prospect.start_month,
+            amount_paise=amount,
+        ))
         for raw in ids:
             _attach_upi(database, admin, prospect, raw)
         database.flush()
@@ -417,17 +433,34 @@ def update_prospect(
     prospect = _get(database, admin, prospect_id, lock=True)
     _check_version(prospect, payload.version)
     updated = payload.model_dump(exclude_unset=True, exclude={"version"})
-    if ("monthly_contribution_paise" in updated
-            and prospect.last_verified_payment_at is not None):
-        raise HTTPException(
-            status_code=409, detail="Change active sponsorship amounts through agreement history"
-        )
     changed = {field: value for field, value in updated.items()
                if getattr(prospect, field) != value}
     if changed:
         previous = prospect.version
         for field, value in changed.items():
             setattr(prospect, field, value)
+        if "monthly_contribution_paise" in changed:
+            # Existing and current IST months retain the contracted amount.
+            # A new rate becomes effective NEXT month; no historical rewrite.
+            from app.accounting import shift_month
+
+            effective = shift_month(_ist_month(), 1)
+            row = database.scalars(
+                select(SponsorshipRate).where(
+                    SponsorshipRate.organization_id == admin.organization_id,
+                    SponsorshipRate.prospect_id == prospect.id,
+                    SponsorshipRate.effective_month == effective,
+                )
+            ).one_or_none()
+            if row is None:
+                database.add(SponsorshipRate(
+                    organization_id=admin.organization_id,
+                    prospect_id=prospect.id,
+                    effective_month=effective,
+                    amount_paise=changed["monthly_contribution_paise"],
+                ))
+            else:
+                row.amount_paise = changed["monthly_contribution_paise"]
         prospect.version += 1
         prospect.updated_at = utc_now()
         _audit(database, admin, prospect, "prospect.updated",
