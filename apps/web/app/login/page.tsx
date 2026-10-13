@@ -44,7 +44,7 @@ export default function LoginPage() {
     </section>
     <section className="login-card" aria-labelledby="login-title">
       <span className="login-mark"><Icon name="moon" size={32}/></span>
-      <h2 id="login-title">Welcome back</h2><p>Sign in to manage your masjid sponsorships.</p>
+      <h2 id="login-title">Welcome back</h2>
       <form onSubmit={submit}>
         <div className="login-fields">
           <label className="field"><span className="field-label">{localDemo?"Email or username":"Email address"}</span><input type={localDemo?"text":"email"} autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)} placeholder={localDemo?"Enter Admin or your email":"Enter your email address"}/></label>
