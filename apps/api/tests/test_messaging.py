@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
