@@ -19,8 +19,7 @@ from app.models import (
     PromoterAssignment,
 )
 from app.security import hash_password
-from test_prospects import create as add_prospect
-from test_prospects import login
+from test_prospects import create as add_prospect, login
 
 
 @pytest.fixture
