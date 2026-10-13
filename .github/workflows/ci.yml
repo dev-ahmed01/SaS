@@ -109,7 +109,7 @@ jobs:
                   db,
                   email="admin@foundation.org",
                   password="integration-only-long-password-123",
-                  organization_name="CI Test Foundation"
+                  organization_name="CI Test Foundation", amount_paise=50000
               )
           PY
       - name: Start API for browser integration

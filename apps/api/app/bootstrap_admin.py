@@ -33,7 +33,11 @@ def provision_admin(
         raise ValueError("A valid organization name is required")
     if database.scalars(select(AdminUser).limit(1)).first() is not None:
         raise ValueError("Admin already provisioned; use the controlled account recovery process")
-    if not valid_commitment(amount_paise) or not 1 <= sponsor_day <= 28 or not 1 <= promoter_day <= 28:
+    if (
+        not valid_commitment(amount_paise)
+        or not 1 <= sponsor_day <= 28
+        or not 1 <= promoter_day <= 28
+    ):
         raise ValueError("Invalid initial sponsorship configuration")
     if inactivity_months != INACTIVITY_COMPLETED_MONTHS:
         raise ValueError("Invalid initial inactivity threshold")
@@ -82,7 +86,9 @@ def main() -> None:
     with Session(get_engine()) as database:
         provision_admin(
             database, email=email, password=password, organization_name=org,
-            amount_paise=int(os.environ.get("BOOTSTRAP_AMOUNT_PAISE", str(SPONSORSHIP_DEFAULT_PAISE))),
+            amount_paise=int(os.environ.get(
+                "BOOTSTRAP_AMOUNT_PAISE", str(SPONSORSHIP_DEFAULT_PAISE)
+            )),
             sponsor_day=int(os.environ.get("BOOTSTRAP_SPONSOR_DAY", "5")),
             promoter_day=int(os.environ.get("BOOTSTRAP_PROMOTER_DAY", "20")),
             inactivity_months=int(os.environ.get("BOOTSTRAP_INACTIVITY_MONTHS", "2")),

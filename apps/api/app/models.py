@@ -57,7 +57,7 @@ class OrganizationSettings(Base):
         CheckConstraint("default_contribution_paise > 0", name="ck_settings_positive_amount"),
         CheckConstraint("sponsor_reminder_day BETWEEN 1 AND 28", name="ck_settings_sponsor_day"),
         CheckConstraint("promoter_reminder_day BETWEEN 1 AND 28", name="ck_settings_promoter_day"),
-        CheckConstraint("inactivity_months BETWEEN 1 AND 24", name="ck_settings_inactivity"),
+        CheckConstraint("inactivity_months = 2", name="ck_settings_inactivity"),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(

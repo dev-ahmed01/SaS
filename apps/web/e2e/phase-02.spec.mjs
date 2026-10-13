@@ -90,7 +90,7 @@ test("settings are persisted, edited and can be reloaded",async ({page})=>{
   await expect(page.getByRole("heading",{name:"Organisation Settings"})).toBeVisible();
   const amount=page.getByRole("spinbutton",{name:"Default monthly contribution (₹)"});
   await expect(amount).not.toHaveValue("");
-  const updated=(Number(await amount.inputValue())+1).toString();
+  const updated=(Number(await amount.inputValue())+250).toString();
   await amount.fill(updated);
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText(/Settings saved/)).toBeVisible();
