@@ -68,15 +68,19 @@ export function PromoterEditor({
   }
   return <section className="content-panel prospect-form-panel" aria-label={initial?"Edit Promoter":"Add Promoter"}>
     <h2>{initial?"Edit Promoter":"Add Promoter"}</h2>
-    <p className="panel-description">A promoter supports sponsors and can receive a consolidated follow-up on the configured date. Message sending is not enabled yet.</p>
     <form onSubmit={submit}>
       <div className="form-grid">
         <label className="field"><span className="field-label">Full name <span className="required">*</span></span><input required maxLength={160} minLength={2} placeholder="Enter full name" value={form.full_name} onChange={e=>set("full_name",e.target.value)}/></label>
         <label className="field"><span className="field-label">Phone number <span className="required">*</span></span><input required type="tel" placeholder="+91 98765 43210" value={form.mobile_number} onChange={e=>set("mobile_number",e.target.value)}/></label>
-        <label className="field"><span className="field-label">WhatsApp number (optional)</span><input type="tel" placeholder="+91 98765 43210" value={form.whatsapp_number} onChange={e=>set("whatsapp_number",e.target.value)}/></label>
-        <label className="field"><span className="field-label">Area / City <span className="required">*</span></span><input required maxLength={120} minLength={2} placeholder="Enter area or city" value={form.area_city} onChange={e=>set("area_city",e.target.value)}/></label>
-        <label className="field form-cell full"><span className="field-label">Notes</span><textarea rows={3} maxLength={1500} placeholder="Optional notes about this promoter" value={form.notes} onChange={e=>set("notes",e.target.value)}/></label>
-        <label className="checkbox-field form-cell full"><input type="checkbox" checked={form.whatsapp_opt_in} onChange={e=>set("whatsapp_opt_in",e.target.checked)}/><span>WhatsApp communication consent recorded (no automatic messages in this phase)</span></label>
+        <label className="field form-cell full"><span className="field-label">Area / City <span className="required">*</span></span><input required maxLength={120} minLength={2} placeholder="Enter area or city" value={form.area_city} onChange={e=>set("area_city",e.target.value)}/></label>
+        <details className="optional-details">
+          <summary>More details (optional)</summary>
+          <div className="optional-fields">
+            <label className="field"><span className="field-label">WhatsApp number</span><input type="tel" placeholder="Same as mobile if empty" value={form.whatsapp_number} onChange={e=>set("whatsapp_number",e.target.value)}/></label>
+            <label className="field full"><span className="field-label">Notes</span><textarea rows={2} maxLength={1500} placeholder="Optional notes" value={form.notes} onChange={e=>set("notes",e.target.value)}/></label>
+            <label className="checkbox-field full"><input type="checkbox" checked={form.whatsapp_opt_in} onChange={e=>set("whatsapp_opt_in",e.target.checked)}/><span>WhatsApp communication consent recorded</span></label>
+          </div>
+        </details>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       <div className="form-actions">

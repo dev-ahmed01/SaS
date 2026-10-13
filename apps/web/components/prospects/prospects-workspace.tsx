@@ -13,7 +13,7 @@ const tabs=[
 
 export function ProspectsWorkspace({view}:{view:"add"|"inactive"|"all"}) {
   return <AppShell>
-    <PageHeading title="Prospects" description="Register and manage people who may sponsor a salah."/>
+    <PageHeading title="Prospects"/>
     <ModuleTabs current={view} tabs={tabs}/>
     <div className="prospects-workspace">
       {view==="add"

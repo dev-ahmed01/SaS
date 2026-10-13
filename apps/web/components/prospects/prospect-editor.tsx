@@ -16,6 +16,8 @@ type EditValues = {
   whatsapp_opt_in: boolean;
 };
 
+const contributionOptions = [250,500,750,1000,1250,1500,1750,2000,2500,3000,5000,10000] as const;
+
 const empty: EditValues = {
   full_name: "", mobile_number: "", whatsapp_number: "",
   area_city: "", amount_rupees: "", next_followup_on: "",
@@ -190,21 +192,35 @@ export function ProspectEditor({
 
   return <section className="content-panel prospect-form-panel" aria-label={current?"Edit Prospect":"Add Prospect"}>
     <h2>{current?"Edit Prospect":"Add Prospect"}</h2>
-    <p className="panel-description">Manage contact details and the agreed monthly contribution. A new prospect stays New until the first recorded positive contribution. Both commitments and incoming recorded contributions start at ₹250 and use ₹250 increments.</p>
     <form onSubmit={submit}>
       <div className="form-grid">
         <label className="field"><span className="field-label">Full name <span className="required">*</span></span><input required minLength={2} maxLength={160} value={values.full_name} onChange={e=>update("full_name",e.target.value)} placeholder="Enter full name"/></label>
         <label className="field"><span className="field-label">Mobile number <span className="required">*</span></span><input required type="tel" value={values.mobile_number} onChange={e=>update("mobile_number",e.target.value)} placeholder="+91 98765 43210"/></label>
-        <label className="field"><span className="field-label">WhatsApp number (optional)</span><input type="tel" value={values.whatsapp_number} onChange={e=>update("whatsapp_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">Area / City <span className="required">*</span></span><input required minLength={2} maxLength={120} value={values.area_city} onChange={e=>update("area_city",e.target.value)} placeholder="Enter area or city"/></label>
-        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step={current && current.monthly_contribution_paise%25000!==0?"any":"250"}
-          min={current && current.monthly_contribution_paise<25000?"0.01":"250"}
-          max="10000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
-        <label className="field"><span className="field-label">Next follow-up date</span><input type="date" value={values.next_followup_on} onChange={e=>update("next_followup_on",e.target.value)}/></label>
-        <label className="field"><span className="field-label">Last contact date</span><input type="date" value={values.last_contact_on} onChange={e=>update("last_contact_on",e.target.value)}/></label>
-        {!current && <label className="field"><span className="field-label">UPI ID (optional)</span><input maxLength={193} value={values.upi_id} onChange={e=>update("upi_id",e.target.value)} placeholder="name@bank"/></label>}
-        <label className="field form-cell full"><span className="field-label">Notes</span><textarea rows={3} maxLength={1500} value={values.notes} onChange={e=>update("notes",e.target.value)} placeholder="Enter any notes about this prospect"/></label>
-        <label className="checkbox-field form-cell full"><input type="checkbox" checked={values.whatsapp_opt_in} onChange={e=>update("whatsapp_opt_in",e.target.checked)}/><span>WhatsApp communication consent recorded (no messages sent in this phase)</span></label>
+        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span>
+          <select aria-label="Monthly contribution (₹)" required disabled={!ready}
+            value={contributionOptions.includes(Number(values.amount_rupees) as typeof contributionOptions[number])?values.amount_rupees:"other"}
+            onChange={e=>update("amount_rupees",e.target.value==="other"?"":e.target.value)}>
+            {contributionOptions.map(amount=><option key={amount} value={amount}>{amount.toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0})}</option>)}
+            <option value="other">Other multiple of ₹250…</option>
+          </select>
+        </label>
+        {!contributionOptions.includes(Number(values.amount_rupees) as typeof contributionOptions[number])&&
+          <label className="field form-cell full"><span className="field-label">Custom monthly contribution (₹) *</span>
+            <input required type="number" min="250" step="250" max="10000000" value={values.amount_rupees}
+              onChange={e=>update("amount_rupees",e.target.value)} placeholder="Enter a multiple of 250"/>
+          </label>}
+        <details className="optional-details">
+          <summary>More details (optional)</summary>
+          <div className="optional-fields">
+            <label className="field"><span className="field-label">WhatsApp number</span><input type="tel" value={values.whatsapp_number} onChange={e=>update("whatsapp_number",e.target.value)} placeholder="Same as mobile if empty"/></label>
+            <label className="field"><span className="field-label">Next follow-up date</span><input type="date" value={values.next_followup_on} onChange={e=>update("next_followup_on",e.target.value)}/></label>
+            <label className="field"><span className="field-label">Last contact date</span><input type="date" value={values.last_contact_on} onChange={e=>update("last_contact_on",e.target.value)}/></label>
+            {!current&&<label className="field"><span className="field-label">UPI ID</span><input maxLength={193} value={values.upi_id} onChange={e=>update("upi_id",e.target.value)} placeholder="name@bank"/></label>}
+            <label className="field full"><span className="field-label">Notes</span><textarea rows={2} maxLength={1500} value={values.notes} onChange={e=>update("notes",e.target.value)} placeholder="Optional notes"/></label>
+            <label className="checkbox-field full"><input type="checkbox" checked={values.whatsapp_opt_in} onChange={e=>update("whatsapp_opt_in",e.target.checked)}/><span>WhatsApp communication consent recorded</span></label>
+          </div>
+        </details>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-actions">

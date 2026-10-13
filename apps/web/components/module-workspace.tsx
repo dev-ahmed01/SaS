@@ -76,7 +76,7 @@ function Reminders({view}:{view:string}) {
         <Icon name="arrow-left" size={17}/> Back to reminders
       </Link>
       <PageHeading title="WhatsApp Reminder"
-        description="Preview unpaid-sponsor eligibility and consolidated promoter follow-ups."/>
+        description=""/>
       <WhatsAppEligibility/>
     </AppShell>;
   }
@@ -84,7 +84,7 @@ function Reminders({view}:{view:string}) {
     const wa=view==="whatsapp";
     return <AppShell><Link className="back-link" href="/reminders"><Icon name="arrow-left" size={17}/> Back to reminders</Link>
       <PageHeading title={wa?"WhatsApp Reminder":"Email Reminder"} description={wa?"Preview the monthly sponsorship WhatsApp reminder.":"Email reminders are planned but not connected yet."}/>
-      <PhaseNotice phase="11" text="Message delivery is disabled until WhatsApp/Email onboarding, consent and backend eligibility checks are complete."/>
+  
       <div className="composer-grid"><Panel title="Message details">
         <div className="form-grid"><div className="form-cell full">{wa?<SelectField label="Message template" placeholder="Monthly Salah Sponsorship Reminder" required/>:<TextField label="Subject" placeholder="Monthly Salah Sponsorship Reminder" required/>}</div>
         <div className="form-cell full"><label className="field"><span className="field-label">Message content</span><textarea rows={7} disabled defaultValue={"Assalamu Alaikum {name},\n\nThis is a friendly reminder about your monthly Salah sponsorship.\n\nJazakAllahu Khair for your continued support."}/></label></div>
@@ -94,21 +94,21 @@ function Reminders({view}:{view:string}) {
     </AppShell>;
   }
   if(view!=="add") return null;
-  return <AppShell><PageHeading title="Reminders" description="Send sponsorship reminders through the approved communication channels."/>
-    <PhaseNotice phase="11" text="WhatsApp and email delivery will be enabled after provider setup and backend eligibility checks."/>
-    <div className="reminder-cards"><Link href="/reminders/whatsapp" className="reminder-card"><span className="reminder-icon whatsapp"><Icon name="message" size={26}/></span><h2>WhatsApp Reminders</h2><p>Send monthly sponsorship reminders through WhatsApp.</p><span className="reminder-card-link">View reminder composer →</span></Link><Link href="/reminders/email" className="reminder-card"><span className="reminder-icon email"><Icon name="mail" size={26}/></span><h2>Email Reminders</h2><p>Prepare email reminders for sponsors.</p><span className="reminder-card-link">View reminder composer →</span></Link></div>
+  return <AppShell><PageHeading title="Reminders" description=""/>
+
+    <div className="reminder-cards"><Link href="/reminders/whatsapp" className="reminder-card"><span className="reminder-icon whatsapp"><Icon name="message" size={26}/></span><h2>WhatsApp Reminders</h2><span className="reminder-card-link">View reminder composer →</span></Link><Link href="/reminders/email" className="reminder-card"><span className="reminder-icon email"><Icon name="mail" size={26}/></span><h2>Email Reminders</h2><span className="reminder-card-link">View reminder composer →</span></Link></div>
   </AppShell>;
 }
 
 function Dashboard() {
   return <AppShell><PageHeading title="Dashboard"
-    description="A current overview of your masjid sponsorship operations."/>
+    description=""/>
     <DashboardLive/>
   </AppShell>;
 }
 
 function Settings() {
-  return <AppShell><PageHeading title="Settings" description="Manage organisation preferences and administrative configuration."/>
+  return <AppShell><PageHeading title="Settings" description=""/>
     <AdminSettingsForm/>
   </AppShell>;
 }
@@ -119,10 +119,10 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="reminders") return <Reminders view={view}/>;
   if(module==="prospects" && ["add","inactive","all"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"all"}/>;
   if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
-  if(module==="collections" && view==="add") return <AppShell><PageHeading title="Collections" description="Record received contributions with an audit trail."/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
-  if(module==="collections" && view==="all") return <AppShell><PageHeading title="Collections" description="Monthly commitments and verified contributions."/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace/></AppShell>;
-  if(module==="payouts" && view==="add") return <AppShell><PageHeading title="Payouts" description="Plan and document outgoing Foundation payments."/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
-  if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Payouts" description="Recurring obligations, one-time payouts, and verified Admin records."/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
+  if(module==="collections" && view==="add") return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
+  if(module==="collections" && view==="all") return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace/></AppShell>;
+  if(module==="payouts" && view==="add") return <AppShell><PageHeading title="Payouts" description=""/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
+  if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Payouts" description=""/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;
 }

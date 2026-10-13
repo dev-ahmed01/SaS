@@ -40,11 +40,11 @@ export default function LoginPage() {
   return <main className="login-layout">
     <section className="login-illustration" aria-label="Sponsor a Salah welcome">
       <div className="login-brand"><Icon name="moon" size={38}/><h1>Sponsor a Salah</h1><p>Masjid Charity Management</p></div>
-      <div className="login-mosque" aria-hidden="true"><span className="minaret minaret-one"/><span className="dome dome-one"/><span className="minaret minaret-two"/><span className="dome dome-two"/></div>
+      <div className="login-mosque" aria-hidden="true"/>
     </section>
     <section className="login-card" aria-labelledby="login-title">
       <span className="login-mark"><Icon name="moon" size={32}/></span>
-      <h2 id="login-title">Welcome back</h2><p>Sign in to manage your masjid sponsorships.</p>
+      <h2 id="login-title">Welcome back</h2>
       <form onSubmit={submit}>
         <div className="login-fields">
           <label className="field"><span className="field-label">{localDemo?"Email or username":"Email address"}</span><input type={localDemo?"text":"email"} autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)} placeholder={localDemo?"Enter Admin or your email":"Enter your email address"}/></label>

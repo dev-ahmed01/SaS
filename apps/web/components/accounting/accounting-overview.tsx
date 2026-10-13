@@ -46,7 +46,7 @@ export function AccountingOverview(){
   return <section className="accounting-workspace" aria-label="Monthly sponsorship ledger">
     <div className="accounting-heading">
       <div><h2>Monthly sponsorship ledger</h2>
-        <p>Monthly dues, verified contributions and unpaid balances. No bank feed is connected yet.</p></div>
+</div>
       <label className="field account-month-picker"><span className="field-label">Accounting month (IST)</span>
         <input aria-label="Accounting month (IST)" type="month" max={data?.as_of.slice(0,7)}
           value={month||data?.period_month.slice(0,7)||""}
@@ -66,7 +66,7 @@ export function AccountingOverview(){
     </div>
     <div className="accounting-details">
       <div className="accounting-list-heading"><div>
-        <h3>Sponsor commitments</h3><p>Status depends on completed IST months and verified full monthly payments.</p>
+        <h3>Sponsor commitments</h3>
       </div><button type="button" className="btn btn-secondary" disabled={saving||loading}
         onClick={refreshStatuses}>{saving?"Updating…":"Refresh sponsor statuses"}</button></div>
       <div className="table-scroll"><table className="data-table">
@@ -90,6 +90,5 @@ export function AccountingOverview(){
         </div>
       </div>
     </div>
-    <p className="accounting-footnote">No gateway, statement import, automatic matching or payment confirmation is enabled. Status refresh never creates a payment.</p>
   </section>;
 }

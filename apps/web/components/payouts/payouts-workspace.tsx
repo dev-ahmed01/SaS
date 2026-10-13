@@ -84,7 +84,7 @@ export function PayoutAdd(){
   }
   return <section className="content-panel payouts-form" aria-label="Add payout plan">
     <div className="payout-panel-heading">
-      <div><h2>Add payout</h2><p className="panel-description">Record a planned outgoing commitment. This does not send money.</p></div>
+      <div><h2>Add payout</h2></div>
       <button type="button" className="text-action" onClick={()=>router.push("/payouts/all")}>All payouts →</button>
     </div>
     <form onSubmit={submit}>
@@ -105,23 +105,25 @@ export function PayoutAdd(){
           <input required aria-label="Payout purpose" minLength={3} maxLength={240}
             value={purpose} placeholder="e.g. Facility support"
             onChange={e=>{setPurpose(e.target.value);change();}}/></label>
-        {kind==="recurring"
-          ?<label className="field"><span className="field-label">First payment month (IST) *</span>
-            <input required type="month" aria-label="First payment month (IST)" value={start}
-              onChange={e=>{setStart(e.target.value);change();}}/></label>
-          :<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
-            <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
-              onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
-        <label className="field form-cell full"><span className="field-label">Notes (optional)</span>
-          <textarea rows={3} aria-label="Payout notes" maxLength={800} value={notes}
-            onChange={e=>{setNotes(e.target.value);change();}}/></label>
+        {kind==="one_time"&&<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
+          <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
+            onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
+        <details className="optional-details"><summary>Schedule and notes (optional)</summary>
+          <div className="optional-fields">
+            {kind==="recurring"&&<label className="field"><span className="field-label">First payment month (IST) *</span>
+              <input required type="month" aria-label="First payment month (IST)" value={start}
+                onChange={e=>{setStart(e.target.value);change();}}/></label>}
+            <label className="field full"><span className="field-label">Notes</span>
+              <textarea rows={2} aria-label="Payout notes" maxLength={800} value={notes}
+                onChange={e=>{setNotes(e.target.value);change();}}/></label>
+          </div>
+        </details>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
       <div className="form-actions"><button className="btn btn-primary" type="submit" disabled={saving}>
         {saving?"Saving…":"Save payout plan"}</button></div>
     </form>
-    <p className="accounting-footnote">The plan only creates an obligation. Actual disbursement is separately confirmed in All Payouts with a unique payment reference.</p>
   </section>;
 }
 
@@ -204,7 +206,6 @@ export function PayoutList({view}:{view:"all"|"active"}){
   return <section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
     <div className="payout-list-title"><div>
       <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
-      <p>Plans are commitments; only Admin-confirmed outgoing payments count as disbursed.</p>
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
       <input aria-label="Payout accounting month" type="month" value={period}
         onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
@@ -277,7 +278,6 @@ export function PayoutList({view}:{view:"all"|"active"}){
              onClick={()=>setPaymentOffset(n=>n+30)}>Next payments</button>
          </div>
        </div>
-      <p className="accounting-footnote">These entries were recorded by Admin; they are not bank-verified transfers. Corrections to outgoing payment evidence require an audited adjustment workflow before production.</p>
     </section>}
     {chosen&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
@@ -288,10 +288,8 @@ export function PayoutList({view}:{view:"all"|"active"}){
           aria-label="Close payout dialog">Close</button></div>
       <div className="content-panel">
         <h2 id="payout-modal-title">{mode==="paid"?"Record paid payout":"Schedule recurring status"}</h2>
-        <p className="panel-description">
-          {mode==="paid"?"Only record funds that have already left the Foundation's account. No money is transferred from this app."
-            :"This status change begins next calendar month in Asia/Kolkata; past obligations remain unchanged."}
-        </p>
+
+         <p className="panel-description">{mode==="paid"?"Record confirmed payments only.":"Applies from next month."}</p>
         <div className="reversal-facts">
           <div><span>Payee</span><strong>{chosen.payee_name}</strong></div>
           <div><span>Amount</span><strong>{money(chosen.amount_paise)}</strong></div>
@@ -319,10 +317,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
               onChange={e=>setConfirmed(e.target.checked)}/>
               <span>I checked the Foundation's records and confirm the funds were disbursed.</span>
             </label>
-          </>:<p className="accounting-footnote">
-            The planned change to <strong>{mode==="pause"?"Paused":mode==="resume"?"Active":"Closed"}</strong> takes effect next month.
-            Closing a plan is irreversible from this interface.
-          </p>}
+          </>:mode==="close"?<p className="accounting-footnote">Closing a plan is irreversible.</p>:null}
           {error&&<p className="form-error" role="alert">{error}</p>}
           <div className="form-actions"><button type="button" className="btn btn-secondary"
             onClick={close} disabled={saving}>Cancel</button>

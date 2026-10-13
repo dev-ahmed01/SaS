@@ -58,7 +58,7 @@ test("reminder screens do not send messages before Phase 11",async ({page})=>{
   await page.getByRole("link",{name:/WhatsApp Reminders/}).click();
   await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
   await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
-  await expect(page.getByText(/Delivery is disabled/)).toBeVisible();
+  await expect(page.getByText(/WhatsApp sending: off/).first()).toBeVisible();
   await page.goto("/dashboard");
   await expect(page.getByRole("region",{name:"Foundation dashboard"})).toBeVisible();
   await expect(page.getByText("Recorded contributions",{exact:true}).first()).toBeVisible();
@@ -72,14 +72,14 @@ test("responsive layout has no horizontal overflow and drawer controls work",asy
     await expect(page.getByRole("navigation",{name:"Modules"})).toBeVisible();
     await page.getByRole("button",{name:"Close menu"}).click();
   }else{
-    await page.getByRole("button",{name:"Collapse sidebar"}).click();
-    await expect(page.getByRole("button",{name:"Expand sidebar"})).toBeVisible();
-    await page.getByRole("button",{name:"Expand sidebar"}).click();
+    await expect(page.getByRole("button",{name:"Collapse sidebar"})).toHaveCount(0);
+    await expect(page.getByRole("link",{name:"Sponsor a Salah home"})).toBeVisible();
   }
 });
 
 test("WhatsApp cannot be enabled by a development Admin",async ({page})=>{
   await page.goto("/settings");
+  await page.getByText("WhatsApp automation",{exact:true}).click();
   await expect(page.getByRole("textbox",{name:"WhatsApp automation confirmation"})).toBeVisible();
   await page.getByRole("textbox",{name:"WhatsApp automation confirmation"}).fill("ENABLE WHATSAPP");
   await expect(page.getByRole("button",{name:"Enable WhatsApp automation"})).toBeDisabled();
@@ -157,6 +157,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await expect(row.getByText("+919876543210")).toBeVisible();
   await row.getByRole("button",{name:"Edit"}).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("dialog").getByText("More details (optional)").click();
   await page.getByRole("dialog").getByRole("textbox",{name:"Notes"}).fill("Synthetic test note");
   await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -224,6 +225,7 @@ test("Admin can edit promoters and deactivate/reactivate unassigned promoters",a
   await expect(row).toBeVisible();
   await row.getByRole("button",{name:"Edit"}).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("dialog").getByText("More details (optional)").click();
   await page.getByRole("dialog").getByRole("textbox",{name:"Notes"}).fill("Test follow-up");
   await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -269,7 +271,7 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   const name="Ledger Candidate "+(Date.now()%1000000);
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  const agreed=Number(await page.getByRole("spinbutton",{name:"Monthly contribution (₹)"}).inputValue());
+  const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -322,14 +324,31 @@ test("manual collection amount accepts only ₹250 denominations",async ({page})
   // No sponsor is selected: this is input validation only, never a real receipt.
 });
 
+test("Approved sponsor denomination selector supports multiples of 250 without a floating list",async ({page})=>{
+  await page.goto("/prospects");
+  const tiers=page.getByRole("combobox",{name:"Monthly contribution (₹)"});
+  await expect(tiers).toBeVisible();
+  await tiers.selectOption("750");
+  await expect(tiers).toHaveValue("750");
+  await expect(page.getByRole("spinbutton",{name:/Custom monthly contribution/})).toHaveCount(0);
+  await tiers.selectOption("other");
+  const custom=page.getByRole("spinbutton",{name:/Custom monthly contribution/});
+  await expect(custom).toBeVisible();
+  await custom.fill("375");
+  expect(await custom.evaluate(element=>element.checkValidity())).toBe(false);
+  await custom.fill("15000");
+  expect(await custom.evaluate(element=>element.checkValidity())).toBe(true);
+});
+
 test("Admin records a manual contribution without claiming WhatsApp delivery",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
   const name="Manual Pay Sponsor "+id;
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  const agreed=Number(await page.getByRole("spinbutton",{name:"Monthly contribution (₹)"}).inputValue());
+  const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9826"+id);
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByText("More details (optional)").click();
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
@@ -406,9 +425,10 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   const name="Reversal Browser Sponsor "+id;
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  const agreed=Number(await page.getByRole("spinbutton",{name:"Monthly contribution (₹)"}).inputValue());
+  const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9847"+id);
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByText("More details (optional)").click();
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
@@ -555,7 +575,7 @@ test("Recurring pause schedules next month without changing current obligations"
   await expect(row).toBeVisible();
   await row.getByRole("button",{name:"Pause",exact:true}).click();
   const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
-  await expect(dialog).toContainText("next calendar month");
+  await expect(dialog).toContainText("next month");
   await dialog.getByRole("button",{name:"Confirm status change"}).click();
   await expect(dialog).toHaveCount(0);
   await expect(row.getByText("Active",{exact:true})).toBeVisible();
@@ -660,7 +680,7 @@ test("Recurring payout status change is scheduled without rewriting current mont
     .getByRole("row",{name:new RegExp(payee)});
   await row.getByRole("button",{name:"Pause"}).click();
   const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
-  await expect(dialog.getByText(/next calendar month/)).toBeVisible();
+  await expect(dialog.getByText(/next month/)).toBeVisible();
   await dialog.getByRole("button",{name:"Confirm status change"}).click();
   await expect(row.getByText("Active",{exact:true})).toBeVisible();
   await expect(row.getByText("Next: paused")).toBeVisible();
@@ -697,6 +717,7 @@ test("Reminders WhatsApp preview uses real sponsor eligibility with no sending",
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9857"+suffix);
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByText("More details (optional)").click();
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
@@ -704,7 +725,7 @@ test("Reminders WhatsApp preview uses real sponsor eligibility with no sending",
   await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
   const targets=page.getByRole("region",{name:"Eligible reminder recipients"});
   await expect(targets.getByRole("row",{name:new RegExp(name)})).toBeVisible();
-  await expect(page.getByText(/Delivery is disabled/)).toBeVisible();
+  await expect(page.getByText(/WhatsApp sending: off/).first()).toBeVisible();
   await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
   await page.getByRole("button",{name:"Promoters",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Consolidated promoter follow-ups"})).toBeVisible();
@@ -805,8 +826,8 @@ test("Dashboard shows real six-month metrics and never initiates a payment",asyn
   await expect(page.getByRole("region",{name:"Outgoing payouts"})).toBeVisible();
   await expect(page.getByRole("region",{name:"Six-month financial trends"})).toBeVisible();
   await expect(page.locator(".dashboard-trend-row")).toHaveCount(6);
-  await expect(page.getByText(/Creating a payout plan does not send funds/)).toBeVisible();
-  await expect(page.getByText(/not independently reconciled bank balances/)).toBeVisible();
+  await expect(page.getByText(/Creating a payout plan does not send funds/)).toHaveCount(0);
+  await expect(page.getByText(/not independently reconciled bank balances/)).toHaveCount(0);
   await expect.poll(async()=>{
     return page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
   }).toBe(true);

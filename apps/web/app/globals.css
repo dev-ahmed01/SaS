@@ -473,3 +473,55 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .site-sidebar .sidebar-art { display:none; }
   .site-sidebar .sidebar-nav { margin-top:10px; }
 }
+
+/* Approved two-font visual system: headings Bricolage 700/600; body Poppins 400/500/600. */
+.app-frame { grid-template-columns:248px minmax(0,1fr); }
+.site-sidebar { padding:27px 14px 15px; }
+.sidebar-head { justify-content:flex-start; gap:0; padding:0 8px; min-height:56px; }
+.brand-link { gap:11px; width:100%; }
+.brand-copy strong { font-family:var(--font-heading); font-weight:700; font-size:18px; letter-spacing:-.035em; line-height:1.15; }
+.brand-copy small { font-family:var(--font-body); font-weight:400; font-size:9.5px; margin-top:4px; }
+.site-sidebar .desktop-collapse { display:none !important; }
+.sidebar-nav { margin-top:33px; }
+.sidebar-link { font:500 13px var(--font-body); min-height:46px; }
+.sidebar-art {
+  flex:0 0 238px; height:238px; min-height:238px; width:calc(100% + 28px);
+  margin:12px -14px 0; opacity:1; background:url("/art/masjid-sidebar.svg") center bottom/cover no-repeat;
+}
+.sidebar-art::after {display:none}
+.topbar-name { font-family:var(--font-heading);font-size:14px;font-weight:600; }
+.page-heading h1 { font-family:var(--font-heading);font-weight:700;font-size:clamp(30px,3vw,38px); }
+.content-panel h2,.dashboard-panel h3,.dashboard-section-head h3,.reminder-card h2 {
+  font-family:var(--font-heading);font-weight:600;
+}
+.page-heading p,.panel-description,.dashboard-caption,.dashboard-disclaimer,.settings-help {
+  font-family:var(--font-body);font-weight:400;
+}
+.field-label,.module-tab,.btn,.text-action {font-family:var(--font-body);font-weight:500;font-size:12.5px}
+.data-table td {font-family:var(--font-body);font-size:12px;font-weight:400}
+.data-table th {font-family:var(--font-body);font-size:12px;font-weight:500}
+.dashboard-metric strong,.dashboard-facts dd,.accounting-metric strong {font-family:var(--font-body);font-weight:600}
+.module-tabs {align-items:center;gap:10px;min-height:50px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.module-tab {min-width:125px}
+.login-illustration {
+  background: #e9fbf0 url("/art/masjid-landscape.svg") no-repeat center bottom;
+  background-size:cover;
+}
+.login-mosque {display:none}
+.login-brand {transform:translateY(-24px)}
+.login-card h2 {font-family:var(--font-heading);font-weight:700}
+.optional-details {grid-column:1/-1;margin-top:4px;border-top:1px solid var(--line);padding-top:12px}
+.optional-details summary {color:var(--forest);font:500 12px var(--font-body);cursor:pointer;padding:7px 0}
+.optional-fields {margin-top:13px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.optional-fields .full {grid-column:1/-1}
+.field select {appearance:auto;min-height:43px}
+@media(max-width:780px) {
+  .app-frame {display:block}
+  .site-sidebar {padding:25px 13px 15px}
+  .sidebar-art {margin:12px -13px 0;width:calc(100% + 26px)}
+  .optional-fields {grid-template-columns:1fr}
+}
+@media(max-width:520px) {
+  .sidebar-head {padding:0 4px}
+  .page-content {padding:24px 17px 55px}
+}
