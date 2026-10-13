@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 300" role="img" aria-label="Mint mosque skyline and rolling hills">
+<defs>
+ <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c5ead6"/><stop offset="1" stop-color="#65b38b"/></linearGradient>
+ <linearGradient id="temple" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#99d0b0"/><stop offset="1" stop-color="#399569"/></linearGradient>
+</defs>
+<g>
+ <path d="M0 203q85-74 155-32 91-71 165-19v148H0Z" fill="#e1f3e8"/>
+ <path d="M0 236q65-64 135-25 79-74 185-27v116H0Z" fill="#bee6d0"/>
+ <g opacity=".5" fill="#8ccbad">
+  <path d="M29 159h13v112H29zM25 156q10-29 22 0Z"/><path d="M232 176h15v110h-15zM226 176q14-33 26 0Z"/>
+  <path d="M45 208h50v61H45zM51 208q19-47 39 0Z"/>
+ </g>
+ <g fill="url(#temple)">
+  <path d="M108 199h122v101H108z"/>
+  <path d="M120 199q20-72 49-77 32 9 49 77Z"/>
+  <path d="M164 120v-13h8v13z"/><path d="M169 105q-10-13 3-22-4 12 9 10-5 10-12 12Z" fill="#5aa67e"/>
+  <path d="M78 179h20v121H78zM73 177h30l-4-9H77zM76 166q12-33 24 0Z"/>
+  <path d="M83 133h12v32H83zM79 130h20l-4-7H83zM83 122q6-20 12 0Z"/>
+  <path d="M87 108v13" stroke="#438f69" stroke-width="3"/>
+  <path d="M249 159h24v141h-24zM244 158h34l-5-10h-24zM247 147q14-35 28 0Z"/>
+  <path d="M256 119h10v27h-10zM253 115h15l-4-7h-8zM256 107q5-18 11 0Z"/>
+  <path d="M261 93v13" stroke="#428e68" stroke-width="3"/>
+ </g>
+ <g fill="#dff5e7">
+  <path d="M116 251v49h18v-49q-9-24-18 0Z"/><path d="M146 251v49h19v-49q-10-24-19 0Z"/>
+  <path d="M176 251v49h18v-49q-9-24-18 0Z"/><path d="M204 251v49h17v-49q-9-24-17 0Z"/>
+ </g>
+ <path d="M0 274q80-39 159-7 89-47 161-14v47H0Z" fill="url(#hill)"/>
+ <path d="M0 291q73-29 145-6 80-27 175-5v20H0Z" fill="#68b18b"/>
+ <g fill="#5aa77e" opacity=".85">
+  <path d="M8 300v-48l-12-7 14 3 9-22-4 24 19-10-17 18v42Z"/>
+  <ellipse cx="11" cy="255" rx="24" ry="13"/><ellipse cx="29" cy="245" rx="23" ry="13"/>
+  <path d="M305 300v-57l-17-9 19 6 8-20-4 23 18-7-18 16v48Z"/>
+  <ellipse cx="305" cy="243" rx="30" ry="16"/>
+ </g>
+</g></svg>

@@ -64,6 +64,45 @@ test("reminder screens do not send messages before Phase 11",async ({page})=>{
   await expect(page.getByText("Recorded contributions",{exact:true}).first()).toBeVisible();
 });
 
+test("desktop branding and landscape artwork have the right proportions",async ({page,isMobile})=>{
+  await page.goto("/dashboard");
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  const sidebar=page.locator(".site-sidebar");
+  const art=page.locator(".sidebar-art");
+  await expect(art).toBeVisible();
+  await expect.poll(async()=>art.evaluate(el=>getComputedStyle(el).backgroundImage.includes("masjid-sidebar-premium.svg"))).toBe(true);
+  if(!isMobile){
+    await expect.poll(async()=>sidebar.evaluate(el=>Math.round(el.getBoundingClientRect().width))).toBe(248);
+    const metrics=await page.evaluate(()=>{
+      const title=document.querySelector(".topbar-name");
+      const heading=document.querySelector(".page-heading h1");
+      const panel=document.querySelector(".site-sidebar");
+      return {
+        brand:parseFloat(getComputedStyle(title).fontSize),
+        heading:parseFloat(getComputedStyle(heading).fontSize),
+        scroll:panel.scrollHeight<=panel.clientHeight+1
+      };
+    });
+    expect(metrics.brand).toBeGreaterThan(metrics.heading);
+    expect(metrics.scroll).toBe(true);
+  }
+});
+
+test("Admin profile menu closes with Escape and outside interaction",async ({page,isMobile})=>{
+  await page.goto("/dashboard");
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  const button=page.getByRole("button",{name:"Admin account"});
+  await button.click();
+  await expect(page.getByRole("button",{name:"Sign out"})).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(button).toHaveAttribute("aria-expanded","false");
+  await button.click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Dashboard"}).click();
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await expect(button).toHaveAttribute("aria-expanded","false");
+  await expect(page.getByRole("button",{name:"Sign out"})).toHaveCount(0);
+});
+
 test("responsive layout has no horizontal overflow and drawer controls work",async ({page,isMobile})=>{
   await page.goto("/promoters");
   await expect.poll(async()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
@@ -122,6 +161,11 @@ test("same-origin API rejects missing CSRF and foreign origins",async ({page})=>
 
 test("sign out ends the authenticated browser session",async ({page,isMobile})=>{
   if(isMobile) await page.getByRole("button",{name:"Open navigation"}).click();
+  const profile=page.getByRole("button",{name:"Admin account"});
+  await expect(profile).toHaveAttribute("aria-expanded","false");
+  await expect(page.getByRole("button",{name:"Sign out"})).toHaveCount(0);
+  await profile.click();
+  await expect(profile).toHaveAttribute("aria-expanded","true");
   await page.getByRole("button",{name:"Sign out"}).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto("/collections");
