@@ -20,8 +20,8 @@ from app.models import (
     AuditEvent,
     ManualCollection,
     ManualCollectionReversal,
-    MessageOutbox,
     MessageDispatch,
+    MessageOutbox,
     OrganizationSettings,
     Prospect,
     SponsorshipRate,
@@ -70,7 +70,10 @@ class CollectionOutput(BaseModel):
     payment_method: str
     reference_mask: str
     evidence: Literal["admin_attested"]
-    message_status: Literal["awaiting_integration", "suppressed", "claimed", "accepted", "unknown", "failed", "cancelled", "sent", "delivered"]
+    message_status: Literal[
+        "awaiting_integration", "suppressed", "claimed", "accepted",
+        "unknown", "failed", "cancelled", "sent", "delivered",
+    ]
     sponsor_status: str
     reversed: bool
     reversal_reason: str | None
@@ -277,7 +280,10 @@ class ReversalOutput(BaseModel):
     amount_paise: int
     reason_code: str
     reversed: Literal[True]
-    message_status: Literal["awaiting_integration", "suppressed", "claimed", "accepted", "unknown", "failed", "cancelled", "sent", "delivered"]
+    message_status: Literal[
+        "awaiting_integration", "suppressed", "claimed", "accepted",
+        "unknown", "failed", "cancelled", "sent", "delivered",
+    ]
     sponsor_status: str
 
 
