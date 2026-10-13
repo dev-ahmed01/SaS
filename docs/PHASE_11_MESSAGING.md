@@ -6,7 +6,7 @@ This release integrates the Foundation's **Admin-entered collections** and its *
 
 The only message categories are:
 1. **Payment acknowledgment**: queued when Admin explicitly attests a manually received collection (Phase 07). A reversal before dispatch suppresses the queue. Template should say *"The Foundation recorded ₹{amount} for {month}"*, not *"Bank verified"*.
-2. **Sponsor reminder**: prepared only on the configured 5th (or Admin-set day) for net unpaid, WhatsApp-consenting, non-inactive and non-archived sponsors. A partial receipt reduces outstanding.
+2. **Sponsor reminder**: prepared only on the configured 5th (or Admin-set day) for net unpaid, WhatsApp-consenting, non-inactive and non-archived sponsors. Only recorded contributions of ₹250 or higher in exact ₹250 increments are allowed; any remaining commitment balance stays outstanding.
 3. **Promoter consolidated follow-up**: prepared only on the configured 20th (or Admin-set day), at most one intent per promoter, using **live current assignments and unpaid balances**. By default the provider will not receive names/balances for a promoter until the Foundation explicitly sets `PROMOTER_DISCLOSURE_APPROVED=true` following privacy review.
 
 The worker **re-evaluates** payment, consent, active status, current-day scheduling, the current organization's automation switch and (for promoters) linked sponsors immediately before transmitting. It never sends from a saved reminder snapshot or an Admin-modified payee string.

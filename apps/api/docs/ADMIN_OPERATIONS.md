@@ -8,7 +8,7 @@ The public repository contains **no credentials**, no development Admin default,
 2. Set `DATABASE_URL` for your development PostgreSQL instance.
 3. Generate `AUTH_SECRET` using `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Use a unique secret per environment and protect it in hosting secrets; **do not commit it**.
 4. Run `python -m alembic upgrade head` inside `apps/api`.
-5. Set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ORGANIZATION` in your shell; optionally seed values with `BOOTSTRAP_AMOUNT_PAISE`, `BOOTSTRAP_SPONSOR_DAY`, `BOOTSTRAP_PROMOTER_DAY`, `BOOTSTRAP_INACTIVITY_MONTHS`.
+5. Set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ORGANIZATION` in your shell; optionally seed values with `BOOTSTRAP_AMOUNT_PAISE`, `BOOTSTRAP_SPONSOR_DAY`, `BOOTSTRAP_PROMOTER_DAY`, `BOOTSTRAP_INACTIVITY_MONTHS`. The approved sponsorship default is 25000 paise (₹250), overrides must be positive multiples of 25000 paise, and inactivity is fixed at two completed IST months.
 6. Run `python -m app.bootstrap_admin` and enter a strong password twice at the interactive prompts. Provisioning fails if an Admin already exists.
 7. Start `uvicorn app.main:app --host 127.0.0.1 --port 8000`.
 

@@ -9,7 +9,7 @@ Work on feature branches. Each phase requires a PR, documented verification, tes
 | 03 | Admin auth, provisioning, audited configurable settings | No unauthenticated access, no default passwords |
 | 04 | Prospects and optional UPI IDs | Create/search/edit/status tests |
 | 05 | Promoters and sponsor linking | Assigned-sponsor visibility and edit tests |
-| 06 | Monthly accounting in IST, inactivity/reactivation | Boundary and partial-payment tests |
+| 06 | Monthly accounting in IST, inactivity/reactivation | IST activity, ₹250-tier contributions and reversal tests |
 | 07 | Admin manual collections and confirmation intent | Financial audit, deduplication and opt-in, no false delivery |
 | 08 | Collection corrections, review and financial safeguards | Audited reversals, controls, reporting and acceptance |
 | 09 | Recurring and one-time Payouts | No fake payment execution, financial audit |

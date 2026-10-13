@@ -4,12 +4,12 @@
 
 The locked Sponsor a Salah web layout remains the source of truth. The Prospects area has exactly three tabs: **Add Prospect**, **Inactive**, and **All Prospects**. Admin login is required for every API and screen.
 
-A candidate can register before paying, so the initial lifecycle status is **New**. Inactive means **two consecutive IST months with no verified payment** and is **not manually editable** by Admin. The payment-status engine (Phase 06) and bank reconciliation (Phase 08) will be the only permitted sources of activation, inactivity, and reactivation. In Phase 04, verified payments do not exist; tests may seed synthetic statuses at the database level.
+A candidate can register before paying, so the initial lifecycle status is **New**. **Current approved rule (supersedes the Phase 04 placeholder):** a sponsor becomes Inactive after two consecutive completed IST months with zero net Admin-attested recorded contributions and reactivates on any valid ₹250-tier recorded contribution. Neither lifecycle status nor the two-month threshold is Admin-editable. Bank-statement imports are deferred; Admin manually records actual received funds. Earlier Phase 04 tests may use synthetic fixture statuses.
 
 ## Stored fields
 
 - Full name, E.164 phone and optional WhatsApp contact, area/city
-- Agreed monthly contribution in integer paise (the Admin's current default fills an omitted amount)
+- Agreed monthly contribution in integer paise, minimum ₹250 and in ₹250 increments (the Admin's current valid default fills an omitted amount). New incoming manual contributions follow the same denominations.
 - Follow-up/contact dates, notes, and an explicit, default-off WhatsApp consent flag
 - Status and first-payment history columns reserved for the future accounting engine
 - Optional multiple UPI identifiers (up to five), stored as **HMAC-SHA256 digests** with **masked display only**; IDs are **unverified** until bank/statement reconciliation

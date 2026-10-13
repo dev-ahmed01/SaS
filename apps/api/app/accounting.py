@@ -1,7 +1,9 @@
 """Read-only IST monthly accounting, plus audited status materialization.
 
-Only VerifiedCredit rows are counted as collected. Phase 06 deliberately has no
-credit-creation API: payment evidence will be assessed in Phases 07-08.
+Only net VerifiedCredit rows are counted. In the current app an Admin-attested
+manual collection records a credit only after actual receipt confirmation;
+wrong entries use immutable reversal records. New incoming amounts are limited
+to ₹250 denominations, while older evidence stays unchanged.
 """
 from collections import defaultdict
 from datetime import UTC, date, datetime
