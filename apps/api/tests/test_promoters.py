@@ -224,3 +224,14 @@ def test_archived_sponsors_cannot_be_assigned(system):
         "/v1/promoters/"+promoter["id"]+"/sponsors/"+prospect["id"],
         headers={**csrf,"If-Match":"2"},
     ).status_code==404
+
+
+def test_location_is_optional_for_new_promoter(system):
+    client, _ = system
+    csrf = login(client)
+    response = client.post("/v1/promoters", headers=csrf, json={
+        "full_name": "No Location Promoter",
+        "mobile_number": "+919111122234",
+    })
+    assert response.status_code == 201, response.text
+    assert response.json()["area_city"] == ""
