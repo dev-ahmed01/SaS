@@ -337,17 +337,33 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9836"+id);
   await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
   await page.goto("/collections");
+  await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
+  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill("500.00");
+  const receivedOn=await page.locator('input[type="date"]').inputValue();
+  const month=await page.locator('input[type="month"]').inputValue();
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   await page.getByRole("button",{name:"Save Collection"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
-  await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
-  await page.getByRole("option",{name:new RegExp(name)}).click();
-  await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
-  await page.getByRole("checkbox",{name:/Foundation's records/}).check();
-  await page.getByRole("button",{name:"Save Collection"}).click();
-  await expect(page.locator(".manual-collections-workspace .form-error")).toContainText(/already recorded/);
+  const outcome=await page.evaluate(async({receivedOn,month,reference})=>{
+    const session=await fetch("/api/admin/session",{cache:"no-store"});
+    const {csrf_token}=await session.json();
+    const list=await fetch("/api/admin/collections?limit=1",{cache:"no-store"});
+    const existing=(await list.json()).items[0];
+    const response=await fetch("/api/admin/collections",{
+      method:"POST",
+      headers:{"X-CSRF-Token":csrf_token,"Content-Type":"application/json"},
+      body:JSON.stringify({
+        request_id:crypto.randomUUID(),prospect_id:existing.prospect_id,
+        amount_paise:50000,period_month:month+"-01",received_on:receivedOn,
+        payment_method:"upi",receipt_reference:reference,funds_confirmed:true,
+      }),
+    });
+    return response.status;
+  },{receivedOn,month,reference:"DUPEREF"+id});
+  expect(outcome).toBe(409);
 });
