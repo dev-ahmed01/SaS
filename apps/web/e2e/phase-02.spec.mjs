@@ -349,5 +349,5 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   await page.getByRole("button",{name:"Save Collection"}).click();
-  await expect(page.getByRole("alert")).toContainText(/already recorded/);
+  await expect(page.locator(".manual-collections-workspace .form-error")).toContainText(/already recorded/);
 });
