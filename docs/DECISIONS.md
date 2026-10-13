@@ -17,3 +17,10 @@
 3. Partial payment status/reactivation policy.
 4. WhatsApp Business/Pabbly setup, template approval and opt-in language.
 5. Payout categories, retention, backup drill, staging/UAT and production approval.
+
+## Phase 09 — Payouts implementation boundaries
+
+- **Payouts Add, Active, All** are real PostgreSQL-backed Admin modules. Recurring monthly commitments and one-time expenses are distinct. All retains both types and attested payments.
+- Creating a payout plan does not transfer money. Recording `paid` requires explicit Admin attestation and unique outgoing reference. No gateway/disbursement integration is authorized.
+- Recurring pause/resume/close becomes effective next IST calendar month; past obligations and payments are not rewritten. Status history remains auditable.
+- **Pending approval:** proof and authority for outgoing payouts, second-person approval threshold, adjustments and historical corrections, amount change policy and partial/advance disbursement rules.
