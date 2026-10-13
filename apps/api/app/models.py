@@ -351,3 +351,91 @@ class VerifiedCredit(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class ManualCollection(Base):
+    """Admin-attested collection entry: immutable and source-backed for the ledger."""
+
+    __tablename__ = "manual_collections"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_manual_collections_org_id"),
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_manual_collection_prospect_org",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "verified_credit_id"],
+            ["verified_credits.organization_id", "verified_credits.id"],
+            ondelete="RESTRICT", name="fk_manual_collection_credit_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "request_id", name="uq_manual_collection_request"
+        ),
+        UniqueConstraint(
+            "organization_id", "reference_digest", name="uq_manual_collection_reference"
+        ),
+        UniqueConstraint("verified_credit_id", name="uq_manual_collection_credit"),
+        CheckConstraint("amount_paise > 0", name="ck_manual_collection_amount"),
+        CheckConstraint(
+            "payment_method IN ('upi', 'bank_transfer', 'cash')",
+            name="ck_manual_collection_method",
+        ),
+        Index("ix_manual_collection_org_date", "organization_id", "received_on"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    verified_credit_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    request_payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_mask: Mapped[str] = mapped_column(String(16), nullable=False)
+    received_on: Mapped[date] = mapped_column(Date, nullable=False)
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    recorded_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MessageOutbox(Base):
+    """Consent-gated intent only; no network delivery until approved integration."""
+
+    __tablename__ = "message_outbox"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_message_prospect_org",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "collection_id"],
+            ["manual_collections.organization_id", "manual_collections.id"],
+            ondelete="RESTRICT", name="fk_message_collection_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "collection_id", "event_type",
+            name="uq_message_collection_event",
+        ),
+        CheckConstraint(
+            "status IN ('awaiting_integration', 'suppressed')",
+            name="ck_message_preintegration_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    collection_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    suppress_reason: Mapped[str | None] = mapped_column(String(60))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
