@@ -61,7 +61,7 @@ class ProspectFields(BaseModel):
     full_name: str = Field(min_length=2, max_length=160)
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
-    area_city: str = Field(min_length=2, max_length=120)
+    area_city: str = Field(default="", max_length=120)
     monthly_contribution_paise: int | None = Field(
         default=None, ge=SPONSORSHIP_STEP_PAISE, le=MAX_AMOUNT_PAISE,
         multiple_of=SPONSORSHIP_STEP_PAISE,
@@ -71,13 +71,21 @@ class ProspectFields(BaseModel):
     notes: str | None = Field(default=None, max_length=1500)
     whatsapp_opt_in: bool = False
 
-    @field_validator("full_name", "area_city")
+    @field_validator("full_name")
     @classmethod
     def normalize_labels(cls, value: str) -> str:
         result = _clean_text(value)
         if len(result) < 2:
             raise ValueError("Provide at least two characters")
         return result
+
+    @field_validator("area_city")
+    @classmethod
+    def normalize_area(cls, value: str) -> str:
+        cleaned = _clean_text(value)
+        if cleaned and len(cleaned) < 2:
+            raise ValueError("Provide at least two characters when a location is supplied")
+        return cleaned
 
     @field_validator("mobile_number", "whatsapp_number")
     @classmethod
