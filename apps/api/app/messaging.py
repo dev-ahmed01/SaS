@@ -33,6 +33,7 @@ from app.models import (
     OrganizationSettings,
     Promoter,
     Prospect,
+    ReminderBatch,
     ReminderIntent,
 )
 from app.reminders import _build_preview, _settings, current_intent_eligible
@@ -221,6 +222,92 @@ def _eligible_and_payload(
     }
 
 
+def _prepare_scheduled_reminders(db: Session, now: datetime) -> int:
+    """Idempotent IST auto-preparation, behind both separate sending switches.
+
+    The private runner must be called by an authorized external scheduler.
+    Never prepares catch-up batches on a different IST calendar date.
+    """
+    if not _ready():
+        return 0
+    today=ist_today(now)
+    month=month_start(today)
+    orgs=list(db.scalars(select(OrganizationSettings).where(
+        OrganizationSettings.automation_enabled.is_(True),
+        OrganizationSettings.timezone=="Asia/Kolkata",
+        OrganizationSettings.currency_code=="INR",
+    ).order_by(OrganizationSettings.organization_id).limit(21)).all())
+    if len(orgs)>20:
+        raise HTTPException(
+            status_code=409,detail="Too many organizations for one sender run"
+        )
+    prepared=0
+    for settings in orgs:
+        admin=db.scalars(select(AdminUser).where(
+            AdminUser.organization_id==settings.organization_id,
+            AdminUser.is_active.is_(True),
+        )).first()
+        if admin is None:
+            continue
+        for kind,day in (
+            ("sponsor",settings.sponsor_reminder_day),
+            ("promoter",settings.promoter_reminder_day),
+        ):
+            if today.day!=day:
+                continue
+            existing=db.scalar(select(ReminderBatch.id).where(
+                ReminderBatch.organization_id==settings.organization_id,
+                ReminderBatch.kind==kind,
+                ReminderBatch.period_month==month,
+            ))
+            if existing is not None:
+                continue
+            # The same live rules as the Admin preview; snapshots never authorize
+            # sending, as each intent is revalidated by _eligible_and_payload.
+            preview=_build_preview(db,admin,settings,kind,now)
+            batch=ReminderBatch(
+                organization_id=settings.organization_id,
+                request_id=uuid.uuid4(),kind=kind,
+                period_month=month,scheduled_on=today,
+                recipient_count=preview.eligible_recipients,
+                created_by_admin_id=None,
+            )
+            db.add(batch)
+            db.flush()
+            for recipient in preview.recipients:
+                db.add(ReminderIntent(
+                    organization_id=settings.organization_id,batch_id=batch.id,
+                    kind=kind,
+                    prospect_id=recipient.recipient_id if kind=="sponsor" else None,
+                    promoter_id=recipient.recipient_id if kind=="promoter" else None,
+                    period_month=month,scheduled_on=today,
+                    sponsor_count=recipient.sponsor_count,
+                    outstanding_paise=recipient.outstanding_paise,
+                    sponsor_snapshot=[
+                        {"prospect_id":str(p.prospect_id),
+                         "outstanding_paise":p.outstanding_paise}
+                        for p in recipient.unpaid_sponsors
+                    ],
+                    status="prepared",
+                ))
+            db.add(AuditEvent(
+                organization_id=settings.organization_id,actor_admin_id=None,
+                action="reminder.batch_auto_prepared",entity_type="reminder_batch",
+                entity_id=str(batch.id),
+                after_data={
+                    "kind":kind,"period_month":str(month),
+                    "recipient_count":preview.eligible_recipients,
+                },
+            ))
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()  # concurrent Admin/worker batch creation
+                continue
+            prepared+=1
+    return prepared
+
+
 def _first_candidate(db: Session, after: datetime, now: datetime):
     """Select only new enabled-era messages. No old backlog replay."""
     attempted_outbox=select(MessageDispatch.outbox_id).where(
@@ -273,6 +360,7 @@ def dispatch(
     now=utc_now()
     if now<as_utc(cfg.messaging_enable_after):
         raise HTTPException(status_code=409, detail="Messaging is not yet activated")
+    _prepare_scheduled_reminders(db,now)
     statuses={"accepted":0,"cancelled":0,"failed":0,"unknown":0}
     attempted=0
     for _ in range(MAX_PER_RUN):
