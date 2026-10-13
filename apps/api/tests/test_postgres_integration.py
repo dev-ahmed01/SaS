@@ -14,6 +14,8 @@ from app.models import (
     Organization,
     OrganizationSettings,
     Prospect,
+    Promoter,
+    PromoterAssignment,
     ProspectUpiIdentifier,
 )
 
@@ -137,4 +139,73 @@ def test_postgres_enforces_prospect_status_and_amount_constraints() -> None:
         with pytest.raises(IntegrityError):
             session.flush()
         session.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_cross_organization_promoter_assignments() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org_a = Organization(name="Promoter FK test A")
+        org_b = Organization(name="Promoter FK test B")
+        db.add_all([org_a, org_b])
+        db.flush()
+        promoter = Promoter(
+            organization_id=org_a.id, full_name="Synthetic Promoter",
+            mobile_number="+919151515151", area_city="Bengaluru",
+            whatsapp_opt_in=False, is_active=True, version=1,
+        )
+        prospect = Prospect(
+            organization_id=org_b.id, full_name="Synthetic Sponsor",
+            mobile_number="+919414141414", area_city="Bengaluru",
+            monthly_contribution_paise=50000, whatsapp_opt_in=False,
+            lifecycle_status="new", version=1,
+        )
+        db.add_all([promoter, prospect])
+        db.flush()
+        db.add(PromoterAssignment(
+            organization_id=org_a.id, promoter_id=promoter.id,
+            prospect_id=prospect.id,
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_unique_current_sponsor_assignment_with_historical_rows() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Unique primary promoter test")
+        db.add(org)
+        db.flush()
+        first = Promoter(
+            organization_id=org.id, full_name="First Coordinator",
+            mobile_number="+919333300001", area_city="Bengaluru",
+            whatsapp_opt_in=False, is_active=True, version=1,
+        )
+        second = Promoter(
+            organization_id=org.id, full_name="Second Coordinator",
+            mobile_number="+919333300002", area_city="Bengaluru",
+            whatsapp_opt_in=False, is_active=True, version=1,
+        )
+        prospect = Prospect(
+            organization_id=org.id, full_name="Sponsored Person",
+            mobile_number="+919333300003", area_city="Bengaluru",
+            monthly_contribution_paise=50000, whatsapp_opt_in=False,
+            lifecycle_status="new", version=1,
+        )
+        db.add_all([first, second, prospect])
+        db.flush()
+        db.add(PromoterAssignment(
+            organization_id=org.id, promoter_id=first.id,
+            prospect_id=prospect.id,
+        ))
+        db.flush()
+        db.add(PromoterAssignment(
+            organization_id=org.id, promoter_id=second.id,
+            prospect_id=prospect.id,
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
     engine.dispose()
