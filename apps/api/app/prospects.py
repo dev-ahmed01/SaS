@@ -9,6 +9,7 @@ import hmac
 import json
 import re
 import uuid
+from collections import defaultdict
 from datetime import date, datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.accounting import effective_credits, evaluate_status, ist_today
 from app.auth import db_session, get_admin, require_csrf
 from app.config import get_settings
 from app.models import (
@@ -207,7 +209,7 @@ def _upi_list(prospect: Prospect) -> list[UpiRead]:
     ]
 
 
-def _read(prospect: Prospect) -> ProspectRead:
+def _read(prospect: Prospect, status_override: str | None = None) -> ProspectRead:
     return ProspectRead(
         id=prospect.id,
         full_name=prospect.full_name,
@@ -219,7 +221,7 @@ def _read(prospect: Prospect) -> ProspectRead:
         last_contact_on=prospect.last_contact_on,
         notes=prospect.notes,
         whatsapp_opt_in=prospect.whatsapp_opt_in,
-        lifecycle_status=prospect.lifecycle_status,
+        lifecycle_status=status_override or prospect.lifecycle_status,
         last_verified_payment_at=prospect.last_verified_payment_at,
         start_month=prospect.start_month,
         created_at=prospect.created_at,
@@ -287,6 +289,37 @@ def _attach_upi(db: Session, admin: AdminUser, prospect: Prospect, raw: str) -> 
     ))
 
 
+def _project_statuses(
+    db: Session, admin: AdminUser, sponsors: list[Prospect],
+) -> dict[uuid.UUID, str]:
+    """Read-only fresh tenant-scoped status; GET must not mutate audit/versions."""
+    current = [p for p in sponsors if p.archived_at is None]
+    if not current:
+        return {}
+    settings = db.get(OrganizationSettings, admin.organization_id)
+    if settings is None:
+        raise HTTPException(status_code=503, detail="Accounting settings unavailable")
+    now = utc_now()
+    today = ist_today(now)
+    sponsor_ids = [p.id for p in current]
+    rates = defaultdict(list)
+    for item in db.scalars(select(SponsorshipRate).where(
+        SponsorshipRate.organization_id == admin.organization_id,
+        SponsorshipRate.prospect_id.in_(sponsor_ids),
+    )):
+        rates[item.prospect_id].append(item)
+    credits = defaultdict(list)
+    for item in effective_credits(db, admin.organization_id, as_of=now):
+        if item.prospect_id in sponsor_ids:
+            credits[item.prospect_id].append(item)
+    return {
+        p.id: evaluate_status(
+            p, rates[p.id], credits[p.id], today, now, settings.inactivity_months,
+        )
+        for p in current
+    }
+
+
 @router.get("", response_model=ProspectPage)
 def list_prospects(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
@@ -302,8 +335,6 @@ def list_prospects(
     conditions = [Prospect.organization_id == admin.organization_id]
     if not include_archived:
         conditions.append(Prospect.archived_at.is_(None))
-    if status:
-        conditions.append(Prospect.lifecycle_status == status)
     if q.strip():
         escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         term = f"%{escaped}%"
@@ -312,15 +343,21 @@ def list_prospects(
             Prospect.mobile_number.ilike(term, escape="\\"),
             Prospect.area_city.ilike(term, escape="\\"),
         ))
-    total = database.scalar(select(func.count(Prospect.id)).where(*conditions)) or 0
     results = database.scalars(
         select(Prospect).where(*conditions)
         .order_by(Prospect.created_at.desc(), Prospect.id.desc())
-        .limit(limit).offset(offset)
     ).all()
+    fresh = _project_statuses(database, admin, results)
+    matching = [
+        _read(p, fresh.get(p.id))
+        for p in results
+        if status is None or fresh.get(p.id, p.lifecycle_status) == status
+    ]
     response.headers["Cache-Control"] = "no-store"
-    return ProspectPage(items=[_read(p) for p in results], total=total,
-                        limit=limit, offset=offset)
+    return ProspectPage(
+        items=matching[offset:offset + limit], total=len(matching),
+        limit=limit, offset=offset,
+    )
 
 
 @router.post("", status_code=201, response_model=ProspectRead)
@@ -434,8 +471,9 @@ def get_prospect(
     response: Response,
 ) -> ProspectRead:
     prospect = _get(database, context[0], prospect_id, allow_archived=True)
+    current = _project_statuses(database, context[0], [prospect])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, current.get(prospect.id))
 
 
 @router.patch("/{prospect_id}", response_model=ProspectRead)

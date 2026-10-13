@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.accounting import ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
@@ -19,6 +20,7 @@ from app.models import (
     OrganizationSettings,
     Prospect,
     ProspectUpiIdentifier,
+    SponsorshipRate,
 )
 from app.security import hash_password
 
@@ -130,7 +132,13 @@ def test_search_filter_soft_delete_restore_and_version_conflict(system):
     ).json()
     with Session(engine) as db:
         record = db.get(Prospect, uuid.UUID(first["id"]))
-        record.lifecycle_status = "inactive"
+        record.lifecycle_status = "active"  # stale materialized cache
+        old_month = shift_month(month_start(ist_today()), -2)
+        record.start_month = old_month
+        rate = db.scalars(select(SponsorshipRate).where(
+            SponsorshipRate.prospect_id == record.id,
+        )).one()
+        rate.effective_month = old_month
         db.commit()
     assert client.get("/v1/prospects?status=inactive").json()["total"] == 1
     assert client.get("/v1/prospects?q=sheikh").json()["items"][0]["id"] == second["id"]
