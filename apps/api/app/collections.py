@@ -12,13 +12,14 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.accounting import evaluate_status, ist_today, month_start
+from app.accounting import effective_credits, evaluate_status, ist_today, month_start
 from app.auth import db_session, get_admin, require_csrf
 from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
     ManualCollection,
+    ManualCollectionReversal,
     MessageOutbox,
     OrganizationSettings,
     Prospect,
@@ -70,6 +71,8 @@ class CollectionOutput(BaseModel):
     evidence: Literal["admin_attested"]
     message_status: Literal["awaiting_integration", "suppressed"]
     sponsor_status: str
+    reversed: bool
+    reversal_reason: str | None
 
 
 class CollectionPage(BaseModel):
@@ -95,12 +98,18 @@ def _view(db: Session, row: ManualCollection) -> CollectionOutput:
         MessageOutbox.organization_id == row.organization_id,
         MessageOutbox.collection_id == row.id,
     )).one()
+    reversed_entry = db.scalars(select(ManualCollectionReversal).where(
+        ManualCollectionReversal.organization_id == row.organization_id,
+        ManualCollectionReversal.collection_id == row.id,
+    )).one_or_none()
     return CollectionOutput(
         id=row.id, prospect_id=row.prospect_id, sponsor_name=sponsor.full_name,
         amount_paise=row.amount_paise, period_month=row.period_month,
         received_on=row.received_on, payment_method=row.payment_method,
         reference_mask=row.reference_mask, evidence="admin_attested",
         message_status=event.status, sponsor_status=sponsor.lifecycle_status,
+        reversed=reversed_entry is not None,
+        reversal_reason=reversed_entry.reason_code if reversed_entry else None,
     )
 
 
@@ -189,10 +198,7 @@ def add_collection(
         ("consent_missing" if not sponsor.whatsapp_opt_in else "recipient_missing"),
     ))
     before = sponsor.lifecycle_status
-    credits = db.scalars(select(VerifiedCredit).where(
-        VerifiedCredit.organization_id == admin.organization_id,
-        VerifiedCredit.prospect_id == sponsor.id,
-    )).all()
+    credits = effective_credits(db, admin.organization_id, sponsor_id=sponsor.id)
     after = evaluate_status(
         sponsor, rates, credits, today, now, settings.inactivity_months,
     )
@@ -245,3 +251,145 @@ def list_collections(
         items=[_view(db, row) for row in rows], total=total,
         limit=limit, offset=offset,
     )
+
+
+class ReversalInput(BaseModel):
+    """Voids a mistaken ledger attestation; it does NOT initiate a refund."""
+
+    model_config = ConfigDict(extra="forbid")
+    request_id: uuid.UUID
+    reason_code: Literal[
+        "duplicate_entry", "wrong_sponsor", "wrong_amount", "funds_not_received", "other"
+    ]
+    confirmation: Literal["REVERSE"]
+
+
+class ReversalOutput(BaseModel):
+    id: uuid.UUID
+    collection_id: uuid.UUID
+    prospect_id: uuid.UUID
+    amount_paise: int
+    reason_code: str
+    reversed: Literal[True]
+    message_status: Literal["awaiting_integration", "suppressed"]
+    sponsor_status: str
+
+
+def _reversal_view(
+    database: Session, reversal: ManualCollectionReversal, receipt: ManualCollection,
+) -> ReversalOutput:
+    sponsor = database.get(Prospect, receipt.prospect_id)
+    outbox = database.scalars(
+        select(MessageOutbox).where(
+            MessageOutbox.organization_id == receipt.organization_id,
+            MessageOutbox.collection_id == receipt.id,
+        )
+    ).one()
+    return ReversalOutput(
+        id=reversal.id, collection_id=receipt.id, prospect_id=receipt.prospect_id,
+        amount_paise=receipt.amount_paise, reason_code=reversal.reason_code,
+        reversed=True, message_status=outbox.status,
+        sponsor_status=sponsor.lifecycle_status,
+    )
+
+
+@router.post("/{collection_id}/reverse", response_model=ReversalOutput, status_code=201)
+def reverse_collection(
+    collection_id: uuid.UUID,
+    payload: ReversalInput,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    db: Annotated[Session, Depends(db_session)],
+) -> ReversalOutput:
+    """Atomically remove an incorrect payment from net totals, preserving evidence."""
+    admin = context[0]
+    settings = db.scalars(select(OrganizationSettings).where(
+        OrganizationSettings.organization_id == admin.organization_id,
+    ).with_for_update()).one_or_none()
+    if settings is None or settings.currency_code != "INR" or settings.timezone != "Asia/Kolkata":
+        raise HTTPException(status_code=503, detail="Accounting settings unavailable")
+
+    previously = db.scalars(select(ManualCollectionReversal).where(
+        ManualCollectionReversal.organization_id == admin.organization_id,
+        ManualCollectionReversal.request_id == payload.request_id,
+    )).one_or_none()
+    receipt = db.scalars(select(ManualCollection).where(
+        ManualCollection.organization_id == admin.organization_id,
+        ManualCollection.id == collection_id,
+    )).one_or_none()
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    if previously is not None:
+        if previously.collection_id != collection_id or previously.reason_code != payload.reason_code:
+            raise HTTPException(status_code=409, detail="Request ID already used for a different reversal")
+        response.status_code = 200
+        response.headers["Cache-Control"] = "no-store"
+        return _reversal_view(db, previously, receipt)
+    already = db.scalars(select(ManualCollectionReversal).where(
+        ManualCollectionReversal.organization_id == admin.organization_id,
+        ManualCollectionReversal.collection_id == collection_id,
+    )).one_or_none()
+    if already is not None:
+        raise HTTPException(status_code=409, detail="This collection is already reversed")
+
+    sponsor = db.scalars(select(Prospect).where(
+        Prospect.organization_id == admin.organization_id,
+        Prospect.id == receipt.prospect_id,
+    ).with_for_update()).one()
+    outbox = db.scalars(select(MessageOutbox).where(
+        MessageOutbox.organization_id == admin.organization_id,
+        MessageOutbox.collection_id == collection_id,
+    ).with_for_update()).one()
+    # No external messaging worker is enabled in this release. Any pending
+    # collection-confirmation intent is invalidated before a sender can use it.
+    before_message = outbox.status
+    if outbox.status == "awaiting_integration":
+        outbox.status = "suppressed"
+        outbox.suppress_reason = "collection_reversed"
+
+    reversal = ManualCollectionReversal(
+        organization_id=admin.organization_id, collection_id=collection_id,
+        request_id=payload.request_id, reason_code=payload.reason_code,
+        actor_admin_id=admin.id,
+    )
+    db.add(reversal)
+    db.flush()
+    rates = list(db.scalars(select(SponsorshipRate).where(
+        SponsorshipRate.organization_id == admin.organization_id,
+        SponsorshipRate.prospect_id == receipt.prospect_id,
+    )).all())
+    credits = effective_credits(db, admin.organization_id, sponsor_id=receipt.prospect_id)
+    now = utc_now()
+    before_status = sponsor.lifecycle_status
+    if sponsor.archived_at is None:
+        new_status = evaluate_status(
+            sponsor, rates, credits, ist_today(now), now, settings.inactivity_months
+        )
+        if new_status != before_status:
+            sponsor.lifecycle_status = new_status
+            sponsor.status_updated_at = now
+            sponsor.updated_at = now
+            sponsor.version += 1
+    db.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="collection.manual_reversed", entity_type="manual_collection",
+        entity_id=str(collection_id),
+        before_data={
+            "amount_paise": receipt.amount_paise,
+            "status": before_status, "message_status": before_message,
+        },
+        after_data={
+            "reversal_id": str(reversal.id), "reason_code": payload.reason_code,
+            "status": sponsor.lifecycle_status, "message_status": outbox.status,
+            "net_receipt_removed_paise": receipt.amount_paise,
+        },
+    ))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Collection was reversed by another request. Refresh and retry"
+        ) from exc
+    response.headers["Cache-Control"] = "no-store"
+    return _reversal_view(db, reversal, receipt)
