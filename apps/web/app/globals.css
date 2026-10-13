@@ -295,4 +295,5 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .accounting-footnote { font-size:11px; color:var(--muted); margin-top:18px; max-width:780px; }
 @media(max-width:1000px) { .accounting-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:540px) { .accounting-metrics { grid-template-columns:1fr; } .accounting-metric { padding:13px; } .accounting-metric strong { font-size:18px; } .accounting-details { padding:12px; } }
-\n.status-pill.archived { color:#62726c; background:#eef1ee; }\n
+
+.status-pill.archived { color:#62726c; background:#eef1ee; }
