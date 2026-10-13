@@ -65,9 +65,19 @@ test("responsive design, focus visibility, and reduced motion present", () => {
   assert.match(ui,/scope="col"/);
 });
 
-test("mosque visuals use the owner-approved board illustration assets", () => {
-  assert.match(css,/approved-mosque-sidebar\.webp/);
-  assert.match(css,/approved-mosque-hills\.webp/);
-  assert.ok(existsSync(new URL("../public/art/approved-mosque-sidebar.webp",import.meta.url)));
-  assert.ok(existsSync(new URL("../public/art/approved-mosque-hills.webp",import.meta.url)));
+test("premium mosque illustrations remain scalable, unobstructed, and softly integrated", () => {
+  assert.match(css,/masjid-sidebar-premium\\.svg/);
+  assert.match(css,/masjid-landscape-premium\\.svg/);
+  for (const name of ["masjid-sidebar-premium.svg","masjid-landscape-premium.svg"]) {
+    assert.ok(existsSync(new URL("../public/art/"+name,import.meta.url)));
+    const drawing=read("../public/art/"+name);
+    assert.match(drawing,/<svg[^>]*viewBox=/);
+    assert.match(drawing,/linearGradient/);
+    assert.doesNotMatch(drawing,/<image/);
+  }
+  assert.match(css,/mask-image:linear-gradient/);
+  assert.match(shell,/className="sidebar-art"/);
+  assert.match(shell,/aria-label="Admin account"/);
+  assert.match(shell,/aria-expanded=\\{profileOpen\\}/);
+  assert.match(shell,/aria-label="Sign out"/);
 });
