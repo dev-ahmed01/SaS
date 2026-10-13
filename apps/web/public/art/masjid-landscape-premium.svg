@@ -1,13 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 590" role="img" aria-label="Layered mint hills with a masjid skyline">
 <defs>
- <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f5fcf7" stop-opacity="0"/><stop offset=".25" stop-color="#eaf9ef" stop-opacity=".2"/><stop offset="1" stop-color="#bce8ce"/></linearGradient>
  <linearGradient id="near" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#88c9a6"/><stop offset="1" stop-color="#3c926d"/></linearGradient>
  <linearGradient id="mosque" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c5ebd5"/><stop offset="1" stop-color="#75b895"/></linearGradient>
  <linearGradient id="foreground" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#69b18c"/><stop offset="1" stop-color="#267954"/></linearGradient>
  <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f0fcf5" stop-opacity=".6"/><stop offset="1" stop-color="#f0fcf5" stop-opacity="0"/></linearGradient>
 </defs>
 <g>
- <path fill="url(#sky)" d="M0 0h1280v590H0z"/>
  <circle cx="947" cy="182" r="79" fill="#f9fff8" opacity=".38"/>
  <path d="M0 355C158 275 244 322 370 282c119-37 195-89 313-59 130 35 201 4 301-38 97-40 194-24 296 38v367H0Z" fill="#d4eedf" opacity=".92"/>
  <path d="M0 412C123 381 226 329 334 346c131 20 237-73 350-46 125 29 204 51 313-16 109-65 180-59 283-6v312H0Z" fill="#bde2cf" opacity=".9"/>
