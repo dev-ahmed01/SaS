@@ -6,7 +6,7 @@
 
 | Gate | Required evidence | Owner/approval | Status |
 | --- | --- | --- | --- |
-| Canonical business policy | Signed default rupees, partial-payment/inactivity/New sponsor rules, late-entry chronology and due/reminder policies | Foundation finance lead | **Blocked — conflicting source docs** |
+| Canonical business policy | Sign-off for New sponsor reminder permissions, evidence standards and billing exceptions; sponsorship multiples and inactivity are approved | Foundation finance lead | **Partially resolved — sponsorship and inactivity approved 13 Oct 2026** |
 | Review/integration | PRs #1–#12 reviewed and merged sequentially to protected `main`, including unresolved P1/P2 reviews and Phase 9 branch comparison | Tech reviewer | **Not completed** |
 | Authentication/tenancy | Login abuse cases from distinct client networks; Admin CSRF/session/proxy tests; inaccessible cross-organization records | Security reviewer | **Staging pending** |
 | Finance | Approved manual receipt evidence standards, reversals and outgoing payout proof; synthetic month-end and historical corrections | Foundation finance lead | **Pending** |
@@ -18,7 +18,7 @@
 | UI review | Approved light sidebar hierarchy, Bricolage/Poppins, responsive/accessible screens; empty/errors with no fabricated financials | Foundation stakeholder | **Pending stakeholder UAT** |
 | Final approval | Dated written Foundation approval and named rollback operator | Foundation authorized signatory | **Not granted** |
 
-**Policy freeze:** The historical ₹250 and later ₹500 defaults conflict. The original inactivity rule counts two completed IST months with **zero** net verified contributions, while the implemented evaluator uses two not-fully-settled months. Never resolve these by assumption. The payment method remains Admin-attested manual entry, NOT a bank importer. Until sign-off, postpone decisions that would alter sponsor lifecycle, obligations, reminders or launch data.
+**Approved on 13 October 2026:** new recurring sponsorship commitments are positive multiples of ₹250 and newly provisioned organizations default to ₹250. Existing effective-dated rates do not change. Two completed IST months with zero net recorded receipt activity cause inactivity. Any positive net recorded receipt, including partial entries for an earlier billing month, reactivates; credit reversals negate that activity. Other operational and messaging policies still need explicit approval. The payment method remains Admin-attested manual entry, NOT a bank importer. Until sign-off, postpone decisions that would alter sponsor lifecycle, obligations, reminders or launch data.
 
 ## Deploy topology and control boundaries
 
@@ -61,7 +61,7 @@ Use isolated synthetic sponsor/promoter identities and distinct cash/UPI transac
 - Full audited reversal, including correct net outstanding and unsent confirmation suppression; verify previous original credit still exists.
 - Archive and restore across calendar months with **no retrospective dues for paused periods**; the unresolved historical-interval issue must be fixed and proven before launch.
 - Recurring payout scheduled/paused/resumed/closed, one-time planned vs actually attested paid, early one-time disbursement blocked, unique outgoing reference, wrong-tenant rejection and plan/outgoing distinction.
-- Exact sponsor New/Active/Inactive transitions and partial-payment reminder eligibility **according to the Foundation-signed rule only**.
+- Exact sponsor New/Active/Inactive transitions under the approved October 13 rule, with partial late-allocated receipt reactivation and reversal suppression.
 - Empty Foundation with zero real activity must show zero, never fictitious donations/notifications.
 
 ## Messaging UAT with explicit opt-in test phone only
