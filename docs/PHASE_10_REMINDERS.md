@@ -7,7 +7,7 @@ This phase implements read-only eligibility previews, deduplicated **preparation
 - On the **configurable sponsor reminder day (initially the 5th)**, a sponsor with an unpaid current-month contribution may be eligible for **one** WhatsApp reminder.
 - On the **configurable promoter follow-up day (initially the 20th)**, a promoter may be eligible for **one combined WhatsApp summary**, listing eligible unpaid sponsors assigned to that promoter.
 - After **two fully missed completed months** (or current Admin-configured inactivity threshold), a sponsor becomes **Inactive** and is excluded from both direct reminders and promoter follow-up summaries. Eligibility is calculated from the **net financial ledger**, not the cached lifecycle status; reversed entries never count as paid.
-- A sponsor whose current month is fully paid is **not eligible**, even if the sponsor is otherwise Active. Partial installments leave a smaller outstanding balance; current Phase 6 rules do not treat a partially paid month as fully settled.
+- A sponsor whose current month is fully paid is **not eligible**, even if the sponsor is otherwise Active. Valid ₹250-tier receipts reduce the outstanding balance; an account may remain unpaid against its current monthly commitment even after reactivation. No sub-₹250 or off-tier new manual collections are allowed.
 - Sponsors may register before first payment. New unpaid sponsors **with WhatsApp consent** are eligible for the direct reminder until they reach the inactivity threshold. This is a first-release policy requiring Foundation review.
 - A promoter must be **Active**, have recorded WhatsApp consent, have a usable contact number, and have a current assigned eligible unpaid sponsor for the combined summary. Assignment is the Foundation's current operational authorization for promoter follow-up; confirm sponsor/promoter information-sharing policy before any delivery.
 
@@ -42,7 +42,7 @@ PostgreSQL tests enforce unique batch/recipient, same-org FK, and recipient-type
 
 ## Explicit open business and release decisions
 
-1. Should **any positive partial contribution** reactivate an Inactive sponsor, or only a fully settled month? Phase 6 currently requires a fully paid month; no reminder rule silently changes this.
+1. **Resolved by Foundation 13 October 2026:** any valid newly recorded ₹250-tier contribution reactivates a sponsor, but reminder eligibility must still recheck consent, inactivity, current outstanding balance and the allowed schedule. Direct messaging to never-paying New sponsors still requires separate approval.
 2. Should new registered but never-paying sponsors receive the 5th reminder? This phase includes them **until** the two-missed-month threshold, provided consent exists.
 3. Does the Foundation approve disclosing sponsor name/outstanding amount to the assigned promoter via WhatsApp? Assignment permits internal review; external WhatsApp delivery still needs sign-off and privacy/consent review.
 4. WhatsApp sender/business account, Pabbly connection, approved message templates, opt-out/re-opt-in handling, webhook signatures, retry policy, delivery receipts, cost budget and old-queue release rules are pending.

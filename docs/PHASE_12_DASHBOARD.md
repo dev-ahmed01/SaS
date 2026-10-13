@@ -22,6 +22,6 @@ Zero-record organizations display real zero values and an empty activity state. 
 
 ## Acceptance and production gates
 
-Test auth/tenant isolation, empty organization, IST month boundaries, sponsor registration/collection/partial and reversal, payout commitments vs recorded disbursement, pending vs provider-confirmed messaging, six-month trends, responsive desktop/mobile views, migrations and backend lint/build CI.
+Test auth/tenant isolation, empty organization, IST month boundaries, sponsor registration/valid ₹250-tier collections/remaining due and reversals, payout commitments vs recorded disbursement, pending vs provider-confirmed messaging, six-month trends, responsive desktop/mobile views, migrations and backend lint/build CI.
 
 Phase 13 still requires ordered merging of stacked PRs, secrets and environment separation, independent financial UAT, backups/restore drills, capacity testing, visual acceptance and authorized Pabbly/Meta WhatsApp sender/templates before live messages.

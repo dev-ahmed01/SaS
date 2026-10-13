@@ -110,7 +110,7 @@ export function DashboardLive(){
           <div><dt>Admin-recorded contributions</dt><dd>{money(data.recorded_contributions_paise)}</dd></div>
           <div><dt>Fully paid sponsors</dt><dd>{data.fully_paid_sponsors}</dd></div>
         </dl>
-        <p className="dashboard-caption">Partial payments remain outstanding. These are not independently reconciled bank balances.</p>
+        <p className="dashboard-caption">An unpaid commitment can remain outstanding after a valid ₹250-tier receipt. These are Admin-attested entries, not independently reconciled bank balances.</p>
       </section>
       <section className="dashboard-panel" aria-label="Outgoing payouts">
         <div className="dashboard-section-head">

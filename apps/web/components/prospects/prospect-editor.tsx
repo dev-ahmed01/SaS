@@ -190,7 +190,7 @@ export function ProspectEditor({
 
   return <section className="content-panel prospect-form-panel" aria-label={current?"Edit Prospect":"Add Prospect"}>
     <h2>{current?"Edit Prospect":"Add Prospect"}</h2>
-    <p className="panel-description">Manage contact details and the agreed monthly contribution. A new prospect stays New until the first recorded positive contribution. Commitments are in ₹250 increments; partial receipts remain permitted.</p>
+    <p className="panel-description">Manage contact details and the agreed monthly contribution. A new prospect stays New until the first recorded positive contribution. Both commitments and incoming recorded contributions start at ₹250 and use ₹250 increments.</p>
     <form onSubmit={submit}>
       <div className="form-grid">
         <label className="field"><span className="field-label">Full name <span className="required">*</span></span><input required minLength={2} maxLength={160} value={values.full_name} onChange={e=>update("full_name",e.target.value)} placeholder="Enter full name"/></label>

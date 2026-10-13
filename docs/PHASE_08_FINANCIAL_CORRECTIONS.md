@@ -34,10 +34,10 @@ Keep the locked responsive desktop website, light white/pastel sage-green/dark f
 
 ## Checks and deployment boundaries
 
-Tests must verify: credit preserved but removed from net totals; outstanding rises after reversal; partial payments leave other installments intact; sponsor status returns to New or Inactive according to calendar rules; original WhatsApp intent is suppressed; no cross-org data access; no CSRF bypass; idempotent retries; unknown reasons blocked; one reversal per collection; archived sponsors stay archived; post-migration PostgreSQL constraints; and responsive browser review/confirmation.
+Tests must verify: credit preserved but removed from net totals; outstanding rises after reversal; reversing one valid ₹250-tier receipt leaves all other immutable receipts intact; sponsor status returns to New or Inactive according to calendar rules; original WhatsApp intent is suppressed; no cross-org data access; no CSRF bypass; idempotent retries; unknown reasons blocked; one reversal per collection; archived sponsors stay archived; post-migration PostgreSQL constraints; and responsive browser review/confirmation.
 
 Live sending remains **disabled** until WhatsApp Business sender/approved templates/explicit consent/Pabbly connection/callback validation and a safe queued-event release policy are built and approved. A reversal does not send a donor notification or recover money.
 
-**Financial governance still requires Foundation decisions**: proof required to record incoming UPI/cash payments, who may authorize reversals, whether a second reviewer is required for large entries, and whether partial payments can reactivate a sponsor. The initial single-Admin flow is a technical baseline, not final policy approval.
+**Financial governance still requires Foundation decisions**: proof required to record incoming UPI/cash payments, who may authorize reversals, whether a second reviewer is required for large entries, and proof and operator reconciliation standards for accepting valid ₹250-tier receipts. The initial single-Admin flow is a technical baseline, not final policy approval.
 
 Future Phase 09: recurring and one-time payouts. Phase 10: reminder eligibility. Phase 11: Pabbly/WhatsApp confirmations and monthly reminders. No bank importer is part of the current agreed plan.

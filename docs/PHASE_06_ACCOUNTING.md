@@ -5,7 +5,7 @@
 - Currency **INR**, calendar timezone **Asia/Kolkata**.
 - New foundations provision at **₹500/month** (50,000 paise) per the latest client decision. Admin Settings can change this default. Previously provisioned organisations keep their existing settings: migrations **never silently rewrite agreed contributions**.
 - Each prospect can register before payment, starts as **New**, and has an agreement start in their IST registration month.
-- A full verified current-month contribution immediately activates/reactivates a sponsor. Missing **two fully completed consecutive months** (or Admin's configured threshold) makes a sponsor **Inactive**. A partial contribution reduces outstanding balance but does not count as a fully-paid month. If a sponsor has never fully paid and fewer than two completed months have elapsed, status remains **New**.
+- **Approved policy superseding the original Phase 06 rule (13 October 2026):** two consecutive **completed IST calendar months with zero net recorded incoming contributions** make a sponsor Inactive. Any newly recorded valid ₹250-tier contribution reactivates, even when credited against an earlier billing period. New registrations remain New until a valid contribution or the two completed zero-activity months have elapsed. The Admin cannot change the fixed two-month threshold. Full settlement is a separate accounting measure used for outstanding balance, not the lifecycle threshold.
 - Overpayment is shown under total verified credits; outstanding cannot be negative. Credit allocation or excess carry-forward is not performed automatically.
 - No payment may be invented from a QR scan or a mobile SMS. No payment confirmation or receipt creation endpoint exists in Phase 06.
 
@@ -39,7 +39,7 @@ The locked Collections tabs stay **Add / Active / All**. The **All** tab now con
 
 ## Delivery and pending decisions
 
-Test matrix includes midnight IST boundary, leap months, first enrollment, two missed months, partial/full installments, activation/reactivation, absent evidence, future-effective rate updates, tenant isolation and PostgreSQL uniqueness. GitHub CI covers migrations, lint, tests, web build and desktop/mobile E2E.
+Test matrix includes midnight IST boundary, leap months, first enrollment, two missed months, ₹250-tier contributions, full settlement, activation/reactivation, absent evidence, future-effective rate updates, tenant isolation and PostgreSQL uniqueness. GitHub CI covers migrations, lint, tests, web build and desktop/mobile E2E.
 
 The Foundation chose manual entry in Phase 07 and audited corrections in Phase 08; the statement importer is deferred. Phase 10 adds scheduled status refresh and payment eligibility; Phase 11 connects Pabbly with WhatsApp Business after explicit opt-in and template approval.
 

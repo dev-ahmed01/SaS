@@ -4,7 +4,7 @@ The Foundation will **enter received payments manually**. Bank statement importi
 
 ## User journey
 1. **Collections → Add:** search and select an existing sponsor.
-2. Enter amount (INR), date received, sponsorship month, method (UPI / bank transfer / cash), and unique bank transaction reference or numbered cash receipt.
+2. Enter the exact **approved ₹250 denomination** (₹250, ₹500, ₹750, …; no smaller or off-tier entries), date received, sponsorship month, method (UPI / bank transfer / cash), and unique bank transaction reference or numbered cash receipt. The Admin must not invent or round money to satisfy the rule.
 3. Tick the explicit confirmation that Foundation records have been checked.
 4. Save. The backend writes the collection, Admin-attested credit and audit record in one transaction.
 5. The monthly ledger updates and the sponsor's current Active/New/Inactive status recalculates.
@@ -23,7 +23,7 @@ The confirmation must say "The Foundation has recorded your contribution of ₹X
 
 ## Remaining production acceptance gates
 - Full verification evidence standard for UPI, cash and bank transfer, and who may reverse/correct a mistaken payment.
-- Confirmation of whether a partial contribution should reactivate a sponsor; Phase 06 currently requires the month's amount to be fully paid.
+- **Resolved 13 October 2026:** every valid ₹250-tier newly recorded contribution immediately reactivates an inactive sponsor; there is no partial-contribution feature. Historical off-tier receipts remain immutable and auditable. Migration 0013 blocks NEW off-tier database inserts without rewriting old evidence.
 - WhatsApp Business sender, approved template, explicit permission to contact donors, Pabbly integration, signed callbacks, deduplicated delivery, opt-out support and monitoring. Do not automatically release the existing pre-integration backlog.
 - Security/UAT, migration verification, backups, production monitoring and audit trail review.
 
