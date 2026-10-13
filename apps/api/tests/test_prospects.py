@@ -335,3 +335,18 @@ def test_plain_registration_without_upi_secret_still_works(system, monkeypatch):
     assert create(client, csrf, upi_ids=["sponsor@upi"]).status_code == 503
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Prospect)) == 1
+
+
+def test_location_is_optional_for_new_sponsor_without_fake_placeholder(system):
+    client, engine = system
+    csrf = login(client)
+    response = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "No Location Sponsor",
+        "mobile_number": "+919876543211",
+    })
+    assert response.status_code == 201, response.text
+    assert response.json()["area_city"] == ""
+    with Session(engine) as db:
+        assert db.scalars(select(Prospect).where(
+            Prospect.id == response.json()["id"]
+        )).one().area_city == ""
