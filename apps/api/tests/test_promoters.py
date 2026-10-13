@@ -1,20 +1,56 @@
 """Phase 05 Promoters: Admin authorization, cross-tenant safety and assignment history."""
-import uuid
+from types import SimpleNamespace
 
-from sqlalchemy import func, select
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
+from app.bootstrap_admin import provision_admin
+from app.main import app
 from app.models import (
+    AdminUser,
     AuditEvent,
+    Base,
     Organization,
     OrganizationSettings,
     Promoter,
     PromoterAssignment,
 )
 from app.security import hash_password
-from app.models import AdminUser
 from test_prospects import create as add_prospect
-from test_prospects import login, system  # noqa: F401
+from test_prospects import login
+
+
+@pytest.fixture
+def system(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org", password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="synthetic-auth-secret-more-than-thirty-two-characters",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(upi_match_secret="synthetic-independent-upi-hmac-key-for-tests"),
+    )
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
 
 PROMOTER={
     "full_name":"Bilal Ahmed",
@@ -126,7 +162,8 @@ def test_rejects_cross_org_promoter_and_prospect_access(system):
     sponsor=add_prospect(client,csrf).json()
     with Session(engine) as db:
         org=Organization(name="Other Charity")
-        db.add(org);db.flush()
+        db.add(org)
+        db.flush()
         db.add(AdminUser(
             organization_id=org.id,email="otherpromoter@foundation.org",
             password_hash=hash_password("synthetic-secondary-password"),is_active=True,
