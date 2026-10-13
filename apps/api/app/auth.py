@@ -45,7 +45,7 @@ class Credentials(BaseModel):
             and value.strip().lower() == "admin"
             and getattr(get_settings(), "local_demo_login_enabled", False)
         ):
-            return "admin@localhost.invalid"
+            return "admin@local.sas.example"
         return value
 
 

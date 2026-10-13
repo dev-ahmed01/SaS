@@ -30,7 +30,7 @@ def main() -> None:
     with Session(get_engine()) as database:
         provision_admin(
             database,
-            email="admin@localhost.invalid",
+            email="admin@local.sas.example",
             password=password,
             organization_name="Emlen Foundation",
             local_demo_short_password=True,

@@ -62,7 +62,7 @@ def test_ordinary_short_admin_password_still_rejected(monkeypatch):
             )
         with pytest.raises(ValueError, match="exception is disabled"):
             provision_admin(
-                db, email="admin@localhost.invalid", password="shortpass",
+                db, email="admin@local.sas.example", password="shortpass",
                 organization_name="Emlen Foundation",
                 local_demo_short_password=True,
             )
@@ -81,11 +81,11 @@ def test_username_admin_signs_in_only_in_opted_in_development(monkeypatch):
     ))
     with Session(engine) as db:
         provision_admin(
-            db, email="admin@localhost.invalid", password="shortpass",
+            db, email="admin@local.sas.example", password="shortpass",
             organization_name="Emlen Foundation", local_demo_short_password=True,
         )
         user = db.scalars(select(AdminUser)).one()
-        assert user.email == "admin@localhost.invalid"
+        assert user.email == "admin@local.sas.example"
         assert user.password_hash.startswith("$argon2id$")
         assert verify_password(user.password_hash, "shortpass")
         assert db.get(OrganizationSettings, user.organization_id).automation_enabled is False
