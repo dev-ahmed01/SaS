@@ -180,3 +180,78 @@ test("Admin can archive and restore a prospect without deleting its record",asyn
   await row.getByRole("button",{name:"Restore"}).click();
   await expect(row.getByRole("button",{name:"Archive"})).toBeVisible();
 });
+
+test("Admin creates and searches promoters in the approved Active and All views",async ({page})=>{
+  const label="Phase5 Promoter "+(Date.now()%1000000);
+  const number="9876"+String(Date.now()%1000000).padStart(6,"0");
+  await page.goto("/promoters");
+  await page.getByRole("textbox",{name:"Full name"}).fill(label);
+  await page.getByRole("textbox",{name:"Phone number"}).fill(number);
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
+  await expect(page).toHaveURL(/\/promoters\/all$/);
+  const find=page.getByRole("textbox",{name:"Search promoters"});
+  await find.fill(label);
+  await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
+  await expect(page.getByRole("row",{name:new RegExp(label)}).getByText("Active",{exact:true})).toBeVisible();
+  await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Active"}).click();
+  await expect(page.getByRole("region",{name:"Active Promoters"})).toBeVisible();
+  await page.getByRole("textbox",{name:"Search promoters"}).fill(label);
+  await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
+});
+
+test("Admin can edit promoters and deactivate/reactivate unassigned promoters",async ({page})=>{
+  const label="Toggle Promoter "+(Date.now()%1000000);
+  const number="9786"+String(Date.now()%1000000).padStart(6,"0");
+  await page.goto("/promoters");
+  await page.getByRole("textbox",{name:"Full name"}).fill(label);
+  await page.getByRole("textbox",{name:"Phone number"}).fill(number);
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
+  await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
+  await expect(page).toHaveURL(/\/promoters\/all$/);
+  const search=page.getByRole("textbox",{name:"Search promoters"});
+  await search.fill(label);
+  let row=page.getByRole("row",{name:new RegExp(label)});
+  await expect(row).toBeVisible();
+  await row.getByRole("button",{name:"Edit"}).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("dialog").getByRole("textbox",{name:"Notes"}).fill("Test follow-up");
+  await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  row=page.getByRole("row",{name:new RegExp(label)});
+  page.once("dialog",d=>d.accept());
+  await row.getByRole("button",{name:"Deactivate"}).click();
+  await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
+  await row.getByRole("button",{name:"Reactivate"}).click();
+  await expect(row.getByText("Active",{exact:true})).toBeVisible();
+});
+
+test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",async ({page})=>{
+  const key=Date.now()%1000000;
+  const sponsor="Phase5 Sponsor "+key;
+  const promoter="Phase5 Liaison "+key;
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(sponsor);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9676"+String(key).padStart(6,"0"));
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await page.goto("/promoters");
+  await page.getByRole("textbox",{name:"Full name"}).fill(promoter);
+  await page.getByRole("textbox",{name:"Phone number"}).fill("9566"+String(key).padStart(6,"0"));
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
+  await expect(page).toHaveURL(/\/promoters\/all$/);
+  await page.getByRole("textbox",{name:"Search promoters"}).fill(promoter);
+  await page.getByRole("row",{name:new RegExp(promoter)}).getByRole("button",{name:"Edit"}).click();
+  const dialog=page.getByRole("dialog");
+  await dialog.getByRole("textbox",{name:"Find sponsor"}).fill(sponsor);
+  await expect(dialog.getByText(sponsor,{exact:true})).toBeVisible();
+  page.once("dialog",d=>d.accept());
+  await dialog.getByRole("button",{name:"Assign",exact:true}).click();
+  await expect(dialog.getByRole("button",{name:"Unassign"})).toBeVisible();
+  await dialog.getByRole("button",{name:"Unassign"}).click();
+  await expect(dialog.getByText("No sponsors assigned to this promoter.")).toBeVisible();
+  await dialog.getByRole("button",{name:"Close edit"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
