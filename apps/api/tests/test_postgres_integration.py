@@ -23,6 +23,8 @@ from app.models import (
     PromoterAssignment,
     Prospect,
     ProspectUpiIdentifier,
+    ReminderBatch,
+    ReminderIntent,
     SponsorshipRate,
     VerifiedCredit,
 )
@@ -549,6 +551,107 @@ def test_postgres_rejects_duplicate_payout_month_and_invalid_schedule() -> None:
             ))
             if char == "a":
                 db.flush()
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def _reminder_fixtures(db):
+    first = Organization(name="Reminder integrity A")
+    second = Organization(name="Reminder integrity B")
+    db.add_all([first, second])
+    db.flush()
+    person = Prospect(
+        organization_id=first.id,
+        full_name="Synthetic Reminder Sponsor",
+        mobile_number="+919311102221", area_city="Bengaluru",
+        monthly_contribution_paise=50000,
+        start_month=date(2026, 10, 1),
+        whatsapp_opt_in=True, lifecycle_status="new", version=1,
+    )
+    db.add(person)
+    db.flush()
+    batch = ReminderBatch(
+        organization_id=first.id, request_id=uuid.uuid4(), kind="sponsor",
+        period_month=date(2026, 10, 1),
+        scheduled_on=date(2026, 10, 5), recipient_count=1,
+    )
+    db.add(batch)
+    db.flush()
+    return first, second, person, batch
+
+
+def _reminder_intent(org, person, batch, **overrides):
+    data = {
+        "organization_id": org.id,
+        "batch_id": batch.id,
+        "kind": "sponsor",
+        "prospect_id": person.id,
+        "promoter_id": None,
+        "period_month": date(2026, 10, 1),
+        "scheduled_on": date(2026, 10, 5),
+        "sponsor_count": 1,
+        "outstanding_paise": 50000,
+        "sponsor_snapshot": [
+            {"prospect_id": str(person.id), "outstanding_paise": 50000},
+        ],
+        "status": "prepared",
+    }
+    data.update(overrides)
+    return ReminderIntent(**data)
+
+
+def test_postgres_prevents_duplicate_sponsor_reminder_intents() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        first, _, person, batch = _reminder_fixtures(db)
+        db.add(_reminder_intent(first, person, batch))
+        db.flush()
+        db.add(_reminder_intent(first, person, batch))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_cross_tenant_reminder_recipient() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        first, second, person, batch = _reminder_fixtures(db)
+        db.add(_reminder_intent(second, person, batch))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_invalid_recipient_kind_pair_and_status() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        first, _, person, batch = _reminder_fixtures(db)
+        db.add(_reminder_intent(first, person, batch, kind="promoter"))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    with Session(engine) as db:
+        first, _, person, batch = _reminder_fixtures(db)
+        db.add(_reminder_intent(first, person, batch, status="delivered"))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_prevents_multiple_batches_same_kind_month() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        first, _, _, _ = _reminder_fixtures(db)
+        db.add(ReminderBatch(
+            organization_id=first.id, request_id=uuid.uuid4(),
+            kind="sponsor", period_month=date(2026, 10, 1),
+            scheduled_on=date(2026, 10, 5), recipient_count=0,
+        ))
         with pytest.raises(IntegrityError):
             db.flush()
         db.rollback()
