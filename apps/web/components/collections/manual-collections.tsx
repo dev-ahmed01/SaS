@@ -60,7 +60,7 @@ export function ManualCollections(){
 
   function select(prospect:Prospect){
     setSelected(prospect);setSearch(prospect.full_name);setResults([]);
-    setRupees((prospect.monthly_contribution_paise/100).toFixed(2));setError("");
+    setRupees("");setError("");
     requestId.current=null;
   }
   function update(){setError("");setSuccess("");requestId.current=null;}
@@ -106,7 +106,10 @@ export function ManualCollections(){
       setSuccess("Recorded "+amount(data.amount_paise)+" for "+data.sponsor_name+
         ". "+(data.message_status==="awaiting_integration"
           ?"WhatsApp confirmation is awaiting provider setup; it has not been sent."
-          :"WhatsApp confirmation suppressed because consent is missing."));
+          :data.message_status==="suppressed"
+            ?"No WhatsApp confirmation was prepared because consent is missing."
+            :"WhatsApp status: "+deliveryLabel(data.message_status)+
+              ". View authenticated delivery status in Reminders."));
       setSelected(null);setSearch("");setRupees("");setReference("");
       setConfirmed(false);requestId.current=null;setRefresh(x=>x+1);
     }catch{setError("Connection interrupted. Check the recent list before retrying.");}
@@ -122,7 +125,7 @@ export function ManualCollections(){
             <label className="field"><span className="field-label">Sponsor <span className="required">*</span></span>
               <input aria-label="Search sponsor" autoComplete="off" required value={search}
                 placeholder="Search by name or mobile number"
-                onChange={e=>{setSearch(e.target.value);setSelected(null);update();}}/>
+                onChange={e=>{setSearch(e.target.value);setSelected(null);setRupees("");update();}}/>
             </label>
             {selected&&<p className="manual-selected">Selected: {selected.full_name} · {selected.mobile_number}
               · {selected.whatsapp_opt_in?"WhatsApp consent recorded":"No WhatsApp consent"}</p>}
@@ -135,7 +138,8 @@ export function ManualCollections(){
           </div>
           <label className="field"><span className="field-label">Amount received (₹) *</span>
             <input aria-label="Amount received (₹)" required type="text" inputMode="decimal" value={rupees}
-              placeholder="500.00" onChange={e=>{setRupees(e.target.value);update();}}/></label>
+              placeholder="Enter the exact funds received" onChange={e=>{setRupees(e.target.value);update();}}/></label>
+          <p className="dashboard-caption form-cell full">Enter the exact amount received. The sponsor's agreed monthly rate may differ for the selected period.</p>
           <label className="field"><span className="field-label">Payment method *</span>
             <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
