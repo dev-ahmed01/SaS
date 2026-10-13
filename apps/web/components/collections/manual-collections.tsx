@@ -119,7 +119,6 @@ export function ManualCollections(){
   return <div className="manual-collections-workspace">
     <section className="content-panel" aria-label="Record a manual collection">
       <h2>Record Collection</h2>
-      <p className="panel-description">Only enter money already received and checked by the Foundation. Accepted contributions start at ₹250 and increase in ₹250 increments. Record funds only after the Foundation confirms receipt; this prepares a WhatsApp confirmation intent when consent exists.</p>
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="form-cell full">
@@ -140,18 +139,21 @@ export function ManualCollections(){
           <label className="field"><span className="field-label">Amount received (₹) *</span>
             <input aria-label="Amount received (₹)" required type="number" inputMode="numeric" min="250" step="250" max="10000000" value={rupees}
               placeholder="250, 500, 750..." onChange={e=>{setRupees(e.target.value);update();}}/></label>
-          <p className="dashboard-caption form-cell full">Only enter confirmed incoming amounts of ₹250, ₹500, ₹750, and so on. The sponsor's agreed monthly rate may differ for the selected billing period.</p>
           <label className="field"><span className="field-label">Payment method *</span>
             <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
               <option value="cash">Cash</option>
             </select></label>
-          <label className="field"><span className="field-label">Received date (IST) *</span>
-            <input aria-label="Received date (IST)" required type="date" max={istDate()}
-              value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/></label>
-          <label className="field"><span className="field-label">Sponsorship month *</span>
-            <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
-              value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
+          <details className="optional-details"><summary>Change payment date or month</summary>
+            <div className="optional-fields">
+              <label className="field"><span className="field-label">Received date (IST) *</span>
+                <input aria-label="Received date (IST)" required type="date" max={istDate()}
+                  value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/></label>
+              <label className="field"><span className="field-label">Sponsorship month *</span>
+                <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
+                  value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
+            </div>
+          </details>
           <label className="field form-cell full"><span className="field-label">UPI transaction ID / bank reference / numbered receipt *</span>
             <input aria-label="Transaction reference" required minLength={6} maxLength={100}
               value={reference} placeholder="Enter a unique reference"
@@ -168,7 +170,6 @@ export function ManualCollections(){
     </section>
     <section className="content-panel" aria-label="Recent manual collections">
       <h2>Recently Recorded</h2>
-      <p className="panel-description">Admin-attested entries, not bank-imported records. Corrections require a separately audited workflow.</p>
       <div className="table-scroll"><table className="data-table">
         <thead><tr><th>Sponsor</th><th>Amount</th><th>Month</th><th>Reference</th><th>WhatsApp</th></tr></thead>
         <tbody>{!records?.items.length?<tr><td colSpan={5}>No manual collections recorded yet.</td></tr>
