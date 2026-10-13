@@ -144,5 +144,5 @@ jobs:
           if [ "$code" != "401" ]; then cat /tmp/sas-invalid-login-body; exit 1; fi
       - name: Fail-fast authenticated browser smoke
         run: npx playwright test --grep "all seven approved modules"
-      - name: Verify mobile form with populated collection history
-        run: npx playwright test --project=mobile-chromium --grep "mobile collection form stays clickable"
+      - name: Run desktop and mobile browser tests
+        run: npx playwright test
