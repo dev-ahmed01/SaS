@@ -18,7 +18,8 @@
   --shadow: 0 7px 27px rgba(17,63,47,.035);
 }
 * { box-sizing: border-box; }
-html { min-height: 100%; scroll-behavior: smooth; }
+/* Administrative forms use immediate scrolling so touch targets remain stable. */
+html { min-height: 100%; scroll-behavior: auto; }
 body { min-height: 100vh; margin: 0; background: var(--canvas); color: var(--ink); font: 400 14px/1.65 var(--font-body); }
 button, input, textarea, select { font: inherit; }
 button, select { cursor: pointer; }
