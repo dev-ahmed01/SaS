@@ -526,10 +526,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .page-content {padding:24px 17px 55px}
 }
 
-/* Responsive mosque illustration system.
-   These crisp, layered vector scenes replace the small stretched raster snippets.
-   Gradual transparency lets artwork emerge from the mint background rather than
-   appearing as a pasted strip or a hard-edged crop. */
+/* Unified, professionally illustrated landscape. Both surfaces display the
+   SAME locally hosted optimized asset with independent responsive framing.
+   Keep the existing SVG as a fallback where AVIF cannot be decoded. */
 .login-layout { min-height:100dvh; }
 .login-illustration {
   overflow:hidden;
@@ -541,10 +540,17 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   bottom:-1px;
   left:0;
   width:100%;
-  height:clamp(305px,49vh,490px);
-  background:url("/art/masjid-landscape-premium.svg") center bottom / cover no-repeat;
-  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.28) 15%,#000 44%);
-  mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.28) 15%,#000 44%);
+  height:clamp(400px,63vh,590px);
+  background-image:url("/art/masjid-landscape-premium.svg");
+  background-image:image-set(
+    url("/art/sponsor-salah-panorama.avif") type("image/avif"),
+    url("/art/masjid-landscape-premium.svg") type("image/svg+xml")
+  );
+  background-size:cover;
+  background-position:48% bottom;
+  background-repeat:no-repeat;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.24) 17%,#000 45%);
+  mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.24) 17%,#000 45%);
   pointer-events:none;
 }
 .login-brand { transform:translateY(-min(7vh,64px)); }
@@ -587,10 +593,17 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   margin:0;
   flex:none;
   z-index:0;
-  opacity:.88;
-  background:url("/art/masjid-sidebar-premium.svg") center bottom / cover no-repeat;
-  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.38) 20%,#000 63%);
-  mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.38) 20%,#000 63%);
+  opacity:.93;
+  background-image:url("/art/masjid-sidebar-premium.svg");
+  background-image:image-set(
+    url("/art/sponsor-salah-panorama.avif") type("image/avif"),
+    url("/art/masjid-sidebar-premium.svg") type("image/svg+xml")
+  );
+  background-size:auto 100%;
+  background-position:left bottom;
+  background-repeat:no-repeat;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.45) 18%,#000 51%);
+  mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.45) 18%,#000 51%);
   pointer-events:none;
 }
 .sidebar-art::after { display:none; }
@@ -672,7 +685,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .topbar { min-height:68px; padding:0 19px; }
   .topbar-name { font-size:clamp(20px,4.6vw,27px); letter-spacing:-.035em; }
   .login-illustration { min-height:310px; }
-  .login-mosque { height:clamp(175px,31vh,260px); }
+  .login-mosque { height:clamp(175px,42vh,290px); background-position:43% bottom; }
   .login-brand { transform:translateY(-25px); }
   .login-brand h1 { font-size:clamp(28px,7vw,36px); }
 }
