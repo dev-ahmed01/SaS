@@ -17,6 +17,7 @@ from app.models import (
     Base,
     ManualCollection,
     MessageOutbox,
+    MessageOutbox,
     Prospect,
     VerifiedCredit,
 )
@@ -234,3 +235,60 @@ def test_contribution_denominations_reject_under_250_and_nonmultiples(system):
     })
     assert accepted.status_code == 201, accepted.text
     assert accepted.json()["amount_paise"] == 25000
+
+
+def test_exact_legacy_off_tier_request_replay_is_read_only(system):
+    from app.collections import CollectionInput, _payload_hash
+
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=False)
+    payload = {**sample(person["id"]), "amount_paise": 12500}
+    checked = CollectionInput(**payload)
+    with Session(engine) as db:
+        existing = db.get(Prospect, uuid.UUID(person["id"]))
+        from app.models import ManualCollection, MessageOutbox, VerifiedCredit
+        from app.security import utc_now
+
+        proof = VerifiedCredit(
+            organization_id=existing.organization_id, prospect_id=existing.id,
+            period_month=checked.period_month, amount_paise=12500,
+            source_type="manual_attested",
+            source_key="manual:legacy-preserved-synthetic",
+            verified_at=utc_now(),
+        )
+        db.add(proof)
+        db.flush()
+        receipt = ManualCollection(
+            organization_id=existing.organization_id, prospect_id=existing.id,
+            verified_credit_id=proof.id, request_id=checked.request_id,
+            request_payload_hash=_payload_hash(checked),
+            reference_digest="a" * 64, reference_mask="****F001",
+            received_on=checked.received_on, period_month=checked.period_month,
+            payment_method=checked.payment_method, amount_paise=12500,
+        )
+        db.add(receipt)
+        db.flush()
+        db.add(MessageOutbox(
+            organization_id=existing.organization_id,
+            prospect_id=existing.id, collection_id=receipt.id,
+            event_type="collection_recorded", status="suppressed",
+            suppress_reason="consent_missing",
+        ))
+        db.commit()
+        original_id = str(receipt.id)
+    retried = client.post("/v1/collections", headers=csrf, json=payload)
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["id"] == original_id
+    assert retried.json()["amount_paise"] == 12500
+    changed = client.post("/v1/collections", headers=csrf, json={
+        **payload, "amount_paise": 25000,
+    })
+    assert changed.status_code == 409, changed.text
+    fresh_invalid = client.post("/v1/collections", headers=csrf, json={
+        **payload, "request_id": str(uuid.uuid4()),
+    })
+    assert fresh_invalid.status_code == 422, fresh_invalid.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(ManualCollection)) == 1
+        assert db.scalar(select(func.count()).select_from(VerifiedCredit)) == 1

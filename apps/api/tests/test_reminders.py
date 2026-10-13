@@ -479,3 +479,20 @@ def test_pre_dispatch_blocks_catchup_after_configured_date(system, monkeypatch):
         assert not current_intent_eligible(
             db, admin, intent, OCT_5.replace(day=6).astimezone(UTC),
         )
+
+
+def test_exact_reminder_request_replay_after_ist_midnight(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    set_today(monkeypatch, OCT_5)
+    sponsor(client, csrf, 217)
+    request = uuid.uuid4()
+    created = prepare(client, csrf, "sponsor", request)
+    assert created.status_code == 201, created.text
+    set_today(monkeypatch, OCT_5.replace(day=6))
+    replay = prepare(client, csrf, "sponsor", request)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["id"] == created.json()["id"]
+    assert prepare(client, csrf, "sponsor").status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(ReminderBatch)) == 1

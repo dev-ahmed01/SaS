@@ -269,3 +269,31 @@ def test_legacy_sponsorship_can_edit_contacts_without_repricing(policy_api):
     with Session(engine) as db:
         rate = db.scalars(select(SponsorshipRate)).one()
         assert rate.amount_paise == 37500
+
+
+def test_prospect_patch_rejects_new_off_tier_rates_and_keeps_legacy_identity(policy_api):
+    client, engine, csrf = policy_api
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Synthetic Signed Agreement",
+        "mobile_number": "+919876500092",
+        "area_city": "Bengaluru",
+        "monthly_contribution_paise": 50000,
+    })
+    assert created.status_code == 201, created.text
+    person = created.json()
+    endpoint = "/v1/prospects/" + person["id"]
+    for amount in (1, 12500, 37500, 70000):
+        result = client.patch(endpoint, headers=csrf, json={
+            "version": person["version"], "monthly_contribution_paise": amount,
+        })
+        assert result.status_code == 422, (amount, result.text)
+    with Session(engine) as db:
+        all_rates = list(db.scalars(select(SponsorshipRate).where(
+            SponsorshipRate.prospect_id == uuid.UUID(person["id"]),
+        )))
+        assert len(all_rates) == 1
+        assert all_rates[0].amount_paise == 50000
+    success = client.patch(endpoint, headers=csrf, json={
+        "version": person["version"], "monthly_contribution_paise": 75000,
+    })
+    assert success.status_code == 200, success.text

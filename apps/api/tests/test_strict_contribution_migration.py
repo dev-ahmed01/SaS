@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -83,6 +83,16 @@ def test_new_denomination_policy_preserves_historical_receipt(tmp_path, monkeypa
             ).all())
             assert amounts == [12500, 25000]
             assert db.get(ManualCollection, accepted_id) is not None
+            # SQLite '%' coerces REAL to INTEGER; ensure trigger protects
+            # fractional paise even for direct bypassing database writers.
+            with pytest.raises(IntegrityError):
+                db.execute(
+                    text("UPDATE manual_collections SET amount_paise = 25000.5 "
+                         "WHERE id = :id"),
+                    {"id": accepted_id.hex},
+                )
+                db.flush()
+            db.rollback()
         engine.dispose()
         command.check(config)
     finally:

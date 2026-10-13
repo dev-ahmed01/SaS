@@ -317,3 +317,21 @@ def test_request_fingerprint_is_keyed_even_when_upi_is_supplied(system):
         assert len(saved.registration_payload_hash) == 64
         assert saved.registration_payload_hash != plain_digest
         assert "hidden-user" not in saved.registration_payload_hash
+
+
+def test_plain_registration_without_upi_secret_still_works(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    monkeypatch.setattr("app.prospects.get_settings", lambda: SimpleNamespace(
+        upi_match_secret=None,
+        auth_secret="synthetic-fallback-hmac-secret-long-enough-1234",
+    ))
+    payload = {**BASE, "request_id": str(uuid.uuid4())}
+    first = create(client, csrf, request_id=payload["request_id"])
+    assert first.status_code == 201, first.text
+    retried = create(client, csrf, request_id=payload["request_id"])
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["id"] == first.json()["id"]
+    assert create(client, csrf, upi_ids=["sponsor@upi"]).status_code == 503
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 1
