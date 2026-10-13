@@ -324,6 +324,22 @@ test("manual collection amount accepts only ₹250 denominations",async ({page})
   // No sponsor is selected: this is input validation only, never a real receipt.
 });
 
+test("Approved sponsor denomination selector supports multiples of 250 without a floating list",async ({page})=>{
+  await page.goto("/prospects");
+  const tiers=page.getByRole("combobox",{name:"Monthly contribution (₹)"});
+  await expect(tiers).toBeVisible();
+  await tiers.selectOption("750");
+  await expect(tiers).toHaveValue("750");
+  await expect(page.getByRole("spinbutton",{name:/Custom monthly contribution/})).toHaveCount(0);
+  await tiers.selectOption("other");
+  const custom=page.getByRole("spinbutton",{name:/Custom monthly contribution/});
+  await expect(custom).toBeVisible();
+  await custom.fill("375");
+  expect(await custom.evaluate(element=>element.checkValidity())).toBe(false);
+  await custom.fill("15000");
+  expect(await custom.evaluate(element=>element.checkValidity())).toBe(true);
+});
+
 test("Admin records a manual contribution without claiming WhatsApp delivery",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
   const name="Manual Pay Sponsor "+id;
