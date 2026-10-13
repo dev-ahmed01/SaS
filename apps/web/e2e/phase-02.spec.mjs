@@ -255,3 +255,40 @@ test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",a
   await dialog.getByRole("button",{name:"Close edit"}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("Collections All shows real monthly commitments, not imaginary deposits",async ({page})=>{
+  const name="Ledger Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await page.goto("/collections/all");
+  await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
+  await expect(page.getByText("Verified collections")).toBeVisible();
+  const row=page.getByRole("row",{name:new RegExp(name)});
+  await expect(row).toBeVisible();
+  await expect(row.getByText("₹500.00")).toBeVisible();
+  await expect(row.getByText("New",{exact:true})).toBeVisible();
+  await expect(row.getByText("No",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Refresh sponsor statuses"}).click();
+  await expect(page.getByText(/Checked .* sponsors/)).toBeVisible();
+});
+
+test("Accounting rejects forged requests and never exposes payment write actions",async ({page})=>{
+  const unauthenticated=await page.request.get("/api/admin/accounting/overview");
+  expect(unauthenticated.status()).toBe(200);
+  const noCsrf=await page.evaluate(()=>fetch("/api/admin/accounting/refresh-statuses",{
+    method:"POST",
+  }).then(response=>response.status));
+  expect(noCsrf).toBe(403);
+  const forged=await page.request.post("/api/admin/accounting/refresh-statuses",{
+    headers:{"Origin":"https://invalid.example"},
+  });
+  expect(forged.status()).toBe(403);
+  const unsupported=await page.request.post("/api/admin/accounting/credit",{
+    headers:{"Origin":"http://127.0.0.1:3000"},
+  });
+  expect(unsupported.status()).toBe(404);
+});
