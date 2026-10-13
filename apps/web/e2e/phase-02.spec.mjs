@@ -322,7 +322,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.getByRole("option",{name:new RegExp(name)}).click();
   const payment=page.getByRole("textbox",{name:"Amount received (₹)"});
   await expect(payment).toHaveValue("");
-  await payment.fill("125.00");
+  await payment.fill("500.00");
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
   const save=page.getByRole("button",{name:"Save Collection"});
   await expect(save).toBeDisabled();
