@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
@@ -18,6 +18,8 @@ from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
+    ManualCollection,
+    ManualCollectionReversal,
     OrganizationSettings,
     Prospect,
     SponsorshipRate,
@@ -60,6 +62,37 @@ def _month_from_query(value: str | None, today: date) -> date:
     if requested > month_start(today) or requested < shift_month(month_start(today), -35):
         raise HTTPException(status_code=422, detail="Month is outside the 36-month history")
     return requested
+
+
+def effective_credits(
+    database: Session, organization_id: object,
+    sponsor_id: object | None = None, as_of: datetime | None = None,
+) -> list[VerifiedCredit]:
+    """Credit rows excluding fully voided manual entries; originals stay auditable.
+
+    This is the shared financial projection used by ledger, manual entry and
+    reversal status updates. Other (bank) credits are unaffected.
+    """
+    voided_credit_ids = (
+        select(ManualCollection.verified_credit_id)
+        .join(
+            ManualCollectionReversal,
+            and_(
+                ManualCollectionReversal.organization_id == ManualCollection.organization_id,
+                ManualCollectionReversal.collection_id == ManualCollection.id,
+            ),
+        )
+        .where(ManualCollection.organization_id == organization_id)
+    )
+    filters = [
+        VerifiedCredit.organization_id == organization_id,
+        VerifiedCredit.id.not_in(voided_credit_ids),
+    ]
+    if sponsor_id is not None:
+        filters.append(VerifiedCredit.prospect_id == sponsor_id)
+    if as_of is not None:
+        filters.append(VerifiedCredit.verified_at <= as_of)
+    return list(database.scalars(select(VerifiedCredit).where(*filters)).all())
 
 
 def _monthly_amount(rates: list[SponsorshipRate], month: date) -> int | None:
@@ -190,12 +223,7 @@ def _load_account(
     ):
         rates[str(rate.prospect_id)].append(rate)
     credits = defaultdict(list)
-    for credit in db.scalars(
-        select(VerifiedCredit).where(
-            VerifiedCredit.organization_id == admin.organization_id,
-            VerifiedCredit.verified_at <= now,
-        )
-    ):
+    for credit in effective_credits(db, admin.organization_id, as_of=now):
         credits[str(credit.prospect_id)].append(credit)
     return settings, sponsors, rates, credits
 
@@ -284,6 +312,9 @@ def refresh_statuses(
     )
     changed = 0
     for sponsor in sponsors:
+        if sponsor.archived_at is not None:
+            # Archived sponsors remain archived, and are not reminder eligible.
+            continue
         pid = str(sponsor.id)
         status = evaluate_status(
             sponsor, rates_by_id[pid], credits_by_id[pid],
