@@ -53,6 +53,8 @@ npm run dev
 
 Browse `http://localhost:3000`. Test with `python -m ruff check .`, `python -m pytest -q` from `apps/api`, and `npm test && npm run typecheck && npm run build` from `apps/web`. CI additionally exercises the PostgreSQL migrations and authenticated browser suite.
 
+**New Phase 13 operations:** [strict `main` protection and staging recovery audit](docs/PHASE_13_MAIN_PROTECTION_AND_STAGING.md), [manual release-governance workflow](.github/workflows/release-governance.yml), and [synthetic PostgreSQL restore](docs/PHASE_13_RECOVERY_DRILL.md). The GitHub owner must activate branch protection separately; an external Foundation staging backup/restore remains unverified.
+
 **Release rule:** Code integration does not authorize production. Main branch protection, approved financial proof policy, staging UAT, real backup restoration, security, consent, opt-out, sender/template and provider callback checks remain mandatory. [Phase 13 production gates](docs/PHASE_13_PRODUCTION.md) and [Issue #13](https://github.com/dev-ahmed01/SaS/issues/13) track these separately.
 
 A fail-closed **offline documentary check** is available after real approval records exist: copy `docs/RELEASE_EVIDENCE_TEMPLATE.json` to a secure, untracked location, fill all 12 gates with genuine evidence references, and run `python -m app.release_gate /secure/release-evidence.json --sha <40-character-release-commit>` from `apps/api`. Passing validates metadata completeness **only**; it does not independently verify a provider, configure branch protection, deploy software or authorize WhatsApp messages.
