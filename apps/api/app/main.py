@@ -5,17 +5,19 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.accounting import router as accounting_router
 from app.admin_settings import router as settings_router
 from app.auth import router as auth_router
 from app.db import get_engine
 from app.promoters import router as promoters_router
 from app.prospects import router as prospects_router
 
-app = FastAPI(title="Sponsor a Salah API", version="0.5.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="Sponsor a Salah API", version="0.6.0", docs_url=None, redoc_url=None)
 app.include_router(auth_router)
 app.include_router(settings_router)
 app.include_router(prospects_router)
 app.include_router(promoters_router)
+app.include_router(accounting_router)
 
 
 @app.get("/health/live", tags=["health"])
