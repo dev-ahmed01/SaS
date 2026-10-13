@@ -26,6 +26,7 @@ from app.models import (
     VerifiedCredit,
 )
 from app.security import utc_now
+from app.sponsorship_policy import INACTIVITY_COMPLETED_MONTHS
 
 router = APIRouter(prefix="/v1/accounting", tags=["Admin monthly accounting"])
 IST = ZoneInfo("Asia/Kolkata")
@@ -154,33 +155,38 @@ def period_balance(
 def evaluate_status(
     prospect: Prospect, rates: list[SponsorshipRate],
     credits: list[VerifiedCredit], as_of: date, verified_until: datetime,
-    inactivity_months: int = 2,
+    inactivity_months: int = INACTIVITY_COMPLETED_MONTHS,
 ) -> Literal["new", "active", "inactive"]:
-    if inactivity_months < 1:
-        raise ValueError("Inactivity threshold must be positive")
+    if inactivity_months != INACTIVITY_COMPLETED_MONTHS:
+        raise ValueError("Foundation inactivity policy is exactly two completed months")
     current = month_start(as_of)
     start = prospect.start_month
     if start is None or start > current:
         return "new"
-    # A fully paid current month immediately reactivates an inactive sponsor.
-    if period_balance(prospect, rates, credits, current, verified_until)[3]:
+    # Status measures real receipt activity, *not* whether a month's dues
+    # have been fully settled. VerifiedCredit.verified_at is the immutable
+    # recording time; period_month remains the separate billing allocation.
+    # A late-entered receipt for an earlier billing month therefore genuinely
+    # reactivates on the day it is recorded, without rewriting old balances.
+    activity_months = {
+        month_start(_utc(row.verified_at).astimezone(IST).date())
+        for row in credits
+        if row.amount_paise > 0
+        and _utc(row.verified_at) <= verified_until
+        and _utc(row.verified_at).astimezone(IST).date() <= as_of
+    }
+    if current in activity_months:
         return "active"
     prior = [shift_month(current, -(i + 1)) for i in range(inactivity_months)]
     if all(
-        start <= month and
-        not period_balance(prospect, rates, credits, month, verified_until)[3]
+        start <= month
+        # Do not count months when an archived sponsorship had no obligation.
+        and period_balance(prospect, rates, credits, month, verified_until)[0] > 0
+        and month not in activity_months
         for month in prior
     ):
         return "inactive"
-    # A partial payment is accounted for but not represented as a paid month.
-    months = 1 + (current.year - start.year) * 12 + current.month - start.month
-    has_fully_paid = any(
-        period_balance(
-            prospect, rates, credits, shift_month(start, i), verified_until
-        )[3]
-        for i in range(max(0, months))
-    )
-    return "active" if has_fully_paid else "new"
+    return "active" if activity_months else "new"
 
 
 class AccountingRow(BaseModel):

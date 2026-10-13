@@ -32,6 +32,7 @@ from app.models import (
     SponsorshipRate,
 )
 from app.security import utc_now
+from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
 
 
 def _ist_month() -> date:
@@ -59,7 +60,10 @@ class ProspectFields(BaseModel):
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(min_length=2, max_length=120)
-    monthly_contribution_paise: int | None = Field(default=None, ge=1, le=MAX_AMOUNT_PAISE)
+    monthly_contribution_paise: int | None = Field(
+        default=None, ge=SPONSORSHIP_STEP_PAISE, le=MAX_AMOUNT_PAISE,
+        multiple_of=SPONSORSHIP_STEP_PAISE,
+    )
     next_followup_on: date | None = None
     last_contact_on: date | None = None
     notes: str | None = Field(default=None, max_length=1500)
@@ -364,8 +368,11 @@ def create_prospect(
     amount = payload.monthly_contribution_paise
     if amount is None:
         amount = settings.default_contribution_paise
-    if amount > MAX_AMOUNT_PAISE:
-        raise HTTPException(status_code=422, detail="Amount exceeds the maximum")
+    if not valid_commitment(amount):
+        raise HTTPException(
+            status_code=409,
+            detail="Configured sponsor amount must be a positive multiple of ₹250",
+        )
     ids = [_upi_normalized(raw) for raw in payload.upi_ids]
     if len(set(ids)) != len(ids):
         raise HTTPException(status_code=422, detail="Duplicate UPI identifiers supplied")

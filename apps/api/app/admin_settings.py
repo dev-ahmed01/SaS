@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 from app.auth import db_session, get_admin, require_csrf
 from app.config import get_settings
 from app.models import AdminSession, AdminUser, AuditEvent, OrganizationSettings
+from app.sponsorship_policy import (
+    INACTIVITY_COMPLETED_MONTHS,
+    SPONSORSHIP_STEP_PAISE,
+)
 
 router = APIRouter(prefix="/v1/settings", tags=["Admin settings"])
 
@@ -25,10 +29,15 @@ EDITABLE = (
 
 class SettingsPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    default_contribution_paise: int | None = Field(None, ge=1, le=1_000_000_000)
+    default_contribution_paise: int | None = Field(
+        None, ge=SPONSORSHIP_STEP_PAISE, le=1_000_000_000,
+        multiple_of=SPONSORSHIP_STEP_PAISE,
+    )
     sponsor_reminder_day: int | None = Field(None, ge=1, le=28)
     promoter_reminder_day: int | None = Field(None, ge=1, le=28)
-    inactivity_months: int | None = Field(None, ge=1, le=24)
+    inactivity_months: int | None = Field(
+        None, ge=INACTIVITY_COMPLETED_MONTHS, le=INACTIVITY_COMPLETED_MONTHS,
+    )
 
     @model_validator(mode="after")
     def prohibit_null_updates(self) -> "SettingsPatch":

@@ -30,7 +30,8 @@ function toPaise(amount: string): number | null {
   if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(amount.trim())) return null;
   const [whole, fraction = ""] = amount.trim().split(".");
   const paise = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(paise) && paise > 0 && paise <= 1000000000 ? paise : null;
+  return Number.isSafeInteger(paise) && paise >= 25000 && paise <= 1000000000
+    && paise % 25000 === 0 ? paise : null;
 }
 
 function normalizePhone(input: string): string | null {
@@ -100,7 +101,7 @@ export function ProspectEditor({
       setError("Use a valid mobile number (10-digit Indian number or international + format).");
       return;
     }
-    if (amount === null) {setError("Enter a valid monthly amount in rupees.");return;}
+    if (amount === null) {setError("Monthly sponsorship must be ₹250, ₹500, ₹750, or another positive multiple of ₹250.");return;}
     setSaving(true);setError("");
     try {
       const body: Record<string,unknown> = {
@@ -182,14 +183,14 @@ export function ProspectEditor({
 
   return <section className="content-panel prospect-form-panel" aria-label={current?"Edit Prospect":"Add Prospect"}>
     <h2>{current?"Edit Prospect":"Add Prospect"}</h2>
-    <p className="panel-description">Manage contact details and the agreed monthly contribution. A new prospect stays New until their first verified payment.</p>
+    <p className="panel-description">Manage contact details and the agreed monthly contribution. A new prospect stays New until the first recorded positive contribution. Commitments are in ₹250 increments; partial receipts remain permitted.</p>
     <form onSubmit={submit}>
       <div className="form-grid">
         <label className="field"><span className="field-label">Full name <span className="required">*</span></span><input required minLength={2} maxLength={160} value={values.full_name} onChange={e=>update("full_name",e.target.value)} placeholder="Enter full name"/></label>
         <label className="field"><span className="field-label">Mobile number <span className="required">*</span></span><input required type="tel" value={values.mobile_number} onChange={e=>update("mobile_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">WhatsApp number (optional)</span><input type="tel" value={values.whatsapp_number} onChange={e=>update("whatsapp_number",e.target.value)} placeholder="+91 98765 43210"/></label>
         <label className="field"><span className="field-label">Area / City <span className="required">*</span></span><input required minLength={2} maxLength={120} value={values.area_city} onChange={e=>update("area_city",e.target.value)} placeholder="Enter area or city"/></label>
-        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step="0.01" min="0.01" max="10000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
+        <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span><input required type="number" step="250" min="250" max="10000000" value={values.amount_rupees} onChange={e=>update("amount_rupees",e.target.value)} placeholder="Amount"/></label>
         <label className="field"><span className="field-label">Next follow-up date</span><input type="date" value={values.next_followup_on} onChange={e=>update("next_followup_on",e.target.value)}/></label>
         <label className="field"><span className="field-label">Last contact date</span><input type="date" value={values.last_contact_on} onChange={e=>update("last_contact_on",e.target.value)}/></label>
         {!current && <label className="field"><span className="field-label">UPI ID (optional)</span><input maxLength={193} value={values.upi_id} onChange={e=>update("upi_id",e.target.value)} placeholder="name@bank"/></label>}
