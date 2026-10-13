@@ -321,7 +321,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  const payment=page.getByRole("textbox",{name:"Amount received (₹)"});
+  const payment=page.getByRole("spinbutton",{name:"Amount received (₹)"});
   await expect(payment).toHaveValue("");
   await payment.fill(agreed.toFixed(2));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
@@ -357,7 +357,7 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill("500.00");
+  await page.getByRole("spinbutton",{name:"Amount received (₹)"}).fill("500.00");
   const receivedOn=await page.locator('input[type="date"]').inputValue();
   const month=await page.locator('input[type="month"]').inputValue();
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
@@ -400,7 +400,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.goto("/collections");
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill(agreed.toFixed(2));
+  await page.getByRole("spinbutton",{name:"Amount received (₹)"}).fill(agreed.toFixed(2));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("REVERSAL"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
@@ -746,7 +746,7 @@ test("mobile collection form stays clickable with populated recent history",asyn
         body:JSON.stringify({
           request_id:crypto.randomUUID(),prospect_id:person.id,
           period_month:today.slice(0,7)+"-01",received_on:today,
-          amount_paise:100,payment_method:"upi",
+          amount_paise:25000,payment_method:"upi",
           receipt_reference:"HISTORY"+suffix+"-"+i,
           funds_confirmed:true,
         }),
@@ -765,7 +765,7 @@ test("mobile collection form stays clickable with populated recent history",asyn
   }).toBeLessThanOrEqual(413);
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(data.name);
   await page.getByRole("option",{name:new RegExp(data.name)}).click();
-  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill("125.00");
+  await page.getByRole("spinbutton",{name:"Amount received (₹)"}).fill("250.00");
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("FINALHISTORY"+suffix);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   const save=page.getByRole("button",{name:"Save Collection"});

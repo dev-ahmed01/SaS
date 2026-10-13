@@ -204,7 +204,7 @@ def test_sponsor_preview_excludes_paid_inactive_archived_and_no_consent(
     assert result["timezone"]=="Asia/Kolkata"
 
 
-def test_partial_receipt_gets_balance_reminder_without_falsely_fully_paid(
+def test_250_receipt_retains_outstanding_reminder_without_falsely_fully_paid(
     system,monkeypatch,
 ):
     client,engine=system
@@ -212,11 +212,11 @@ def test_partial_receipt_gets_balance_reminder_without_falsely_fully_paid(
     set_today(monkeypatch,OCT_5)
     person=sponsor(client,csrf,20)
     set_start(engine,person["id"],date(2026,10,1))
-    payment(engine,person["id"],date(2026,10,1),"partial-current",amount=20000)
+    payment(engine,person["id"],date(2026,10,1),"tier250-current",amount=25000)
     result=client.get("/v1/reminders/preview?kind=sponsor").json()
     assert result["eligible_recipients"]==1
-    assert result["total_outstanding_paise"]==30000
-    assert result["recipients"][0]["outstanding_paise"]==30000
+    assert result["total_outstanding_paise"]==25000
+    assert result["recipients"][0]["outstanding_paise"]==25000
 
 
 def test_two_missed_months_suppress_even_when_materialized_status_stale(

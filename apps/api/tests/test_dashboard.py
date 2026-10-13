@@ -218,27 +218,27 @@ def test_dashboard_tenant_isolation_even_with_foreign_records(system):
     assert state["activity"] == []
 
 
-def test_partial_manual_receipt_keeps_outstanding_and_delivery_unconfirmed(system):
-    """A real partial receipt must not be silently rounded to fully paid."""
+def test_250_receipt_below_legacy_commitment_keeps_balance_and_delivery_unconfirmed(system):
+    """An exact ₹250 receipt cannot be rounded to the ₹500 commitment."""
     client, _ = system
     csrf = login(client)
     sponsor = register(client, csrf, phone="+919876555062")
     today = ist_today()
     receipt = client.post("/v1/collections", headers=csrf, json={
         "request_id": str(uuid.uuid4()), "prospect_id": sponsor["id"],
-        "amount_paise": 12500, "period_month": month_start(today).isoformat(),
+        "amount_paise": 25000, "period_month": month_start(today).isoformat(),
         "received_on": today.isoformat(), "payment_method": "upi",
-        "receipt_reference": "DASHBOARDPARTIAL001", "funds_confirmed": True,
+        "receipt_reference": "DASHBOARDTIER250001", "funds_confirmed": True,
     })
     assert receipt.status_code == 201, receipt.text
     result = client.get("/v1/dashboard/overview")
     assert result.status_code == 200, result.text
     state = result.json()
     assert state["due_paise"] == 50000
-    assert state["recorded_contributions_paise"] == 12500
-    assert state["outstanding_paise"] == 37500
+    assert state["recorded_contributions_paise"] == 25000
+    assert state["outstanding_paise"] == 25000
     assert state["fully_paid_sponsors"] == 0
     assert state["unpaid_sponsors"] == 1
     assert state["acknowledgments_awaiting_setup"] == 1
     assert state["whatsapp_deliveries_confirmed"] == 0
-    assert state["months"][-1]["contributions_paise"] == 12500
+    assert state["months"][-1]["contributions_paise"] == 25000

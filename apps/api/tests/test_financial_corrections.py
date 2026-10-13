@@ -147,25 +147,25 @@ def test_reversal_restores_dues_and_suppresses_unsent_message(system):
         assert record.lifecycle_status=="new"
 
 
-def test_partial_payment_reversal_preserves_other_installments(system):
+def test_reversal_preserves_other_250_tier_collection_records(system):
     client, engine=system
     csrf=login(client)
     person=sponsor(client,csrf)
-    first=pay(client,csrf,person["id"],"MULTIINSTALMENT001",30000)
-    second=pay(client,csrf,person["id"],"MULTIINSTALMENT002",20000)
+    first=pay(client,csrf,person["id"],"MULTIINSTALMENT001",25000)
+    second=pay(client,csrf,person["id"],"MULTIINSTALMENT002",25000)
     before=client.get("/v1/accounting/overview").json()
     assert before["verified_paise"]==50000
     assert before["fully_paid_sponsors"]==1
     assert reverse(client,csrf,first["id"]).status_code==201
-    partial=client.get("/v1/accounting/overview").json()
-    assert partial["verified_paise"]==20000
-    assert partial["outstanding_paise"]==30000
-    assert partial["fully_paid_sponsors"]==0
+    balance=client.get("/v1/accounting/overview").json()
+    assert balance["verified_paise"]==25000
+    assert balance["outstanding_paise"]==25000
+    assert balance["fully_paid_sponsors"]==0
     with Session(engine) as db:
         org_id=db.get(Prospect,uuid.UUID(person["id"])).organization_id
         credits=effective_credits(db,org_id,sponsor_id=uuid.UUID(person["id"]))
         assert len(credits)==1
-        assert credits[0].amount_paise==20000
+        assert credits[0].amount_paise==25000
     assert reverse(client,csrf,second["id"]).status_code==201
     assert client.get("/v1/accounting/overview").json()["verified_paise"]==0
 

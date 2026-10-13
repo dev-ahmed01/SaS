@@ -143,7 +143,7 @@ def test_retries_idempotent_duplicates_rejected_without_second_credit(system):
     repeated = client.post("/v1/collections", headers=csrf, json=original)
     assert repeated.status_code == 200
     assert client.post("/v1/collections", headers=csrf, json={
-        **original, "amount_paise": 70000,
+        **original, "amount_paise": 75000,
     }).status_code == 409
     assert client.post("/v1/collections", headers=csrf, json={
         **original, "request_id": str(uuid.uuid4()),
@@ -156,17 +156,17 @@ def test_retries_idempotent_duplicates_rejected_without_second_credit(system):
         assert db.scalar(select(func.count()).select_from(MessageOutbox)) == 1
 
 
-def test_missing_consent_suppresses_message_and_partial_payment_is_not_full(system):
+def test_missing_consent_suppresses_message_and_250_receipt_tracks_balance(system):
     client, engine = system
     csrf = login(client)
     p = sponsor(client, csrf, consent=False)
-    partial = {**sample(p["id"]), "amount_paise": 15000}
-    res = client.post("/v1/collections", headers=csrf, json=partial)
+    receipt = {**sample(p["id"]), "amount_paise": 25000}
+    res = client.post("/v1/collections", headers=csrf, json=receipt)
     assert res.status_code == 201, res.text
     assert res.json()["message_status"] == "suppressed"
     ledger = client.get("/v1/accounting/overview").json()
-    assert ledger["verified_paise"] == 15000
-    assert ledger["outstanding_paise"] == 35000
+    assert ledger["verified_paise"] == 25000
+    assert ledger["outstanding_paise"] == 25000
     assert ledger["fully_paid_sponsors"] == 0
     with Session(engine) as db:
         message = db.scalars(select(MessageOutbox)).one()
@@ -210,3 +210,27 @@ def test_payment_lists_and_does_not_expose_unmasked_reference(system):
     assert client.get("/v1/collections?period_month=2026-10-03").status_code == 422
     with Session(engine) as db:
         assert db.get(Prospect, uuid.UUID(p["id"])) is not None
+
+
+def test_contribution_denominations_reject_under_250_and_nonmultiples(system):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=True)
+    for invalid in (0, 1, 12500, 24999, 25001, 37500, 70000):
+        request = {
+            **sample(person["id"]),
+            "request_id": str(uuid.uuid4()),
+            "amount_paise": invalid,
+        }
+        result = client.post("/v1/collections", headers=csrf, json=request)
+        assert result.status_code == 422, (invalid, result.text)
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(ManualCollection)) == 0
+        assert db.scalar(select(func.count()).select_from(VerifiedCredit)) == 0
+        assert db.scalar(select(func.count()).select_from(MessageOutbox)) == 0
+
+    accepted = client.post("/v1/collections", headers=csrf, json={
+        **sample(person["id"]), "amount_paise": 25000,
+    })
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["amount_paise"] == 25000

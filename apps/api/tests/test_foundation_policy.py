@@ -1,4 +1,4 @@
-"""Foundation sign-off: positive receipt activity, ₹250 commitments, reversals."""
+"""Foundation-approved ₹250 denominations, activity lifecycle and reversals."""
 import uuid
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
@@ -24,7 +24,7 @@ def rate(start: date):
     return SimpleNamespace(effective_month=start, amount_paise=25000)
 
 
-def credit(period: date, recorded_at: datetime, amount: int = 12500):
+def credit(period: date, recorded_at: datetime, amount: int = 25000):
     return SimpleNamespace(
         period_month=period, verified_at=recorded_at, amount_paise=amount,
     )
@@ -35,11 +35,11 @@ def credit(period: date, recorded_at: datetime, amount: int = 12500):
     (37500, False), (50000, True), (75000, True),
     (1000000000, True), (1000025000, False),
 ])
-def test_commitment_tiers_do_not_constrain_partial_receipts(amount, valid):
+def test_approved_250_tiers_apply_to_incoming_contributions(amount, valid):
     assert valid_commitment(amount) is valid
 
 
-def test_two_completed_zero_receipt_months_and_partial_reactivation():
+def test_two_completed_zero_receipt_months_and_valid_reactivation():
     start = date(2026, 1, 1)
     person = sponsor(start)
     rates = [rate(start)]
@@ -48,8 +48,8 @@ def test_two_completed_zero_receipt_months_and_partial_reactivation():
     assert evaluate_status(
         person, rates, [january], date(2026, 4, 1), as_of,
     ) == "inactive"
-    # Any amount, regardless of whether the *billing* month is paid in full.
-    newly_recorded = credit(start, as_of, amount=100)
+    # A valid ₹250 receipt reactivates even when allocated to an older month.
+    newly_recorded = credit(start, as_of, amount=25000)
     assert evaluate_status(
         person, rates, [january, newly_recorded], date(2026, 4, 1), as_of,
     ) == "active"
@@ -73,7 +73,7 @@ def test_new_sponsor_needs_two_completed_enrollment_months():
     ) == "inactive"
     assert evaluate_status(
         person, rates, [
-            credit(date(2026, 9, 1), next_month, amount=1)
+            credit(date(2026, 9, 1), next_month, amount=25000)
         ], date(2026, 11, 1), next_month,
     ) == "active"
 
@@ -148,7 +148,7 @@ def test_new_org_defaults_to_250_and_rejects_non_tiers(policy_api):
         assert result.status_code == 422, result.text
 
 
-def test_partial_receipt_reactivates_and_full_reversal_deactivates(policy_api):
+def test_250_receipt_reactivates_and_full_reversal_deactivates(policy_api):
     client, engine, csrf = policy_api
     person = client.post("/v1/prospects", headers=csrf, json={
         "full_name": "Sponsor Synthetic",
@@ -175,7 +175,7 @@ def test_partial_receipt_reactivates_and_full_reversal_deactivates(policy_api):
         "prospect_id": profile["id"],
         "period_month": first.isoformat(),  # late allocation does not block activation
         "received_on": ist_today().isoformat(),
-        "amount_paise": 12500,
+        "amount_paise": 25000,
         "payment_method": "upi",
         "receipt_reference": "POLICYRECEIPT12345",
         "funds_confirmed": True,
