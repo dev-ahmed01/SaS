@@ -2,6 +2,7 @@
 
 import os
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -17,6 +18,8 @@ from app.models import (
     PromoterAssignment,
     Prospect,
     ProspectUpiIdentifier,
+    SponsorshipRate,
+    VerifiedCredit,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -205,6 +208,60 @@ def test_postgres_unique_current_sponsor_assignment_with_historical_rows() -> No
             organization_id=org.id, promoter_id=second.id,
             prospect_id=prospect.id,
         ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_effective_rate_requires_same_organization() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        home = Organization(name="Finance rate constraint A")
+        foreign = Organization(name="Finance rate constraint B")
+        db.add_all([home, foreign])
+        db.flush()
+        sponsor = Prospect(
+            organization_id=home.id, full_name="Synthetic Rate Sponsor",
+            mobile_number="+919311100100", area_city="Bengaluru",
+            monthly_contribution_paise=50000, start_month=date(2026, 10, 1),
+            whatsapp_opt_in=False, lifecycle_status="new", version=1,
+        )
+        db.add(sponsor)
+        db.flush()
+        db.add(SponsorshipRate(
+            organization_id=foreign.id, prospect_id=sponsor.id,
+            effective_month=date(2026, 10, 1), amount_paise=50000,
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_duplicate_verified_credit_evidence() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Verified evidence uniqueness")
+        db.add(org)
+        db.flush()
+        sponsor = Prospect(
+            organization_id=org.id, full_name="Synthetic Credit Sponsor",
+            mobile_number="+919311100101", area_city="Bengaluru",
+            monthly_contribution_paise=50000, start_month=date(2026, 10, 1),
+            whatsapp_opt_in=False, lifecycle_status="new", version=1,
+        )
+        db.add(sponsor)
+        db.flush()
+        for idx in range(2):
+            db.add(VerifiedCredit(
+                organization_id=org.id, prospect_id=sponsor.id,
+                period_month=date(2026, 10, 1), amount_paise=25000,
+                source_type="bank_reconciled", source_key="synthetic-bank-ref-dup",
+                verified_at=datetime(2026, 10, 5, 12, 0, tzinfo=UTC),
+            ))
+            if idx == 0:
+                db.flush()
         with pytest.raises(IntegrityError):
             db.flush()
         db.rollback()
