@@ -424,6 +424,7 @@ class MessageOutbox(Base):
             "organization_id", "collection_id", "event_type",
             name="uq_message_collection_event",
         ),
+        UniqueConstraint("organization_id", "id", name="uq_outbox_org_id"),
         CheckConstraint(
             "status IN ('awaiting_integration', 'suppressed')",
             name="ck_message_preintegration_status",
@@ -674,6 +675,7 @@ class ReminderIntent(Base):
             "organization_id", "kind", "promoter_id", "period_month",
             name="uq_reminder_once_promoter_month",
         ),
+        UniqueConstraint("organization_id", "id", name="uq_reminder_intent_org_id"),
         CheckConstraint(
             "kind IN ('sponsor', 'promoter')",
             name="ck_reminder_intent_kind",
@@ -711,6 +713,81 @@ class ReminderIntent(Base):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="prepared"
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MessageDispatch(Base):
+    """One durable external dispatch per source. No automatic retry on uncertainty."""
+
+    __tablename__ = "message_dispatches"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "outbox_id"],
+            ["message_outbox.organization_id", "message_outbox.id"],
+            ondelete="RESTRICT", name="fk_dispatch_outbox_org",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "reminder_intent_id"],
+            ["reminder_intents.organization_id", "reminder_intents.id"],
+            ondelete="RESTRICT", name="fk_dispatch_reminder_org",
+        ),
+        UniqueConstraint("organization_id", "id", name="uq_dispatch_org_id"),
+        UniqueConstraint("organization_id", "outbox_id", name="uq_dispatch_outbox"),
+        UniqueConstraint("organization_id", "reminder_intent_id",
+                         name="uq_dispatch_reminder"),
+        CheckConstraint(
+            "(outbox_id IS NOT NULL AND reminder_intent_id IS NULL) OR "
+            "(outbox_id IS NULL AND reminder_intent_id IS NOT NULL)",
+            name="ck_dispatch_exactly_one_source",
+        ),
+        CheckConstraint(
+            "status IN ('claimed', 'accepted', 'unknown', 'failed', "
+            "'cancelled', 'sent', 'delivered')",
+            name="ck_dispatch_status",
+        ),
+        Index("ix_dispatch_org_status", "organization_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    outbox_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    reminder_intent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    failure_code: Mapped[str | None] = mapped_column(String(32))
+    provider_message_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MessageDeliveryEvent(Base):
+    """Signed provider callback idempotency without recipient PII."""
+
+    __tablename__ = "message_delivery_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "dispatch_id"],
+            ["message_dispatches.organization_id", "message_dispatches.id"],
+            ondelete="RESTRICT", name="fk_delivery_event_dispatch_org",
+        ),
+        UniqueConstraint("organization_id", "event_id", name="uq_delivery_callback_event"),
+        CheckConstraint("status IN ('sent', 'delivered', 'failed')",
+                        name="ck_delivery_callback_state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    dispatch_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    provider_message_id: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
