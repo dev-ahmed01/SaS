@@ -18,6 +18,7 @@ import psycopg
 from psycopg import sql
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session
 
 from app.accounting import effective_credits
@@ -41,7 +42,7 @@ def validate_ci_scope(raw_url: str, env: str, opt_in: str):
     """Fail closed: never trust an arbitrary DATABASE_URL for a destructive drill."""
     try:
         url = make_url(raw_url)
-    except (ValueError, TypeError) as exc:
+    except (ArgumentError, ValueError, TypeError) as exc:
         raise ValueError("Explicit local CI connection required") from exc
     if not (
         env == "test" and opt_in == "1"
