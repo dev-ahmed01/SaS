@@ -70,7 +70,7 @@ test("desktop branding and landscape artwork have the right proportions",async (
   const sidebar=page.locator(".site-sidebar");
   const art=page.locator(".sidebar-art");
   await expect(art).toBeVisible();
-  await expect.poll(async()=>art.evaluate(el=>getComputedStyle(el).backgroundImage.includes("masjid-sidebar-premium.svg"))).toBe(true);
+  await expect.poll(async()=>art.evaluate(el=>getComputedStyle(el).backgroundImage.includes("sponsor-salah-panorama.avif"))).toBe(true);
   if(!isMobile){
     await expect.poll(async()=>sidebar.evaluate(el=>Math.round(el.getBoundingClientRect().width))).toBe(248);
     const metrics=await page.evaluate(()=>{
@@ -86,6 +86,21 @@ test("desktop branding and landscape artwork have the right proportions",async (
     expect(metrics.brand).toBeGreaterThan(metrics.heading);
     expect(metrics.scroll).toBe(true);
   }
+});
+
+test("login hero and sidebar decode the shared illustration on desktop and mobile",async ({page})=>{
+  await page.goto("/login");
+  const loginArt=page.locator(".login-mosque");
+  await expect(loginArt).toBeVisible();
+  const loaded=await page.evaluate(async()=>{
+    const scene=new Image();
+    scene.src="/art/sponsor-salah-panorama.avif";
+    await scene.decode();
+    return {width:scene.naturalWidth,height:scene.naturalHeight};
+  });
+  expect(loaded.width).toBeGreaterThanOrEqual(900);
+  expect(loaded.height).toBeGreaterThanOrEqual(600);
+  await expect.poll(async()=>loginArt.evaluate(el=>getComputedStyle(el).backgroundImage.includes("sponsor-salah-panorama.avif"))).toBe(true);
 });
 
 test("Admin profile menu closes with Escape and outside interaction",async ({page,isMobile})=>{
