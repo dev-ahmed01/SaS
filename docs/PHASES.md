@@ -1,0 +1,30 @@
+# Delivery and acceptance gates
+
+Work on feature branches. Each phase requires a PR, documented verification, tests for changed behavior, and a reviewer decision before merging. `main` is not a staging environment.
+
+| Phase | Scope | Acceptance |
+| --- | --- | --- |
+| 01 | Repo, API, typed configuration, initial DB migration, design tokens, CI | Health checks, schema tests and migration roundtrip pass |
+| 02 | Approved UI system and desktop navigation | Visual regression / accessibility checks |
+| 03 | Admin auth, provisioning, audited configurable settings | No unauthenticated access, no default passwords |
+| 04 | Prospects and optional UPI IDs | Create/search/edit/status tests |
+| 05 | Promoters and sponsor linking | Assigned-sponsor visibility and edit tests |
+| 06 | Monthly accounting in IST, inactivity/reactivation | IST activity, ₹250-tier contributions and reversal tests |
+| 07 | Admin manual collections and confirmation intent | Financial audit, deduplication and opt-in, no false delivery |
+| 08 | Collection corrections, review and financial safeguards | Audited reversals, controls, reporting and acceptance |
+| 09 | Recurring and one-time Payouts | No fake payment execution, financial audit |
+| 10 | Reminder eligibility engine and queue | No messages to inactive/paid sponsors |
+| 11 | Pabbly + WhatsApp payment confirmations and 5th/20th reminders | Await sender, opt-in, approved templates, signed callbacks and delivery tracking |
+| 12 | Dashboard from real records | Accurate reconciled totals |
+| 13 | Staging, UAT, monitoring, backups and production | Restore drill, QA and sign-off |
+
+## Phase 01 explicitly excluded
+
+No login that could be mistaken for real authentication; no Admin user seeds; no real donor records; no bank parsing, Pabbly or messaging credentials; no Dashboard financial KPIs. Early migrations contain only organizations, Admin users, organization settings and audit events. Later tables must arrive through separate reviewed migrations.
+
+## Open technical hardening before production
+
+- Keep GitHub Actions pinned to verified immutable commit SHAs and periodically review updates.
+- Keep the frontend `package-lock.json` current through reviewed dependency-update PRs.
+- Integrate secret scanning, dependency audit, lint/accessibility/browser tests, PostgreSQL integration tests and migrations drift check.
+- Introduce structured authorization tests, append-only audit protections, encrypted backups with restoration evidence, and incident/runbook documentation.

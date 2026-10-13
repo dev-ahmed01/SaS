@@ -1,0 +1,148 @@
+name: Sponsor a Salah CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'phase/**']
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sas_ci
+          POSTGRES_PASSWORD: sas_ci_ephemeral_password
+          POSTGRES_DB: sas_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sas_ci -d sas_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check .
+      - run: python -m pytest -q
+      - name: Migration smoke test
+        env:
+          APP_ENV: test
+          DATABASE_URL: sqlite+pysqlite:///./migration-smoke.sqlite
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+      - name: PostgreSQL migration and integrity verification
+        env:
+          APP_ENV: test
+          DATABASE_URL: postgresql+psycopg://sas_ci:sas_ci_ephemeral_password@localhost:5432/sas_ci
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+          python -m pytest -q tests/test_postgres_integration.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://sas_ci:sas_ci_ephemeral_password@localhost:5432/sas_ci
+      AUTH_SECRET: ci-only-ephemeral-secret-session-value-1234567890
+      UPI_MATCH_SECRET: ci-only-ephemeral-upi-match-key-long-enough-1234567890
+      API_INTERNAL_URL: http://127.0.0.1:8000
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sas_ci
+          POSTGRES_PASSWORD: sas_ci_ephemeral_password
+          POSTGRES_DB: sas_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sas_ci -d sas_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Install backend for browser integration
+        working-directory: apps/api
+        run: python -m pip install -r requirements-dev.txt
+      - name: Migrate test PostgreSQL
+        working-directory: apps/api
+        run: python -m alembic upgrade head
+      - name: Provision synthetic Admin for browser tests
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          from sqlalchemy.orm import Session
+          from app.bootstrap_admin import provision_admin
+          from app.db import get_engine
+          with Session(get_engine()) as db:
+              provision_admin(
+                  db,
+                  email="admin@foundation.org",
+                  password="integration-only-long-password-123",
+                  organization_name="CI Test Foundation", amount_paise=50000
+              )
+          PY
+      - name: Start API for browser integration
+        working-directory: apps/api
+        run: |
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/sas-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health/ready; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sas-api.log
+          exit 1
+      - name: Install browser testing tools (CI-only)
+        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser gateway origin routing
+        run: |
+          npm run start -- -p 3001 -H 127.0.0.1 > /tmp/sas-gateway-probe.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:3001/login >/dev/null; then break; fi
+            sleep 1
+          done
+          code=$(curl --silent --show-error --output /tmp/sas-invalid-login-body --write-out '%{http_code}' \
+            --header 'Content-Type: application/json' \
+            --header 'Origin: http://127.0.0.1:3001' \
+            --data '{"email":"nobody@samplemail.org","password":"wrong"}' \
+            http://127.0.0.1:3001/api/admin/login)
+          echo "Invalid-login gateway HTTP status: $code (expected 401)"
+          if [ "$code" != "401" ]; then cat /tmp/sas-invalid-login-body; exit 1; fi
+      - name: Fail-fast authenticated browser smoke
+        run: npx playwright test --grep "all seven approved modules"
+      - name: Run desktop and mobile browser tests
+        run: npx playwright test
