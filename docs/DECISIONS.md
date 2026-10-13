@@ -1,19 +1,19 @@
-# Confirmed business decisions and deferred integration dependencies
+# Confirmed Sponsor a Salah business decisions
 
-- **Currency:** INR. Default contribution ₹250, configurable by Admin; each sponsorship has an agreed amount. Extra money counts toward the current month only.
-- **Sponsor lifecycle:** Prospects may be registered without paying. Two complete consecutive IST calendar months with **no verified payment** make a previously-paying sponsor inactive; on verification of a later payment they reactivate. Inactive sponsors receive **no further automatic reminders**, including promoter follow-ups for that sponsor. A partial payment breaks a zero-payment streak but may leave an outstanding balance.
-- **Time:** `Asia/Kolkata` is authoritative for accounting and scheduled reminder days; UTC timestamps are retained in the database.
-- **Reminders:** On the 5th, remind only active sponsors who have not satisfied their current-month agreed amount; on the 20th send each linked promoter one consolidated message of active/unpaid assigned sponsors. Actual sending requires bank statement freshness checks and opt-in.
-- **Money received:** Existing UPI QR, **no payment gateway** in first release. Admin imports bank CSV/Excel, backend deduplicates credits and matches by reliable payer UPI IDs (multiple per sponsor if verified). Never match by ₹250 amount alone. Unmatched credits require Admin review. Confirmations are sent only after reliable matching.
-- **Admin:** One `Admin` role controls business settings and financial workflows for the first version. No separate Configuration Manager role. Production permissions are enforced server-side.
-- **Settings:** Business values are versioned and editable, while validations, reconciliation and access controls are tested code. No default user/password.
-- **Payouts:** Active means recurring monthly payout plans; one-time payouts remain distinct records, not failed payouts.
-- **Automation:** Pabbly orchestrates WhatsApp workflows via authenticated backend APIs; FastAPI/PostgreSQL are the financial source of truth.
+- Admin-only Foundation web app using the approved left sidebar and Bricolage Grotesque/Poppins green-white UI.
+- Currency INR, initial monthly contribution ₹500, configurable per sponsor and by Admin without changing historical dues.
+- Registration before first payment is allowed. Monthly accounting uses Asia/Kolkata.
+- A sponsor becomes Inactive after two consecutive missed complete months and does not receive scheduled reminders while Inactive. A payment can reactivate a sponsor. **Clarification required:** Phase 06 currently counts a full month's verified payment as the reactivation threshold; confirm whether partial payment should also count.
+- One current promoter per sponsor. Sponsor reminders are planned for the 5th (only eligible unpaid sponsors), consolidated promoter reminders for the 20th (one message per promoter).
+- **Latest Foundation direction:** Admin **manually enters** payments after checking actual receipt. Bank CSV/Excel statement importer and bank-specific reconciliation are deferred. Entries must include sponsor, amount, month, receipt date, payment method and a unique reference.
+- After entry, the system prepares a consent-checked **WhatsApp confirmation event** automatically. Actual delivery via Pabbly/WhatsApp Business is **not enabled** until sender, approved template, consent, secure authentication, deduplication, delivery callbacks, and retries are configured. Never claim sent/delivered without provider confirmation.
+- One Admin role manages financial records/settings. Payout Active means recurring; one-time payout remains separate.
+- Financial records remain in PostgreSQL, under audited FastAPI transaction controls, with a Next.js same-origin gateway. No hardcoded donation amounts.
 
-## External dependencies (explicit non-blockers for Phases 01–07)
+## Pending business and production inputs
 
-1. **Bank/statement:** The bank and export layout are unknown; obtain an anonymized sample containing UPI credit narration to implement the Phase-08 adapter.
-2. **WhatsApp:** Meta Business sender, approved templates, billing and opt-in have not been configured; required for Phase 11.
-3. **Payout categories:** Foundation to confirm expense/beneficiary categories before Phase 09.
-4. **Sponsor start month:** Foundation to confirm initial due month at activation before Phase 06 acceptance.
-5. **Late statement imports:** Define policy for suppressed reminders when available bank data is stale; default must fail closed (do not send).
+1. Proof standards for manually entered UPI/bank payments and numbered cash receipts.
+2. Approved corrections/reversals and potential second-person review for large amounts.
+3. Partial payment status/reactivation policy.
+4. WhatsApp Business/Pabbly setup, template approval and opt-in language.
+5. Payout categories, retention, backup drill, staging/UAT and production approval.
