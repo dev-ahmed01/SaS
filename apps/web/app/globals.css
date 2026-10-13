@@ -501,7 +501,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .data-table td {font-family:var(--font-body);font-size:12px;font-weight:400}
 .data-table th {font-family:var(--font-body);font-size:12px;font-weight:500}
 .dashboard-metric strong,.dashboard-facts dd,.accounting-metric strong {font-family:var(--font-body);font-weight:600}
-.module-tabs {align-items:center;gap:10px;overflow-x:auto;scrollbar-width:thin}
+.module-tabs {align-items:center;gap:10px;min-height:50px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .module-tab {min-width:125px}
 .login-illustration {
   background: #e9fbf0 url("/art/masjid-landscape.svg") no-repeat center bottom;
