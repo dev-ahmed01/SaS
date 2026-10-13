@@ -126,7 +126,7 @@ export function PromoterList({view}:{view:"active"|"all"}){
         </div>
         <PromoterEditor initial={editing} onCancel={()=>setEditing(null)}
           onSaved={()=>{setEditing(null);setRevision(n=>n+1);}}/>
-        <PromoterSponsors promoter={editing} onChanged={()=>setRevision(n=>n+1)}/>
+        <PromoterSponsors promoter={editing} onChanged={()=>{setEditing(null);setRevision(n=>n+1);}}/>
       </div>
     </div>}
   </section>;

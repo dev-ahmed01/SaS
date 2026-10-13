@@ -36,7 +36,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 
 /* The same sidebar and header are shared by every business module. */
 .app-frame { display:grid; grid-template-columns:230px minmax(0,1fr); min-height:100vh; }
-.site-sidebar { position:sticky; top:0; align-self:start; display:flex; flex-direction:column; min-height:100vh; height:100vh; padding:25px 13px 15px; border-right:1px solid var(--line); background:linear-gradient(169deg,#fff 0%,#f6fdf9 62%,#e7f6ed 100%); overflow:hidden; isolation:isolate; }
+.site-sidebar { position:sticky; top:0; align-self:start; display:flex; flex-direction:column; min-height:100vh; height:100vh; padding:25px 13px 15px; border-right:1px solid var(--line); background:linear-gradient(169deg,#fff 0%,#f6fdf9 62%,#e7f6ed 100%); overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; isolation:isolate; }
 .sidebar-head { display:flex; justify-content:space-between; align-items:center; gap:3px; min-height:45px; padding:0 7px; }
 .brand-link { display:flex; align-items:center; gap:9px; color:var(--forest-deep); min-width:0; }
 .brand-mark { flex:0 0 auto; display:inline-flex; }
@@ -176,8 +176,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 }
 @media(max-width:780px) {
   .app-frame, .sidebar-collapsed { display:block; }
-  .site-sidebar { z-index:110; position:fixed; left:0; top:0; width:min(300px,85vw); transform:translateX(-105%); transition:transform .18s; box-shadow:0 0 0 transparent; height:100dvh; min-height:0; }
-  .site-sidebar.mobile-open { transform:translateX(0); box-shadow:15px 0 40px rgba(0,0,0,.12); }
+  .site-sidebar { z-index:110; position:fixed; left:0; top:0; width:min(300px,85vw); transform:translateX(-105%); transition:transform .18s; box-shadow:0 0 0 transparent; height:100dvh; min-height:0; visibility:hidden; }
+  .site-sidebar.mobile-open { transform:translateX(0); box-shadow:15px 0 40px rgba(0,0,0,.12); visibility:visible; }
   .sidebar-collapsed .site-sidebar { padding:25px 13px 15px; }
   .sidebar-collapsed .brand-copy, .sidebar-collapsed .nav-label, .sidebar-collapsed .account-copy, .sidebar-collapsed .sidebar-art { display:flex; }
   .sidebar-collapsed .sidebar-nav { margin-top:35px; }
@@ -468,3 +468,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:1100px){.dashboard-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:750px){.dashboard-dual{grid-template-columns:1fr}.dashboard-panel{padding:15px}}
 @media(max-width:480px){.dashboard-metrics{grid-template-columns:1fr}.dashboard-trend-row{grid-template-columns:55px minmax(0,1fr) 76px;gap:6px}.dashboard-trend-row>strong{font-size:10px}}
+
+@media (max-height:650px) {
+  .site-sidebar .sidebar-art { display:none; }
+  .site-sidebar .sidebar-nav { margin-top:10px; }
+}

@@ -16,7 +16,7 @@ type Preview={
 };
 type Batch={
   id:string;kind:Kind;period_month:string;scheduled_on:string;
-  recipient_count:number;status:"prepared";delivered_count:0;
+  recipient_count:number;status:"prepared"|"partially_delivered"|"delivered";delivered_count:number;
 };
 type BatchPage={items:Batch[];total:number};
 const money=(value:number)=>(value/100).toLocaleString("en-IN",{
@@ -186,7 +186,13 @@ export function WhatsAppEligibility(){
         <td>{batch.period_month.slice(0,7)}</td>
         <td>{batch.kind==="sponsor"?"Sponsors":"Promoters"}</td>
         <td>{batch.recipient_count}</td>
-        <td><span className="status-pill scheduled">Prepared, not sent</span></td>
+        <td><span className={"status-pill "+(batch.status==="delivered"?"active":"scheduled")}>
+           {batch.status==="delivered"
+             ?"Delivered · "+batch.delivered_count+"/"+batch.recipient_count
+             :batch.status==="partially_delivered"
+               ?"Partially delivered · "+batch.delivered_count+"/"+batch.recipient_count
+               :"Prepared, not confirmed sent"}
+         </span></td>
       </tr>)}</tbody></table></div>
     </section>
   </div>;

@@ -22,7 +22,7 @@ type Overview = {
   notice:string;
 };
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{
-  style:"currency",currency:"INR",maximumFractionDigits:0,
+  style:"currency",currency:"INR",minimumFractionDigits:2,maximumFractionDigits:2,
 });
 const monthLabel=(value:string)=>new Intl.DateTimeFormat("en-IN",{
   month:"short",year:"numeric",timeZone:"UTC",
