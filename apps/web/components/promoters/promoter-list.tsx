@@ -124,9 +124,19 @@ export function PromoterList({view}:{view:"active"|"all"}){
           <span>Promoter details</span>
           <button type="button" className="icon-button" aria-label="Close edit" onClick={()=>setEditing(null)}><Icon name="close"/></button>
         </div>
-        <PromoterEditor initial={editing} onCancel={()=>setEditing(null)}
+        <PromoterEditor key={editing.id+":"+editing.version} initial={editing} onCancel={()=>setEditing(null)}
           onSaved={()=>{setEditing(null);setRevision(n=>n+1);}}/>
-        <PromoterSponsors promoter={editing} onChanged={()=>{setEditing(null);setRevision(n=>n+1);}}/>
+        <PromoterSponsors promoter={editing} onChanged={async()=>{
+           setRevision(n=>n+1);
+           try{
+             const response=await fetch("/api/admin/promoters/"+editing.id,{cache:"no-store"});
+             if(!response.ok)throw Error("refresh failed");
+             setEditing(await response.json() as Promoter);
+           }catch{
+             setEditing(null);
+             setError("Assignment saved. Reopen the promoter to refresh details.");
+           }
+         }}/>
       </div>
     </div>}
   </section>;
