@@ -431,6 +431,7 @@ def record_disbursement(
         recorded_by_admin_id=admin.id,
     )
     db.add(entry)
+    db.flush()
     db.add(AuditEvent(
         organization_id=admin.organization_id, actor_admin_id=admin.id,
         action="payout.disbursement_attested", entity_type="payout_payment",
