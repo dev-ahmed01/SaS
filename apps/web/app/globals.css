@@ -404,20 +404,19 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:530px) {.delivery-status {padding:13px;}
   .delivery-metrics {grid-template-columns:1fr 1fr;}}
 
-/* Phase 11 mobile regression: the submit action occupies an actual grid row,
-   avoiding overlap with earlier form labels during narrow-screen scrolling. */
-.manual-collections-workspace .form-actions.form-cell.full {
-  grid-column:1/-1;
-  justify-self:stretch;
-  margin-top:6px;
+/* Payment confirmation must be in a normal-flow footer outside the form grid.
+   The form fields never overlay the submission control on narrow devices. */
+.manual-collections-workspace form { min-width:0; }
+.manual-collections-workspace .manual-collections-submit {
+  display:flex;
+  justify-content:flex-end;
+  width:100%;
+  clear:both;
+  position:relative;
+  isolation:isolate;
+  margin-top:24px;
 }
-@media(max-width:780px) {
-  .manual-collections-workspace .form-grid { grid-template-columns:minmax(0,1fr); }
-  .manual-collections-workspace .form-actions { padding-bottom:8px; }
-}
-
-/* Mobile collection input must use intrinsic flow, not grid implicit tracks. */
-@media(max-width:780px) {
+@media (max-width:780px) {
   .manual-collections-workspace form > .form-grid {
     display:flex;
     flex-direction:column;
@@ -425,14 +424,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
     gap:17px;
   }
   .manual-collections-workspace form > .form-grid > * {
-    min-width:0;
-    width:100%;
-    flex:0 0 auto;
+    width:100%; min-width:0; flex:0 0 auto;
   }
-  .manual-collections-workspace form > .form-grid > .form-actions {
-    justify-content:flex-end;
-    margin-top:8px;
-    position:relative;
-    z-index:5;
-  }
+}
+@media (max-width:430px) {
+  .manual-collections-workspace .manual-collections-submit { display:block; }
+  .manual-collections-workspace .manual-collections-submit .btn { width:100%; }
 }
