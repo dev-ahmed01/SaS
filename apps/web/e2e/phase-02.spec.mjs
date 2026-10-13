@@ -318,6 +318,9 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   const save=page.getByRole("button",{name:"Save Collection"});
   await expect(save).toBeDisabled();
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  const amountBounds=await payment.boundingBox();
+  const submitBounds=await save.boundingBox();
+  expect(submitBounds.y).toBeGreaterThan(amountBounds.y+amountBounds.height);
   await save.click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
   await expect(page.getByText(/has not been sent/)).toBeVisible();

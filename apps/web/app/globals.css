@@ -414,3 +414,24 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .manual-collections-workspace .form-grid { grid-template-columns:minmax(0,1fr); }
   .manual-collections-workspace .form-actions { padding-bottom:8px; }
 }
+
+/* Mobile collection input must use intrinsic flow, not grid implicit tracks. */
+@media(max-width:780px) {
+  .manual-collections-workspace form > .form-grid {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:17px;
+  }
+  .manual-collections-workspace form > .form-grid > * {
+    min-width:0;
+    width:100%;
+    flex:0 0 auto;
+  }
+  .manual-collections-workspace form > .form-grid > .form-actions {
+    justify-content:flex-end;
+    margin-top:8px;
+    position:relative;
+    z-index:5;
+  }
+}
