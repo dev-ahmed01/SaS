@@ -1,6 +1,6 @@
 """Manual collection acceptance: financial attestation, consent and idempotency."""
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
