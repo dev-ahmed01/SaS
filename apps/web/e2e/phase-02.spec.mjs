@@ -306,6 +306,22 @@ test("Accounting rejects forged requests and never exposes payment write actions
   expect(unsupported.status()).toBe(404);
 });
 
+test("manual collection amount accepts only ₹250 denominations",async ({page})=>{
+  await page.goto("/collections");
+  const amount=page.getByRole("spinbutton",{name:"Amount received (₹)"});
+  await expect(amount).toHaveAttribute("min","250");
+  await expect(amount).toHaveAttribute("step","250");
+  for (const invalid of ["125","375","700"]) {
+    await amount.fill(invalid);
+    expect(await amount.evaluate(element=>element.checkValidity())).toBe(false);
+  }
+  for (const valid of ["250","500","750","1000"]) {
+    await amount.fill(valid);
+    expect(await amount.evaluate(element=>element.checkValidity())).toBe(true);
+  }
+  // No sponsor is selected: this is input validation only, never a real receipt.
+});
+
 test("Admin records a manual contribution without claiming WhatsApp delivery",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
   const name="Manual Pay Sponsor "+id;
