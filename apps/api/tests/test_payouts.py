@@ -333,3 +333,29 @@ def test_one_time_disbursement_cannot_predate_scheduled_day(system):
             paid_on=scheduled.isoformat(),
         ))
         assert accepted.status_code == 201, accepted.text
+
+
+def test_plan_paging_counts_current_active_plans_before_rendering(system):
+    client, _engine = system
+    csrf = login(client)
+    for i in range(7):
+        created = create(
+            client, csrf, "recurring",
+            payee_name=f"Synthetic Payee {i}",
+            request_id=str(uuid.uuid4()),
+        )
+        if i >= 4:
+            assert client.post(
+                "/v1/payouts/plans/" + created["id"] + "/status",
+                headers=csrf,
+                json={"request_id": str(uuid.uuid4()), "new_status": "paused"},
+            ).status_code == 201
+    active = client.get("/v1/payouts/plans?view=active&limit=2&offset=2")
+    assert active.status_code == 200, active.text
+    assert active.json()["total"] == 7
+    assert len(active.json()["items"]) == 2
+    assert all(x["cadence"] == "recurring" for x in active.json()["items"])
+    all_page = client.get("/v1/payouts/plans?view=all&limit=3&offset=6")
+    assert all_page.status_code == 200
+    assert all_page.json()["total"] == 7
+    assert len(all_page.json()["items"]) == 1

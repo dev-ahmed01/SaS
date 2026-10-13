@@ -237,7 +237,7 @@ def test_contribution_denominations_reject_under_250_and_nonmultiples(system):
 
 
 def test_exact_legacy_off_tier_request_replay_is_read_only(system):
-    from app.collections import CollectionInput, _payload_hash
+    from app.collections import CollectionInput, _legacy_payload_hash, _legacy_reference_hash
 
     client, engine = system
     csrf = login(client)
@@ -261,8 +261,9 @@ def test_exact_legacy_off_tier_request_replay_is_read_only(system):
         receipt = ManualCollection(
             organization_id=existing.organization_id, prospect_id=existing.id,
             verified_credit_id=proof.id, request_id=checked.request_id,
-            request_payload_hash=_payload_hash(checked),
-            reference_digest="a" * 64, reference_mask="****F001",
+            request_payload_hash=_legacy_payload_hash(checked),
+            reference_digest=_legacy_reference_hash(checked.receipt_reference),
+            reference_mask="****F001",
             received_on=checked.received_on, period_month=checked.period_month,
             payment_method=checked.payment_method, amount_paise=12500,
         )
@@ -288,6 +289,34 @@ def test_exact_legacy_off_tier_request_replay_is_read_only(system):
         **payload, "request_id": str(uuid.uuid4()),
     })
     assert fresh_invalid.status_code == 422, fresh_invalid.text
+    # Replaying the full legacy *reference* with a new id is also rejected.
+    ref_again = client.post("/v1/collections", headers=csrf, json={
+        **payload, "request_id": str(uuid.uuid4()), "amount_paise": 25000,
+    })
+    assert ref_again.status_code == 409, ref_again.text
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(ManualCollection)) == 1
         assert db.scalar(select(func.count()).select_from(VerifiedCredit)) == 1
+
+
+def test_new_collection_reference_and_request_fingerprints_are_keyed(system):
+    import hashlib
+
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=False)
+    payload = sample(person["id"])
+    recorded = client.post("/v1/collections", headers=csrf, json=payload)
+    assert recorded.status_code == 201, recorded.text
+    with Session(engine) as db:
+        row = db.scalars(select(ManualCollection)).one()
+        assert row.reference_digest != hashlib.sha256(
+            payload["receipt_reference"].encode()
+        ).hexdigest()
+        assert len(row.reference_digest) == len(row.request_payload_hash) == 64
+        assert row.request_payload_hash != hashlib.sha256(
+            __import__("json").dumps({
+                key: value for key, value in payload.items() if key != "request_id"
+            }, sort_keys=True).encode()
+        ).hexdigest()
+    assert client.post("/v1/collections", headers=csrf, json=payload).status_code == 200

@@ -181,6 +181,11 @@ def test_consent_gated_outbox_provider_acceptance_and_signed_receipt(
     status=client.get("/v1/messaging/status").json()
     assert status["accepted_by_provider"]==1
     assert status["delivered_confirmed"]==0
+    # Accepted is neither awaiting first dispatch nor actually delivered.
+    assert status["awaiting_confirmation_intents"]==0
+    assert client.get("/v1/dashboard/overview").json()[
+        "acknowledgments_awaiting_setup"
+    ] == 0
     with Session(engine) as db:
         record=db.scalars(select(MessageDispatch)).one()
         identifier=str(record.id)

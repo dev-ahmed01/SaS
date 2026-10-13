@@ -16,6 +16,7 @@ from app.models import (
     AdminUser,
     AuditEvent,
     Base,
+    MessageDispatch,
     MessageOutbox,
     Organization,
     OrganizationSettings,
@@ -496,3 +497,38 @@ def test_exact_reminder_request_replay_after_ist_midnight(system, monkeypatch):
     assert prepare(client, csrf, "sponsor").status_code == 409
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(ReminderBatch)) == 1
+
+
+def test_reminder_history_reflects_confirmed_deliveries(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    set_today(monkeypatch, OCT_5)
+    sponsor(client, csrf, 218)
+    sponsor(client, csrf, 219)
+    result = prepare(client, csrf, "sponsor")
+    assert result.status_code == 201, result.text
+    assert result.json()["recipient_count"] == 2
+    assert result.json()["status"] == "prepared"
+    with Session(engine) as db:
+        first, second = db.scalars(
+            select(ReminderIntent).order_by(ReminderIntent.prospect_id)
+        ).all()
+        db.add(MessageDispatch(
+            organization_id=first.organization_id,
+            reminder_intent_id=first.id, status="delivered",
+            category="sponsor_reminder",
+        ))
+        db.commit()
+    partial = client.get("/v1/reminders/batches").json()["items"][0]
+    assert partial["status"] == "partially_delivered"
+    assert partial["delivered_count"] == 1
+    with Session(engine) as db:
+        db.add(MessageDispatch(
+            organization_id=second.organization_id,
+            reminder_intent_id=second.id, status="delivered",
+            category="sponsor_reminder",
+        ))
+        db.commit()
+    done = client.get("/v1/reminders/batches").json()["items"][0]
+    assert done["status"] == "delivered"
+    assert done["delivered_count"] == 2
