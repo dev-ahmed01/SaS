@@ -207,7 +207,9 @@ def add_collection(
         ("consent_missing" if not sponsor.whatsapp_opt_in else "recipient_missing"),
     ))
     before = sponsor.lifecycle_status
-    credits = effective_credits(db, admin.organization_id, sponsor_id=sponsor.id)
+    credits = effective_credits(
+        db, admin.organization_id, sponsor_id=sponsor.id, as_of=now,
+    )
     after = evaluate_status(
         sponsor, rates, credits, today, now, settings.inactivity_months,
     )
@@ -385,8 +387,10 @@ def reverse_collection(
         SponsorshipRate.organization_id == admin.organization_id,
         SponsorshipRate.prospect_id == receipt.prospect_id,
     )).all())
-    credits = effective_credits(db, admin.organization_id, sponsor_id=receipt.prospect_id)
     now = utc_now()
+    credits = effective_credits(
+        db, admin.organization_id, sponsor_id=receipt.prospect_id, as_of=now,
+    )
     before_status = sponsor.lifecycle_status
     latest = max((as_utc(row.verified_at) for row in credits), default=None)
     changed_receipt = (
