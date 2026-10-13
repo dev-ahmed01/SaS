@@ -147,6 +147,9 @@ def test_retries_idempotent_duplicates_rejected_without_second_credit(system):
     assert client.post("/v1/collections", headers=csrf, json={
         **original, "request_id": str(uuid.uuid4()),
     }).status_code == 409
+    assert client.post("/v1/collections", headers=csrf, json={
+        **original, "request_id": str(uuid.uuid4()), "payment_method": "bank_transfer",
+    }).status_code == 409
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(VerifiedCredit)) == 1
         assert db.scalar(select(func.count()).select_from(MessageOutbox)) == 1

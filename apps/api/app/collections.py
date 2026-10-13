@@ -84,8 +84,9 @@ def _payload_hash(payload: CollectionInput) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
 
 
-def _reference_hash(method: str, ref: str) -> str:
-    return hashlib.sha256((method + ":" + ref).encode()).hexdigest()
+def _reference_hash(ref: str) -> str:
+    # Prevent recording one transaction twice by relabeling its payment method.
+    return hashlib.sha256(ref.encode()).hexdigest()
 
 
 def _view(db: Session, row: ManualCollection) -> CollectionOutput:
@@ -151,7 +152,7 @@ def add_collection(
     )).all()
     if not any(rate.effective_month <= payload.period_month for rate in rates):
         raise HTTPException(status_code=409, detail="Contribution agreement missing")
-    digest = _reference_hash(payload.payment_method, payload.receipt_reference)
+    digest = _reference_hash(payload.receipt_reference)
     if db.scalars(select(ManualCollection.id).where(
         ManualCollection.organization_id == admin.organization_id,
         ManualCollection.reference_digest == digest,
