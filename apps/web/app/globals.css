@@ -265,3 +265,16 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .modal-scrim { padding:12px; }
   .upi-input-row { align-items:stretch; flex-direction:column; }
 }
+
+/* Phase 05: Promoters detail and sponsor assignment within the approved shell. */
+.promoter-assignments { margin:20px 28px 4px; padding-top:22px; border-top:1px solid var(--line); }
+.promoter-assignments h3 { margin:0 0 8px; font-size:17px; }
+.promoter-assignments .panel-description { margin:0 0 16px; }
+.promoter-sponsor-row { display:flex; justify-content:space-between; align-items:center; gap:15px; padding:10px 2px; border-bottom:1px solid var(--line); font-size:12px; }
+.promoter-sponsor-row div { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.promoter-sponsor-row span { color:var(--muted); font-size:10px; }
+.promoter-sponsor-row .btn { min-height:32px; padding:5px 13px; font-size:10px; }
+.promoter-assign-search { margin-top:25px; }
+.promoter-assign-search .field { max-width:420px; }
+.promoter-candidate-list { margin-top:9px; }
+@media(max-width:780px) { .promoter-assignments { margin:18px 16px; } }

@@ -4,6 +4,7 @@ import { EmptyTable, ModuleTabs, PageHeading, Panel, PhaseNotice, PreviewButton,
 import { Icon } from "./ui/icon";
 import { AdminSettingsForm } from "./admin-settings-form";
 import { ProspectsWorkspace } from "./prospects/prospects-workspace";
+import { PromotersWorkspace } from "./promoters/promoters-workspace";
 
 type Field = {label:string; placeholder:string; required?:boolean; kind?:"text"|"date"|"number"|"tel"|"email"|"select"|"textarea"};
 type Module = "prospects" | "promoters" | "collections" | "payouts";
@@ -103,6 +104,7 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="settings"&&view==="add") return <Settings/>;
   if(module==="reminders") return <Reminders view={view}/>;
   if(module==="prospects" && ["add","inactive","all"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"all"}/>;
+  if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;
 }
