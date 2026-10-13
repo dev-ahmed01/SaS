@@ -260,6 +260,7 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   const name="Ledger Candidate "+(Date.now()%1000000);
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  const agreed=Number(await page.getByRole("spinbutton",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -269,7 +270,10 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   await expect(page.getByText("Verified collections")).toBeVisible();
   const row=page.getByRole("row",{name:new RegExp(name)});
   await expect(row).toBeVisible();
-  await expect(row.getByText("₹500.00")).toBeVisible();
+  const amount=agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+  await expect(row.getByRole("cell").nth(1)).toContainText(amount);
+  await expect(row.getByRole("cell").nth(2)).toContainText("0.00");
+  await expect(row.getByRole("cell").nth(3)).toContainText(amount);
   await expect(row.getByText("New",{exact:true})).toBeVisible();
   await expect(row.getByText("No",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Refresh sponsor statuses"}).click();
