@@ -1,5 +1,6 @@
 """Admin attestation of received funds, not automated bank verification."""
 import hashlib
+import hmac
 import json
 import re
 import uuid
@@ -12,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import auth as auth_module
 from app.accounting import effective_credits, evaluate_status, ist_today, month_start
 from app.auth import db_session, get_admin, require_csrf
 from app.models import (
@@ -87,14 +89,34 @@ class CollectionPage(BaseModel):
     offset: int
 
 
-def _payload_hash(payload: CollectionInput) -> str:
+def _fingerprint(domain: bytes, raw: bytes) -> str:
+    """Domain-separated secret-keyed receipt fingerprints."""
+    secret = auth_module.get_settings().auth_secret
+    if not secret or len(secret) < 32:
+        raise HTTPException(status_code=503, detail="Receipt fingerprint key unavailable")
+    return hmac.new(secret.encode("utf-8"), domain + raw, hashlib.sha256).hexdigest()
+
+
+def _payload_bytes(payload: CollectionInput) -> bytes:
     body = payload.model_dump(mode="json", exclude={"request_id"})
-    return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+    return json.dumps(body, sort_keys=True).encode("utf-8")
+
+
+def _payload_hash(payload: CollectionInput) -> str:
+    return _fingerprint(b"sas:manual-receipt-request:v2:", _payload_bytes(payload))
+
+
+def _legacy_payload_hash(payload: CollectionInput) -> str:
+    # Only compare against older immutable entries. Never write this new.
+    return hashlib.sha256(_payload_bytes(payload)).hexdigest()
 
 
 def _reference_hash(ref: str) -> str:
-    # Prevent recording one transaction twice by relabeling its payment method.
-    return hashlib.sha256(ref.encode()).hexdigest()
+    return _fingerprint(b"sas:manual-receipt-ref:v2:", ref.encode("utf-8"))
+
+
+def _legacy_reference_hash(ref: str) -> str:
+    return hashlib.sha256(ref.encode("utf-8")).hexdigest()
 
 
 def _view(db: Session, row: ManualCollection) -> CollectionOutput:
@@ -143,7 +165,7 @@ def add_collection(
         ManualCollection.request_id == payload.request_id,
     )).one_or_none()
     if old is not None:
-        if old.request_payload_hash != payload_hash:
+        if old.request_payload_hash not in (payload_hash, _legacy_payload_hash(payload)):
             raise HTTPException(status_code=409, detail="Request ID used for different payment")
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
@@ -180,7 +202,9 @@ def add_collection(
     digest = _reference_hash(payload.receipt_reference)
     if db.scalars(select(ManualCollection.id).where(
         ManualCollection.organization_id == admin.organization_id,
-        ManualCollection.reference_digest == digest,
+        ManualCollection.reference_digest.in_(
+            (digest, _legacy_reference_hash(payload.receipt_reference))
+        ),
     )).first() is not None:
         raise HTTPException(status_code=409, detail="Receipt or transaction already recorded")
     now = utc_now()

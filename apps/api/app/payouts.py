@@ -315,16 +315,31 @@ def list_plans(
         period = today
     if period < shift_month(today, -35) or period > shift_month(today, 12):
         raise HTTPException(status_code=422, detail="Selected month is out of range")
-    plans = db.scalars(select(PayoutPlan).where(
-        PayoutPlan.organization_id == admin.organization_id
-    ).order_by(PayoutPlan.created_at.desc(), PayoutPlan.id.desc())).all()
-    rows = [_render_plan(db, plan, period) for plan in plans]
+    clauses = [PayoutPlan.organization_id == admin.organization_id]
     if view == "active":
-        rows = [item for item in rows if item.cadence == "recurring" and item.status == "active"]
+        # Match _render_plan's *current* status, independent of selected month.
+        latest_state = (
+            select(PayoutPlanTerm.status).where(
+                PayoutPlanTerm.organization_id == admin.organization_id,
+                PayoutPlanTerm.plan_id == PayoutPlan.id,
+                PayoutPlanTerm.effective_month <= today,
+            )
+            .order_by(PayoutPlanTerm.effective_month.desc())
+            .limit(1)
+            .correlate(PayoutPlan)
+            .scalar_subquery()
+        )
+        clauses.extend((PayoutPlan.cadence == "recurring", latest_state == "active"))
+    total = db.scalar(select(func.count(PayoutPlan.id)).where(*clauses)) or 0
+    plans = db.scalars(
+        select(PayoutPlan).where(*clauses)
+        .order_by(PayoutPlan.created_at.desc(), PayoutPlan.id.desc())
+        .limit(limit).offset(offset)
+    ).all()
+    rows = [_render_plan(db, plan, period) for plan in plans]
     response.headers["Cache-Control"] = "no-store"
     return PlanPage(
-        items=rows[offset:offset + limit], total=len(rows),
-        limit=limit, offset=offset, period_month=period,
+        items=rows, total=total, limit=limit, offset=offset, period_month=period,
     )
 
 
