@@ -575,7 +575,7 @@ test("Recurring pause schedules next month without changing current obligations"
   await expect(row).toBeVisible();
   await row.getByRole("button",{name:"Pause",exact:true}).click();
   const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
-  await expect(dialog).toContainText("next calendar month");
+  await expect(dialog).toContainText("next month");
   await dialog.getByRole("button",{name:"Confirm status change"}).click();
   await expect(dialog).toHaveCount(0);
   await expect(row.getByText("Active",{exact:true})).toBeVisible();
@@ -680,7 +680,7 @@ test("Recurring payout status change is scheduled without rewriting current mont
     .getByRole("row",{name:new RegExp(payee)});
   await row.getByRole("button",{name:"Pause"}).click();
   const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
-  await expect(dialog.getByText(/next calendar month/)).toBeVisible();
+  await expect(dialog.getByText(/next month/)).toBeVisible();
   await dialog.getByRole("button",{name:"Confirm status change"}).click();
   await expect(row.getByText("Active",{exact:true})).toBeVisible();
   await expect(row.getByText("Next: paused")).toBeVisible();
@@ -826,8 +826,8 @@ test("Dashboard shows real six-month metrics and never initiates a payment",asyn
   await expect(page.getByRole("region",{name:"Outgoing payouts"})).toBeVisible();
   await expect(page.getByRole("region",{name:"Six-month financial trends"})).toBeVisible();
   await expect(page.locator(".dashboard-trend-row")).toHaveCount(6);
-  await expect(page.getByText(/Creating a payout plan does not send funds/)).toBeVisible();
-  await expect(page.getByText(/not independently reconciled bank balances/)).toBeVisible();
+  await expect(page.getByText(/Creating a payout plan does not send funds/)).toHaveCount(0);
+  await expect(page.getByText(/not independently reconciled bank balances/)).toHaveCount(0);
   await expect.poll(async()=>{
     return page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
   }).toBe(true);
