@@ -27,7 +27,6 @@ from app.models import (
     PayoutPlan,
     PayoutPlanTerm,
 )
-from app.security import utc_now
 
 router = APIRouter(prefix="/v1/payouts", tags=["Admin payouts"])
 REFERENCE = re.compile(r"^[A-Z0-9][A-Z0-9._:/-]{5,99}$")
