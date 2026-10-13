@@ -2,7 +2,7 @@
 
 ## Source integration
 
-This candidate integrates the existing 13-phase Admin-only Emlen Foundation / Sponsor a Salah system from stacked GitHub phase commits. **It does not authorize production deployment.**
+PR #17 integrated the existing 13-phase Admin-only Emlen Foundation / Sponsor a Salah system from stacked GitHub phase commits. **It does not authorize production deployment.**
 
 The ancestry is `main` → `phase/01-foundation` → `phase/02-design-system` → `phase/03-admin-auth-settings` → `phase/04-prospects` → `phase/05-promoters` → `phase/06-monthly-accounting` → `phase/07-manual-collections` → `phase/08-financial-corrections` → `phase/09-payouts-management` → `phase/10-reminder-eligibility` → `phase/11-whatsapp-transport` → `phase/12-live-dashboard` → `phase/13-release-hardening` → `phase/13-foundation-policy` → `phase/13-strict-contribution-tiers` → `integration/13-review-gates`.
 
@@ -11,7 +11,7 @@ Phase 9 alternative `phase/09-payouts` diverges from the canonical implementatio
 ## Verified code acceptance
 
 - Prior full review-gate GitHub Actions run: [38412587627](https://github.com/dev-ahmed01/SaS/actions/runs/38412587627) — 125 backend tests passed (23 skipped), 23 PostgreSQL integration tests passed, Ruff clean, Next.js build/typecheck passed, 69 authenticated Playwright tests passed (1 skipped), migration 0013 head verified.
-- Retargeting the review-gate PR onto `main` requires a **fresh main-base CI result** before merge. Record that run URL in the PR; do not claim it passed in advance.
+- Integration PR #17 was merged into `main` as `e48b3155e4e7bbda65e00f2df07d13cb251b74fe` on 13 October 2026. [Fresh pre-merge `main`-base CI](https://github.com/dev-ahmed01/SaS/actions/runs/38413509903) and [post-merge `main` CI](https://github.com/dev-ahmed01/SaS/actions/runs/38414100426) passed both jobs.
 - The original review threads in phase PRs are retained as audit context. Later fixes address the identified issues in this final candidate; a green test does not replace independent approval.
 
 ## Final Foundation policy
