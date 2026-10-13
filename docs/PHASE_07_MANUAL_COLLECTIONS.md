@@ -14,8 +14,8 @@ The confirmation must say "The Foundation has recorded your contribution of ₹X
 
 ## Controls and APIs
 
-- `POST /v1/collections` is Admin session + CSRF only. A valid idempotency `request_id` prevents double credit from retries. A unique method/reference digest prevents different requests double-counting the same transaction. Never store or return the full reference.
-- `GET /v1/collections` is paginated and organization-scoped. Entries are **immutable**; correcting an error requires a future audited reversal workflow, never a silent edit.
+- `POST /v1/collections` is Admin session + CSRF only. A valid idempotency `request_id` prevents double credit from retries. A unique normalized reference digest prevents different requests double-counting the same transaction even if its payment method is relabeled. Never store or return the full reference.
+- `GET /v1/collections` is paginated and organization-scoped. Entries are **immutable**; Phase 08 adds append-only audited full reversals for incorrectly recorded collections, never a silent edit.
 - `verified_credits.source_type = manual_attested`, not `bank_reconciled`. All amounts are integer paise.
 - `message_outbox` has one `collection_recorded` intent per collection, with `awaiting_integration` or `suppressed`. **No provider request is sent in this phase.**
 - The same-origin Next.js gateway allowlists only GET and POST, with JSON, CSRF forwarding and origin restrictions.

@@ -13,7 +13,7 @@
 
 - `prospects.start_month`: enrollment month, first calendar day in IST. Legacy records backfill from their actual recorded registration time. New signups set this immediately.
 - `sponsorship_rates`: effective-month agreement schedule. A new signup receives a starting rate. Subsequent Admin changes to a sponsor's amount take effect **next month**, leaving current and historical rates untouched. Revisions to the same future month's plan replace that yet-to-start rate; changes are audited through Prospects.
-- `verified_credits`: immutable evidence-backed amounts, with unique organization-scoped source references, positive integer paise, calendar month, explicit source, and tenant-safe composite foreign keys. **No API can insert these yet.** The importer/reconciliation in Phase 07–08 will implement strict evidence, duplication and correction workflows.
+- `verified_credits`: immutable evidence-backed amounts, with unique organization-scoped source references, positive integer paise, calendar month, explicit source, and tenant-safe composite foreign keys. Phase 07 added Admin-attested manual collection records; Phase 08 introduces audited full reversal of an incorrect manual entry. Bank import is deferred.
 - `lifecycle_status`: a materialized read-model cache, not payment evidence. The deterministic policy is evaluated live for the accounting screen. Admin's **Refresh sponsor statuses** copies current evaluated values to the Prospects list, with audit history. Future Phase 10 scheduling performs this automatically and performs all reminder eligibility checks directly against ledger state, not stale caches.
 
 ## Financial semantics
@@ -31,16 +31,16 @@ Archiving a sponsor stops new recurring dues after the archive month while retai
 
 ## Screens and API
 
-The locked Collections tabs stay **Add / Active / All**. The **All** tab now contains the first real monthly ledger: date selector, monthly dues, verified funds, outstanding total and per-sponsor status. **Add** and **Active** still have deliberately disabled Phase 08 preview actions; no fake collection capture.
+The locked Collections tabs stay **Add / Active / All**. The **All** tab now contains the first real monthly ledger: date selector, monthly dues, verified funds, outstanding total and per-sponsor status. **Add** is implemented for Admin-attested manual collection records in Phase 07, and **Active** remains a later-release screen.
 
 - `GET /v1/accounting/overview?month=YYYY-MM&offset=0&limit=20`: organization-scoped, bounded last 36 months, no mutation. Admin session required.
 - `POST /v1/accounting/refresh-statuses`: Admin, CSRF and same-origin required; audit only genuine status transitions, idempotent at constant evidence.
-- No endpoint for writing payments, credit allocations or backdating accounts.
+- Phase 07 introduced the Admin-attested manual collection endpoint; Phase 08 introduces an audited reversal endpoint. Neither verifies a bank statement.
 
 ## Delivery and pending decisions
 
 Test matrix includes midnight IST boundary, leap months, first enrollment, two missed months, partial/full installments, activation/reactivation, absent evidence, future-effective rate updates, tenant isolation and PostgreSQL uniqueness. GitHub CI covers migrations, lint, tests, web build and desktop/mobile E2E.
 
-Phase 07 bank-neutral importer and Phase 08 bank reconciliation cannot be finalized until Emlen confirms the bank and statement format. Phase 10 adds scheduled status refresh and payment eligibility; Phase 11 connects Pabbly with WhatsApp Business after explicit opt-in and template approval.
+The Foundation chose manual entry in Phase 07 and audited corrections in Phase 08; the statement importer is deferred. Phase 10 adds scheduled status refresh and payment eligibility; Phase 11 connects Pabbly with WhatsApp Business after explicit opt-in and template approval.
 
 **Operational warning:** Phase 06 is a financial *obligation and status engine*, not a payment collection or verified bank-integration release. Do not use its simulated fixtures as financial evidence or deploy to production without backup/security acceptance.
