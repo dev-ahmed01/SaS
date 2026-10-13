@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -22,9 +22,18 @@ from app.accounting import ist_today, month_start
 from app.auth import db_session, get_admin
 from app.config import get_settings
 from app.models import (
-    AdminSession, AdminUser, AuditEvent, ManualCollection,
-    ManualCollectionReversal, MessageDeliveryEvent, MessageDispatch,
-    MessageOutbox, OrganizationSettings, Promoter, Prospect, ReminderIntent,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    ManualCollection,
+    ManualCollectionReversal,
+    MessageDeliveryEvent,
+    MessageDispatch,
+    MessageOutbox,
+    OrganizationSettings,
+    Promoter,
+    Prospect,
+    ReminderIntent,
 )
 from app.reminders import _build_preview, _settings, current_intent_eligible
 from app.security import as_utc, utc_now
@@ -217,8 +226,12 @@ def _first_candidate(db: Session, after: datetime, now: datetime):
     attempted_outbox=select(MessageDispatch.outbox_id).where(
         MessageDispatch.outbox_id.is_not(None)
     )
+    enabled_orgs=select(OrganizationSettings.organization_id).where(
+        OrganizationSettings.automation_enabled.is_(True)
+    )
     collection=db.scalars(select(MessageOutbox).where(
         MessageOutbox.status=="awaiting_integration",
+        MessageOutbox.organization_id.in_(enabled_orgs),
         MessageOutbox.created_at>=after,
         MessageOutbox.id.not_in(attempted_outbox),
     ).order_by(MessageOutbox.created_at,MessageOutbox.id).limit(1)).first()
@@ -229,6 +242,7 @@ def _first_candidate(db: Session, after: datetime, now: datetime):
     )
     reminder=db.scalars(select(ReminderIntent).where(
         ReminderIntent.status=="prepared",
+        ReminderIntent.organization_id.in_(enabled_orgs),
         ReminderIntent.created_at>=after,
         ReminderIntent.period_month==month_start(ist_today(now)),
         ReminderIntent.scheduled_on==ist_today(now),
@@ -368,9 +382,8 @@ async def callback(
     ))
     if duplicate is not None:
         return {"status":"already_recorded"}
-    if record.status in ("cancelled","unknown","failed"):
-        # Unknown/failed is not a safe basis for trusting an unrelated webhook.
-        raise HTTPException(status_code=409,detail="Dispatch is not callback-eligible")
+    if record.status=="cancelled":
+        raise HTTPException(status_code=409,detail="Cancelled dispatch cannot receive a callback")
     if record.provider_message_id and record.provider_message_id!=payload.provider_message_id:
         raise HTTPException(status_code=409,detail="Provider message ID mismatch")
     if record.status=="delivered" and payload.status!="delivered":
