@@ -294,6 +294,12 @@ def test_automation_enable_is_separate_audited_fail_closed_admin_action(
 
     client, engine = environment
     csrf = sign_in(client)
+    monkeypatch.setattr("app.admin_settings.get_settings", lambda: SimpleNamespace(
+        app_env="test",
+        messaging_delivery_enabled=False,
+        messaging_sender_approved=False,
+        messaging_enable_after=None,
+    ))
     url = "/v1/settings/automation"
     enable = {"enabled": True, "confirmation": "ENABLE WHATSAPP"}
     assert client.post(url, json=enable).status_code == 403
