@@ -28,7 +28,7 @@ from app.models import (
     VerifiedCredit,
 )
 from app.security import as_utc, utc_now
-from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE
+from app.sponsorship_policy import valid_contribution
 
 router = APIRouter(prefix="/v1/collections", tags=["Manual collections"])
 REFERENCE = re.compile(r"^[A-Z0-9][A-Z0-9._:/-]{5,99}$")
@@ -40,11 +40,7 @@ class CollectionInput(BaseModel):
     prospect_id: uuid.UUID
     period_month: date
     received_on: date
-    amount_paise: int = Field(
-        ge=SPONSORSHIP_STEP_PAISE,
-        le=1_000_000_000,
-        multiple_of=SPONSORSHIP_STEP_PAISE,
-    )
+    amount_paise: int = Field(ge=1, le=1_000_000_000)
     payment_method: Literal["upi", "bank_transfer", "cash"]
     receipt_reference: str = Field(min_length=6, max_length=100)
     funds_confirmed: Literal[True]
@@ -153,6 +149,12 @@ def add_collection(
         response.headers["Cache-Control"] = "no-store"
         return _view(db, old)
 
+    # Exact replays of historical off-tier receipts are read-only.
+    if not valid_contribution(payload.amount_paise):
+        raise HTTPException(
+            status_code=422,
+            detail="New contributions must be ₹250 or an exact multiple of ₹250",
+        )
     today = ist_today()
     if payload.received_on > today or payload.period_month > month_start(today):
         raise HTTPException(status_code=422, detail="Cannot record a future payment")

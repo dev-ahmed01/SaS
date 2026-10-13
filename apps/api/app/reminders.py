@@ -297,22 +297,23 @@ def prepare(
     now = utc_now()
     today = ist_today(now)
     scheduled = _schedule(settings, payload.kind, today)
-    # No catch-up batch on other days; prevents backdated mass notifications.
-    if today != scheduled:
-        raise HTTPException(
-            status_code=409,
-            detail="Reminder preparation is only allowed on the configured IST reminder day",
-        )
+    # Existing request retries are safe across the midnight IST boundary.
     existing = database.scalars(select(ReminderBatch).where(
         ReminderBatch.organization_id == admin.organization_id,
         ReminderBatch.request_id == payload.request_id,
     )).one_or_none()
     if existing is not None:
-        if existing.kind != payload.kind or existing.period_month != month_start(today):
+        if existing.kind != payload.kind:
             raise HTTPException(status_code=409, detail="Request ID belongs to another batch")
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
         return _batch_read(existing)
+    # Only *new* batches are subject to the no-catch-up configured-day gate.
+    if today != scheduled:
+        raise HTTPException(
+            status_code=409,
+            detail="Reminder preparation is only allowed on the configured IST reminder day",
+        )
     if database.scalars(select(ReminderBatch.id).where(
         ReminderBatch.organization_id == admin.organization_id,
         ReminderBatch.kind == payload.kind,

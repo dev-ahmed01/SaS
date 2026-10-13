@@ -373,18 +373,25 @@ def create_prospect(
     # The fingerprint may include a sensitive VPA. Key it so a database copy
     # cannot be used as an offline dictionary oracle for those identifiers.
     # A distinct domain prevents correlation with the separately keyed VPA index.
-    fingerprint_secret = get_settings().upi_match_secret
-    if not fingerprint_secret or len(fingerprint_secret) < 32:
-        raise HTTPException(status_code=503, detail="Registration HMAC is not configured")
-    canonical = json.dumps(
-        payload.model_dump(mode="json", exclude={"request_id"}),
-        sort_keys=True, ensure_ascii=True,
-    ).encode("utf-8")
-    payload_hash = hmac.new(
-        fingerprint_secret.encode("utf-8"),
-        b"sas:prospect-registration:v2:" + canonical,
-        hashlib.sha256,
-    ).hexdigest()
+    payload_hash = None
+    if payload.request_id is not None:
+        cfg = get_settings()
+        # UPI requests require their dedicated key. Ordinary request IDs can
+        # use the authenticated application's stable secret instead.
+        fingerprint_secret = getattr(cfg, "upi_match_secret", None) or (
+            getattr(cfg, "auth_secret", None) if not payload.upi_ids else None
+        )
+        if not fingerprint_secret or len(fingerprint_secret) < 32:
+            raise HTTPException(status_code=503, detail="Registration HMAC is not configured")
+        canonical = json.dumps(
+            payload.model_dump(mode="json", exclude={"request_id"}),
+            sort_keys=True, ensure_ascii=True,
+        ).encode("utf-8")
+        payload_hash = hmac.new(
+            fingerprint_secret.encode("utf-8"),
+            b"sas:prospect-registration:v2:" + canonical,
+            hashlib.sha256,
+        ).hexdigest()
     if payload.request_id is not None:
         existing = database.scalars(
             select(Prospect).where(
@@ -490,6 +497,10 @@ def update_prospect(
     updated = payload.model_dump(exclude_unset=True, exclude={"version"})
     changed = {field: value for field, value in updated.items()
                if getattr(prospect, field) != value}
+    if "monthly_contribution_paise" in changed and not valid_commitment(
+        changed["monthly_contribution_paise"]
+    ):
+        raise HTTPException(status_code=422, detail="New commitments require ₹250 increments")
     if changed:
         previous = prospect.version
         for field, value in changed.items():

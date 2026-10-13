@@ -29,7 +29,8 @@ def upgrade() -> None:
         op.execute("""
             CREATE TRIGGER trg_manual_collection_250_tiers_insert
             BEFORE INSERT ON manual_collections
-            WHEN NOT (NEW.amount_paise BETWEEN 25000 AND 1000000000
+            WHEN NOT (typeof(NEW.amount_paise) = 'integer'
+                      AND NEW.amount_paise BETWEEN 25000 AND 1000000000
                       AND NEW.amount_paise % 25000 = 0)
             BEGIN
                 SELECT RAISE(ABORT, 'Manual collection must use a 250 INR increment');
@@ -39,7 +40,8 @@ def upgrade() -> None:
             CREATE TRIGGER trg_manual_collection_250_tiers_update
             BEFORE UPDATE OF amount_paise ON manual_collections
             WHEN NEW.amount_paise <> OLD.amount_paise
-              AND NOT (NEW.amount_paise BETWEEN 25000 AND 1000000000
+              AND NOT (typeof(NEW.amount_paise) = 'integer'
+                       AND NEW.amount_paise BETWEEN 25000 AND 1000000000
                        AND NEW.amount_paise % 25000 = 0)
             BEGIN
                 SELECT RAISE(ABORT, 'Manual collection must use a 250 INR increment');
