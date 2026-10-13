@@ -17,8 +17,8 @@ from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
     Base,
-    Organization,
     MessageDispatch,
+    Organization,
     OrganizationSettings,
     Promoter,
     PromoterAssignment,
