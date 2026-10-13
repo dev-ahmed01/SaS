@@ -707,3 +707,63 @@ test("Reminder proxy forbids unauthorized preparation and nonexistent operations
   });
   expect(wrongEndpoint.status()).toBe(404);
 });
+
+test("mobile collection form stays clickable with populated recent history",async ({page,isMobile})=>{
+  test.skip(!isMobile,"mobile layout regression");
+  await page.goto("/collections");
+  const suffix=String(Date.now()%1000000).padStart(6,"0");
+  const data=await page.evaluate(async suffix=>{
+    const session=await (await fetch("/api/admin/session",{cache:"no-store"})).json();
+    const csrf=session.csrf_token;
+    const headers={"Content-Type":"application/json","X-CSRF-Token":csrf};
+    const sponsorResponse=await fetch("/api/admin/prospects",{
+      method:"POST",headers,
+      body:JSON.stringify({
+        full_name:"Seeded History Sponsor "+suffix,
+        mobile_number:"+919114"+suffix,
+        area_city:"Bengaluru",monthly_contribution_paise:50000,
+        whatsapp_opt_in:false,
+      }),
+    });
+    if(!sponsorResponse.ok)throw Error("Could not seed sponsor: "+sponsorResponse.status);
+    const person=await sponsorResponse.json();
+    const today=new Intl.DateTimeFormat("en-CA",{
+      timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit",
+    }).format(new Date());
+    for(let i=0;i<11;i++){
+      const response=await fetch("/api/admin/collections",{
+        method:"POST",headers,
+        body:JSON.stringify({
+          request_id:crypto.randomUUID(),prospect_id:person.id,
+          period_month:today.slice(0,7)+"-01",received_on:today,
+          amount_paise:100,payment_method:"upi",
+          receipt_reference:"HISTORY"+suffix+"-"+i,
+          funds_confirmed:true,
+        }),
+      });
+      if(!response.ok)throw Error("Could not seed history: "+response.status);
+    }
+    return {name:person.full_name,suffix};
+  },suffix);
+  await page.reload();
+  await expect(page.getByRole("region",{name:"Recently Recorded"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Recently Recorded"}).getByRole("row")).toHaveCount(11);
+  const grid=page.locator(".manual-collections-workspace");
+  await expect.poll(async()=>{
+    const box=await grid.boundingBox();
+    return box ? Math.round(box.width) : 0;
+  }).toBeLessThanOrEqual(413);
+  await page.getByRole("textbox",{name:"Search sponsor"}).fill(data.name);
+  await page.getByRole("option",{name:new RegExp(data.name)}).click();
+  await page.getByRole("textbox",{name:"Transaction reference"}).fill("FINALHISTORY"+suffix);
+  await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  const save=page.getByRole("button",{name:"Save Collection"});
+  await save.scrollIntoViewIfNeeded();
+  await expect.poll(async()=>await save.evaluate(el=>{
+    const r=el.getBoundingClientRect();
+    const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+    return hit===el || el.contains(hit);
+  })).toBe(true);
+  await save.click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
+});

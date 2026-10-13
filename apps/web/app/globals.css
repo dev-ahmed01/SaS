@@ -300,8 +300,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .status-pill.archived { color:#62726c; background:#eef1ee; }
 
 /* Phase 07: locked Collections UI, manual confirmation, no new navigation */
-.manual-collections-workspace { margin-top:22px; max-width:1000px; display:grid; gap:18px; }
-.manual-collections-workspace .content-panel { margin:0; }
+.manual-collections-workspace { margin-top:22px; max-width:1000px; width:100%; min-width:0; display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }
+.manual-collections-workspace .content-panel { margin:0; min-width:0; width:100%; }
+.manual-collections-workspace .table-scroll { min-width:0; max-width:100%; overflow-x:auto; }
 .manual-collections-workspace select { width:100%; min-height:39px; border:1px solid var(--line); border-radius:7px; background:white; padding:8px; font:400 12px var(--font-body); }
 .manual-selected { margin:8px 0 0; color:var(--forest-deep); font-size:11px; }
 .manual-search-results { display:grid; border:1px solid var(--line); border-radius:8px; margin-top:5px; max-height:240px; overflow:auto; }
