@@ -21,6 +21,7 @@ from app.models import (
     ManualCollection,
     ManualCollectionReversal,
     MessageOutbox,
+    MessageDispatch,
     OrganizationSettings,
     Prospect,
     SponsorshipRate,
@@ -69,7 +70,7 @@ class CollectionOutput(BaseModel):
     payment_method: str
     reference_mask: str
     evidence: Literal["admin_attested"]
-    message_status: Literal["awaiting_integration", "suppressed"]
+    message_status: Literal["awaiting_integration", "suppressed", "claimed", "accepted", "unknown", "failed", "cancelled", "sent", "delivered"]
     sponsor_status: str
     reversed: bool
     reversal_reason: str | None
@@ -102,12 +103,17 @@ def _view(db: Session, row: ManualCollection) -> CollectionOutput:
         ManualCollectionReversal.organization_id == row.organization_id,
         ManualCollectionReversal.collection_id == row.id,
     )).one_or_none()
+    dispatch=db.scalars(select(MessageDispatch).where(
+        MessageDispatch.organization_id == row.organization_id,
+        MessageDispatch.outbox_id == event.id,
+    )).one_or_none()
     return CollectionOutput(
         id=row.id, prospect_id=row.prospect_id, sponsor_name=sponsor.full_name,
         amount_paise=row.amount_paise, period_month=row.period_month,
         received_on=row.received_on, payment_method=row.payment_method,
         reference_mask=row.reference_mask, evidence="admin_attested",
-        message_status=event.status, sponsor_status=sponsor.lifecycle_status,
+        message_status=dispatch.status if dispatch else event.status,
+        sponsor_status=sponsor.lifecycle_status,
         reversed=reversed_entry is not None,
         reversal_reason=reversed_entry.reason_code if reversed_entry else None,
     )
@@ -271,7 +277,7 @@ class ReversalOutput(BaseModel):
     amount_paise: int
     reason_code: str
     reversed: Literal[True]
-    message_status: Literal["awaiting_integration", "suppressed"]
+    message_status: Literal["awaiting_integration", "suppressed", "claimed", "accepted", "unknown", "failed", "cancelled", "sent", "delivered"]
     sponsor_status: str
 
 
@@ -285,10 +291,14 @@ def _reversal_view(
             MessageOutbox.collection_id == receipt.id,
         )
     ).one()
+    dispatch=database.scalars(select(MessageDispatch).where(
+        MessageDispatch.organization_id==receipt.organization_id,
+        MessageDispatch.outbox_id==outbox.id,
+    )).one_or_none()
     return ReversalOutput(
         id=reversal.id, collection_id=receipt.id, prospect_id=receipt.prospect_id,
         amount_paise=receipt.amount_paise, reason_code=reversal.reason_code,
-        reversed=True, message_status=outbox.status,
+        reversed=True, message_status=dispatch.status if dispatch else outbox.status,
         sponsor_status=sponsor.lifecycle_status,
     )
 
