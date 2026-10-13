@@ -10,6 +10,7 @@ from app.admin_settings import router as settings_router
 from app.auth import router as auth_router
 from app.collections import router as collections_router
 from app.db import get_engine
+from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
 from app.prospects import router as prospects_router
 
@@ -20,6 +21,7 @@ app.include_router(prospects_router)
 app.include_router(promoters_router)
 app.include_router(accounting_router)
 app.include_router(collections_router)
+app.include_router(payouts_router)
 
 
 @app.get("/health/live", tags=["health"])
