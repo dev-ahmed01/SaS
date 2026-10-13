@@ -14,7 +14,8 @@ from app.accounting import (
 )
 from app.auth import db_session, get_admin
 from app.models import (
-    AdminSession, AdminUser, MessageDispatch, MessageOutbox, PayoutPayment,
+    AdminSession, AdminUser, ManualCollection, ManualCollectionReversal,
+    MessageDispatch, MessageOutbox, PayoutPayment,
     PayoutPlan, PayoutPlanTerm, Promoter, ReminderBatch,
 )
 from app.security import as_utc, utc_now
@@ -74,6 +75,30 @@ def obligation(plan: PayoutPlan, terms: list[PayoutPlanTerm], month: date) -> in
     if plan.cadence == "one_time":
         return plan.amount_paise if plan.start_month == month else 0
     return plan.amount_paise if term_at(terms, month) == "active" else 0
+
+
+def recent_activity(db: Session, org: object) -> list[Activity]:
+    """Latest events from the current organization, without banking identifiers."""
+    items: list[Activity] = []
+    sources = [
+        (ManualCollection, "collection", "Contribution recorded", "/collections/all"),
+        (ManualCollectionReversal, "reversal", "Collection reversed", "/collections/all"),
+        (PayoutPayment, "payout_paid", "Outgoing disbursement attested", "/payouts/all"),
+        (PayoutPlan, "payout_plan", "Payout plan created", "/payouts/all"),
+        (ReminderBatch, "reminder", "Reminder batch prepared, not sent", "/reminders/whatsapp"),
+    ]
+    for model, kind, title, href in sources:
+        records = db.scalars(
+            select(model).where(model.organization_id == org)
+            .order_by(model.created_at.desc(), model.id.desc()).limit(8)
+        ).all()
+        for record in records:
+            items.append(Activity(
+                kind=kind, title=title,
+                amount_paise=getattr(record, "amount_paise", None),
+                at=as_utc(record.created_at), href=href,
+            ))
+    return sorted(items, key=lambda row: (row.at, row.kind), reverse=True)[:8]
 
 
 @router.get("/overview", response_model=Overview)
@@ -180,7 +205,7 @@ def overview(
             MessageDispatch, MessageDispatch.organization_id == org,
             MessageDispatch.status == "delivered",
         ),
-        months=months, activity=[],
+        months=months, activity=recent_activity(db, org),
         notice=(
             "Contributions are Admin-attested and exclude reversed entries. "
             "Payout plans are not bank disbursements. WhatsApp delivery is "
