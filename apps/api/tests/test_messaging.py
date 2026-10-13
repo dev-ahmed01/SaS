@@ -334,7 +334,7 @@ def test_worker_auto_prepares_one_unpaid_sponsor_batch_only_on_due_day(
 ):
     client,engine=system
     csrf=login(client)
-    person=sponsor(client,csrf,7)
+    sponsor(client,csrf,7)
     enable_org(engine,sponsor_reminder=True)
     monkeypatch.setattr("app.messaging.get_settings",lambda:config())
     transmitted=[]
