@@ -16,6 +16,9 @@ from app.models import (
     ManualCollectionReversal,
     Organization,
     OrganizationSettings,
+    PayoutPayment,
+    PayoutPlan,
+    PayoutPlanTerm,
     Promoter,
     PromoterAssignment,
     Prospect,
@@ -387,6 +390,106 @@ def test_postgres_rejects_unknown_reversal_reason_code() -> None:
         db.add(ManualCollectionReversal(
             organization_id=org.id, collection_id=receipt.id,
             request_id=uuid.uuid4(), reason_code="erase_all_records",
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def _pg_payout_plan(db: Session, org: Organization) -> PayoutPlan:
+    plan = PayoutPlan(
+        organization_id=org.id,
+        create_request_id=uuid.uuid4(), create_hash="a" * 64,
+        payee_name="Synthetic Payout Payee",
+        purpose="Safety benchmark fixture", cadence="recurring",
+        start_month=date(2026, 10, 1), amount_paise=50000,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(PayoutPlanTerm(
+        organization_id=org.id, plan_id=plan.id,
+        effective_month=date(2026, 10, 1), status="active",
+    ))
+    db.flush()
+    return plan
+
+
+def test_postgres_payout_term_cannot_reference_different_organization() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        source = Organization(name="Payout tenant source")
+        foreign = Organization(name="Payout tenant foreign")
+        db.add_all([source, foreign])
+        db.flush()
+        plan = _pg_payout_plan(db, source)
+        db.add(PayoutPlanTerm(
+            organization_id=foreign.id, plan_id=plan.id,
+            effective_month=date(2026, 11, 1), status="active",
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_payout_payment_cannot_reference_different_organization() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        source = Organization(name="Payout receipt tenant source")
+        foreign = Organization(name="Payout receipt tenant foreign")
+        db.add_all([source, foreign])
+        db.flush()
+        plan = _pg_payout_plan(db, source)
+        db.add(PayoutPayment(
+            organization_id=foreign.id, plan_id=plan.id,
+            request_id=uuid.uuid4(), request_payload_hash="a" * 64,
+            period_month=date(2026, 10, 1), paid_on=date(2026, 10, 13),
+            amount_paise=50000, payment_method="upi",
+            reference_digest="a" * 64, reference_mask="****1000",
+        ))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_blocks_double_outgoing_payment_for_same_month() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Payout evidence idempotency")
+        db.add(org)
+        db.flush()
+        plan = _pg_payout_plan(db, org)
+        for index in range(2):
+            db.add(PayoutPayment(
+                organization_id=org.id, plan_id=plan.id,
+                request_id=uuid.uuid4(), request_payload_hash="a" * 64,
+                period_month=date(2026, 10, 1), paid_on=date(2026, 10, 13),
+                amount_paise=50000, payment_method="bank_transfer",
+                reference_digest=("a" if index == 0 else "b") * 64,
+                reference_mask="****1001",
+            ))
+            if index == 0:
+                db.flush()
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
+def test_postgres_rejects_negative_or_zero_payout_obligations() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org = Organization(name="Payout positive amount constraint")
+        db.add(org)
+        db.flush()
+        db.add(PayoutPlan(
+            organization_id=org.id, create_request_id=uuid.uuid4(),
+            create_hash="a" * 64, payee_name="Synthetic Payee",
+            purpose="Positive amount policy", cadence="one_time",
+            start_month=date(2026, 10, 1), scheduled_on=date(2026, 10, 13),
+            amount_paise=0,
         ))
         with pytest.raises(IntegrityError):
             db.flush()
