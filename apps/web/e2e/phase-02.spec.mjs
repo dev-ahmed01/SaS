@@ -322,18 +322,6 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   const submitBounds=await save.boundingBox();
   expect(submitBounds.y).toBeGreaterThan(amountBounds.y+amountBounds.height);
   await save.scrollIntoViewIfNeeded();
-  console.log("MOBILE_SAVE_GEOMETRY",JSON.stringify(await save.evaluate(el=>{
-    const b=el.getBoundingClientRect();
-    const point={x:b.left+b.width/2,y:b.top+b.height/2};
-    const top=document.elementFromPoint(point.x,point.y);
-    const rect=node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}};
-    return {viewport:{w:innerWidth,h:innerHeight,scrollY:scrollY},
-      button:rect(el), hit:{tag:top?.tagName,cls:top?.className,text:top?.textContent?.slice(0,50),rect:top?rect(top):null},
-      grid:rect(el.closest("form").querySelector(".form-grid")),
-      footer:rect(el.parentElement),
-      form:rect(el.closest("form")),
-      label:rect(el.closest("form").querySelector("label.field"))};
-  })));
   await save.click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
   await expect(page.getByText(/has not been sent/)).toBeVisible();
@@ -364,6 +352,7 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   const month=await page.locator('input[type="month"]').inputValue();
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
   await page.getByRole("button",{name:"Save Collection"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
   const outcome=await page.evaluate(async({receivedOn,month,reference})=>{
@@ -404,6 +393,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.getByRole("textbox",{name:"Amount received (₹)"}).fill(agreed.toFixed(2));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("REVERSAL"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
+  await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
   await page.getByRole("button",{name:"Save Collection"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
   await page.goto("/collections/all");
