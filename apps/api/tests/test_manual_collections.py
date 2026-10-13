@@ -32,7 +32,7 @@ def system(monkeypatch):
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         provision_admin(
-            db, email="admin@emlen.test", password="synthetic-long-admin-password",
+            db, email="admin@foundation.org", password="synthetic-long-admin-password",
             organization_name="Emlen Foundation",
         )
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
@@ -56,7 +56,7 @@ def system(monkeypatch):
 
 def login(client):
     result = client.post("/v1/auth/login", json={
-        "email": "admin@emlen.test", "password": "synthetic-long-admin-password",
+        "email": "admin@foundation.org", "password": "synthetic-long-admin-password",
     })
     assert result.status_code == 200, result.text
     return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
