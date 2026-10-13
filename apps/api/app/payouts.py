@@ -75,7 +75,7 @@ class PlanRead(BaseModel):
     amount_paise: int
     start_month: date
     scheduled_on: date | None
-    status: Literal["active", "paused", "closed", "scheduled", "paid"]
+    status: Literal["active", "paused", "closed", "scheduled", "paid", "overdue"]
     next_status: Literal["active", "paused", "closed"] | None
     current_month_due_paise: int
     current_month_paid_paise: int
@@ -196,14 +196,12 @@ def _render_plan(
     current = month_start(ist_today())
     upcoming = shift_month(current, 1)
     if plan.cadence == "one_time":
-        status = "paid" if payments else "scheduled"
-        due = (
-            plan.amount_paise
-            if plan.start_month == period and not payments else 0
-        )
+        status = ("paid" if payments else
+                  "overdue" if plan.scheduled_on < ist_today() else "scheduled")
+        due = plan.amount_paise if plan.start_month == period else 0
         next_status = None
     else:
-        status = _term_status(terms, current) or "active"
+        status = _term_status(terms, current) or "scheduled"
         effective = _term_status(terms, period)
         due = (
             plan.amount_paise
