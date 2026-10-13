@@ -15,3 +15,7 @@ out/
 coverage/
 *.tsbuildinfo
 .DS_Store
+
+# Keep filled Foundation release dossiers outside Git; template is intentionally blank.
+release-evidence.private.json
+*.release-attestations.json

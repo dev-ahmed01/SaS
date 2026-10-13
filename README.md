@@ -4,9 +4,9 @@
 
 ## Project state
 
-Phases 01–11 have implementation branches with passing development CI but their stacked pull requests remain under review, not merged into `main`. Phase 12 adds the real-data, read-only dashboard and is undergoing verification. Phase 13 (production acceptance and deployment) is not complete. **This is not an operational payment or live WhatsApp service.**
+**Phases 01–13 are integrated into `main`** through [PR #17](https://github.com/dev-ahmed01/SaS/pull/17), merge commit `e48b3155e4e7bbda65e00f2df07d13cb251b74fe`. [Post-merge CI](https://github.com/dev-ahmed01/SaS/actions/runs/38414100426) passed backend and frontend jobs. The phase branch history and reviews remain available. **The application is source-integrated but NOT production-released**: no provider WhatsApp delivery is enabled, no real payout is executed by the software, and Foundation acceptance is outstanding.
 
-Checkout `phase/12-live-dashboard` to inspect the complete development stack; `main` currently contains only the initial repository scaffold. Review [the implementation roadmap](docs/PHASES.md) and [locked UI requirements](docs/DESIGN_LOCK.md) before changes.
+Use `main` for current development, [the integration record](docs/INTEGRATION_REVIEW.md) for provenance, [the roadmap](docs/PHASES.md) and [locked UI requirements](docs/DESIGN_LOCK.md).
 
 ## Product boundaries
 
@@ -28,7 +28,7 @@ Checkout `phase/12-live-dashboard` to inspect the complete development stack; `m
 Requires Node.js 22+, Python 3.12+, PostgreSQL 16+ or Docker:
 
 ```bash
-git switch phase/12-live-dashboard
+git switch main
 cp apps/api/.env.example apps/api/.env
 # Set local DATABASE_URL and fresh local secrets in apps/api/.env; never commit it.
 docker compose up -d db
@@ -53,4 +53,6 @@ npm run dev
 
 Browse `http://localhost:3000`. Test with `python -m ruff check .`, `python -m pytest -q` from `apps/api`, and `npm test && npm run typecheck && npm run build` from `apps/web`. CI additionally exercises the PostgreSQL migrations and authenticated browser suite.
 
-**Release rule:** No production enablement or actual WhatsApp dispatch until all approved business policies, ordered PR integration, staging UAT, backup/restore, security, consent and provider checks pass. See `docs/PHASE_11_MESSAGING.md`, `docs/PHASE_12_DASHBOARD.md` and `docs/PHASES.md`.
+**Release rule:** Code integration does not authorize production. Main branch protection, approved financial proof policy, staging UAT, real backup restoration, security, consent, opt-out, sender/template and provider callback checks remain mandatory. [Phase 13 production gates](docs/PHASE_13_PRODUCTION.md) and [Issue #13](https://github.com/dev-ahmed01/SaS/issues/13) track these separately.
+
+A fail-closed **offline documentary check** is available after real approval records exist: copy `docs/RELEASE_EVIDENCE_TEMPLATE.json` to a secure, untracked location, fill all 12 gates with genuine evidence references, and run `python -m app.release_gate /secure/release-evidence.json --sha <40-character-release-commit>` from `apps/api`. Passing validates metadata completeness **only**; it does not independently verify a provider, configure branch protection, deploy software or authorize WhatsApp messages.

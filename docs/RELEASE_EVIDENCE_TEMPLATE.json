@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "release_sha": "",
+  "gates": {
+    "source_review": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "protected_main": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "tenant_auth": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "financial_governance": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "payout_governance": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "consent_retention": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "staging_verification": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "backup_restoration": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "whatsapp_authorization": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "incident_monitoring": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "ui_approval": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    },
+    "foundation_final_approval": {
+      "approved": false,
+      "reviewer": "",
+      "evidence_id": "",
+      "approved_at": ""
+    }
+  }
+}

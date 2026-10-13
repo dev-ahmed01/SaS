@@ -7,7 +7,7 @@
 | Gate | Required evidence | Owner/approval | Status |
 | --- | --- | --- | --- |
 | Canonical business policy | Sign-off for New sponsor reminder permissions, evidence standards and billing exceptions; sponsorship multiples and inactivity are approved | Foundation finance lead | **Partially resolved — sponsorship and inactivity approved 13 Oct 2026** |
-| Review/integration | PRs #1–#12 reviewed and merged sequentially to protected `main`, including unresolved P1/P2 reviews and Phase 9 branch comparison | Tech reviewer | **Not completed** |
+| Review/integration | Full stack integrated atomically via PR #17, accepted CI on actual `main` SHA `e48b3155`; independent production review and branch protections still required | Tech reviewer | **Code integrated; protected `main` pending** |
 | Authentication/tenancy | Login abuse cases from distinct client networks; Admin CSRF/session/proxy tests; inaccessible cross-organization records | Security reviewer | **Staging pending** |
 | Finance | Approved manual receipt evidence standards, reversals and outgoing payout proof; synthetic month-end and historical corrections | Foundation finance lead | **Pending** |
 | Environment | Production/staging separate PostgreSQL, web, API, DNS, HTTPS and managed secrets | Operations owner | **Not provisioned/verified here** |
@@ -18,7 +18,7 @@
 | UI review | Approved light sidebar hierarchy, Bricolage/Poppins, responsive/accessible screens; empty/errors with no fabricated financials | Foundation stakeholder | **Pending stakeholder UAT** |
 | Final approval | Dated written Foundation approval and named rollback operator | Foundation authorized signatory | **Not granted** |
 
-**Approved on 13 October 2026:** new recurring sponsorship commitments are positive multiples of ₹250 and newly provisioned organizations default to ₹250. Existing effective-dated rates do not change. Two completed IST months with zero net recorded receipt activity cause inactivity. Any positive net recorded receipt, including valid ₹250-tier entries for an earlier billing month, reactivates; credit reversals negate that activity. Other operational and messaging policies still need explicit approval. The payment method remains Admin-attested manual entry, NOT a bank importer. Until sign-off, postpone decisions that would alter sponsor lifecycle, obligations, reminders or launch data.
+**Approved on 13 October 2026:** new recurring sponsorship commitments AND new incoming Admin-recorded contributions are positive multiples of ₹250 and newly provisioned organizations default to ₹250. Existing effective-dated rates do not change. Two completed IST months with zero net recorded receipt activity cause inactivity. Any positive net recorded receipt, including valid ₹250-tier entries for an earlier billing month, reactivates; credit reversals negate that activity. Other operational and messaging policies still need explicit approval. The payment method remains Admin-attested manual entry, NOT a bank importer. Until sign-off, postpone decisions that would alter sponsor lifecycle, obligations, reminders or launch data.
 
 ## Deploy topology and control boundaries
 
@@ -39,6 +39,20 @@ The proposed vendors (Vercel web, Render API, managed PostgreSQL) are design sug
 5. Validate `APP_ENV=staging` rejects real messaging enabled, `MESSAGING_DELIVERY_ENABLED=false`, organization `automation_enabled=false`, and `PROMOTER_DISCLOSURE_APPROVED=false`. Confirm no automation runner or Meta account is connected in staging unless separately approved with synthetic recipients.
 6. Confirm PostgreSQL client TLS, HTTPS cookies, correct proxy/origin handling, rate-limit separation, expiration/logout, failed-CSRF rejection, secure audit events, log PII masking and cross-tenant isolation.
 7. Review actual migration lineage 0001 through 0010 **plus any subsequently merged revisions**. Do not rewrite or squash applied production revisions.
+
+## Release evidence dossier (offline, does not authorize launch)
+
+The release candidate includes `python -m app.release_gate`, a fail-closed parser for Foundation-controlled sign-off metadata. The [blank evidence template](RELEASE_EVIDENCE_TEMPLATE.json) intentionally has every gate unapproved. **Never commit filled evidence, donor details, private URLs with tokens, real keys or actual beneficiary records.** Store the completed file in a Foundation-controlled encrypted audit location.
+
+From `apps/api`, after installing the backend dependencies:
+
+```bash
+python -m app.release_gate /secure/private-release-dossier.json --sha <approved-40-character-main-sha>
+```
+
+A nonzero exit indicates missing or invalid metadata. An exit code of zero means the *form* has all 12 attestation fields, not that signatories, hosted systems, Meta/Pabbly integrations, legal consents, deployment configuration or backup restoration were independently verified. The program never makes network requests, sends a message, runs migrations or deploys. The operator must still witness every external gate and explicitly authorize an independently controlled release.
+
+**Repository observation 13 October 2026:** `main` was not protected when inspected after merging PR #17. Enable required `backend`/`frontend` status checks, independent code review, no-force-push and branch deletion restrictions in GitHub repository settings, then collect actual evidence. The code in this PR cannot change hosted repository protections.
 
 ## Backups, restore drill and cutover
 
