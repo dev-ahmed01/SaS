@@ -482,3 +482,123 @@ class ManualCollectionReversal(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class PayoutPlan(Base):
+    """Outgoing commitment, not an execution instruction or payment evidence."""
+
+    __tablename__ = "payout_plans"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_payout_plan_org_id"),
+        CheckConstraint(
+            "cadence IN ('recurring', 'one_time')", name="ck_payout_plan_cadence",
+        ),
+        CheckConstraint("amount_paise > 0 AND amount_paise <= 1000000000",
+                        name="ck_payout_plan_positive_amount"),
+        CheckConstraint(
+            "(cadence = 'one_time' AND scheduled_on IS NOT NULL) OR "
+            "(cadence = 'recurring' AND scheduled_on IS NULL)",
+            name="ck_payout_plan_scheduled_only_once",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    payee_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(240), nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(800))
+    cadence: Mapped[str] = mapped_column(String(16), nullable=False)
+    start_month: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_on: Mapped[date | None] = mapped_column(Date)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+
+
+class PayoutPlanTerm(Base):
+    """Monthly effective status; pause/resume never erases past commitments."""
+
+    __tablename__ = "payout_plan_terms"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "plan_id"],
+            ["payout_plans.organization_id", "payout_plans.id"],
+            ondelete="RESTRICT", name="fk_payout_term_plan_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "plan_id", "effective_month",
+            name="uq_payout_term_month",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'paused', 'closed')",
+            name="ck_payout_term_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    effective_month: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+
+
+class PayoutPayment(Base):
+    """Admin-attested actual outgoing payment. This is NOT a bank transfer API."""
+
+    __tablename__ = "payout_payments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "plan_id"],
+            ["payout_plans.organization_id", "payout_plans.id"],
+            ondelete="RESTRICT", name="fk_payout_payment_plan_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "request_id", name="uq_payout_payment_request",
+        ),
+        UniqueConstraint(
+            "organization_id", "reference_digest", name="uq_payout_payment_reference",
+        ),
+        UniqueConstraint(
+            "organization_id", "plan_id", "period_month",
+            name="uq_payout_payment_one_per_period",
+        ),
+        CheckConstraint(
+            "amount_paise > 0 AND amount_paise <= 1000000000",
+            name="ck_payout_payment_positive_amount",
+        ),
+        CheckConstraint(
+            "payment_method IN ('upi', 'bank_transfer', 'cash', 'cheque')",
+            name="ck_payout_payment_method",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    request_payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    paid_on: Mapped[date] = mapped_column(Date, nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(24), nullable=False)
+    reference_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_mask: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
