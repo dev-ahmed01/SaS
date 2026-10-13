@@ -175,6 +175,7 @@ class Prospect(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False,
         onupdate=func.now(),
     )
+    start_month: Mapped[date | None] = mapped_column(Date)
     upi_ids: Mapped[list["ProspectUpiIdentifier"]] = relationship(
         back_populates="prospect", cascade="save-update, merge", lazy="selectin"
     )
@@ -278,4 +279,75 @@ class PromoterAssignment(Base):
     )
     ended_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+
+
+class SponsorshipRate(Base):
+    """Versioned effective-month contribution rate; historical months are immutable."""
+
+    __tablename__ = "sponsorship_rates"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_rate_prospect_same_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "prospect_id", "effective_month",
+            name="uq_rate_prospect_month",
+        ),
+        CheckConstraint("amount_paise > 0", name="ck_rate_positive_amount"),
+        CheckConstraint(
+            "amount_paise <= 1000000000", name="ck_rate_amount_maximum"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    effective_month: Mapped[date] = mapped_column(Date, nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class VerifiedCredit(Base):
+    """Immutable bank/manual verification source for later phases.
+
+    Phase 06 provides NO route to create this record. Bank reconciliation and
+    manual authorization workflows must enforce matching and evidence provenance.
+    """
+
+    __tablename__ = "verified_credits"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_credit_prospect_same_org",
+        ),
+        CheckConstraint("amount_paise > 0", name="ck_credit_positive_amount"),
+        CheckConstraint(
+            "source_type IN ('bank_reconciled', 'manual_attested')",
+            name="ck_credit_source_type",
+        ),
+        UniqueConstraint(
+            "organization_id", "source_key", name="uq_credit_org_source"
+        ),
+        Index(
+            "ix_credit_prospect_month",
+            "organization_id", "prospect_id", "period_month",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
