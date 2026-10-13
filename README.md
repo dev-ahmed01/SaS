@@ -11,10 +11,11 @@ Checkout `phase/12-live-dashboard` to inspect the complete development stack; `m
 ## Product boundaries
 
 - Admin-only prospects, promoters, manual collections, full audited corrections, recurring/one-time payout obligations, reminders, settings and dashboard.
+- Approved 13 October 2026: new sponsorship commitments are positive ₹250 increments (new organization default ₹250); any positive recorded contribution reactivates, and two completed IST months without net recorded contributions cause inactivity. Partial receipts are not restricted to ₹250 increments.
 - The Foundation records receipts and outgoing payments **after funds have moved externally**. This application does **not** move money or independently verify bank transactions.
 - Incoming payment acknowledgments and 5th/20th reminders are **prepared but not delivered** until Meta/Pabbly authorization, approved templates, consent, secret configuration, a private dispatcher and signed delivery callbacks have been tested. Provider acceptance is not delivery.
 - Bank statement import is deferred by the Foundation. No mock donors, fake payment history or delivered-message fixtures are used in the live UI.
-- Final default sponsorship amount, partial-payment lifecycle rules, operational proof policy and promoter disclosure require Foundation approval before release. Read [decisions](docs/DECISIONS.md) and the appropriate phase documents.
+- Operational proof policy and promoter disclosure require Foundation approval before release. Read [decisions](docs/DECISIONS.md) and the appropriate phase documents.
 
 ## Stack
 
