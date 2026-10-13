@@ -74,6 +74,14 @@ test("premium mosque illustrations remain scalable, unobstructed, and softly int
     assert.match(drawing,/linearGradient/);
     assert.doesNotMatch(drawing,/<image/);
   }
+  const scene=new URL("../public/art/sponsor-salah-panorama.avif",import.meta.url);
+  assert.ok(existsSync(scene),"optimized landscape must be committed");
+  const bytes=readFileSync(scene);
+  assert.equal(bytes.subarray(4,12).toString("ascii"),"ftypavif","artwork must be AVIF encoded");
+  assert.ok(bytes.length>12000 && bytes.length<150000,"keep high fidelity artwork reasonably small");
+  assert.ok(css.includes('url("/art/sponsor-salah-panorama.avif")'));
+  assert.ok(css.includes("background-image:image-set("));
+  assert.ok(css.includes("background-size:auto 100%"),"sidebar crop should be derived from same artwork");
   assert.ok(css.includes("mask-image:linear-gradient"));
   assert.ok(shell.includes('className="sidebar-art"'));
   assert.ok(shell.includes('aria-label="Admin account"'));
