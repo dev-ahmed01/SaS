@@ -1,33 +1,48 @@
 # Sponsor a Salah
 
-**Emlen Foundation — internal charity operations web application.**
+**Emlen Foundation — Admin-only charity operations application.**
 
-> **Phase 01 / 13 — foundation.** This branch delivers a working application scaffold, a first database migration, API health probes, tests and CI. Login, payment reconciliation, WhatsApp delivery and live module functionality are **not** implemented. Nothing in this branch should be deployed as a live financial system.
+## Project state
 
-## Architecture
+Phases 01–11 have implementation branches with passing development CI but their stacked pull requests remain under review, not merged into `main`. Phase 12 adds the real-data, read-only dashboard and is undergoing verification. Phase 13 (production acceptance and deployment) is not complete. **This is not an operational payment or live WhatsApp service.**
 
-- `apps/web`: Next.js + TypeScript; shared visual tokens for the approved light/green design.
-- `apps/api`: FastAPI + SQLAlchemy + Alembic; PostgreSQL in production.
-- `docs`: authoritative product decisions, architecture, phase acceptance gates and outstanding integrations.
-- `.github/workflows/ci.yml`: backend tests/schema migration and frontend checks.
+Checkout `phase/12-live-dashboard` to inspect the complete development stack; `main` currently contains only the initial repository scaffold. Review [the implementation roadmap](docs/PHASES.md) and [locked UI requirements](docs/DESIGN_LOCK.md) before changes.
 
-## Run locally
+## Product boundaries
 
-Prerequisites: Node.js 22+, Python 3.12+, PostgreSQL 16+ (or Docker).
+- Admin-only prospects, promoters, manual collections, full audited corrections, recurring/one-time payout obligations, reminders, settings and dashboard.
+- The Foundation records receipts and outgoing payments **after funds have moved externally**. This application does **not** move money or independently verify bank transactions.
+- Incoming payment acknowledgments and 5th/20th reminders are **prepared but not delivered** until Meta/Pabbly authorization, approved templates, consent, secret configuration, a private dispatcher and signed delivery callbacks have been tested. Provider acceptance is not delivery.
+- Bank statement import is deferred by the Foundation. No mock donors, fake payment history or delivered-message fixtures are used in the live UI.
+- Final default sponsorship amount, partial-payment lifecycle rules, operational proof policy and promoter disclosure require Foundation approval before release. Read [decisions](docs/DECISIONS.md) and the appropriate phase documents.
+
+## Stack
+
+- `apps/web`: Next.js 15, TypeScript, server-side authenticated gateway, approved Bricolage Grotesque/Poppins sidebar UI.
+- `apps/api`: Python 3.12, FastAPI, SQLAlchemy, Alembic and PostgreSQL, organization-scoped financial records and audit history.
+- `.github/workflows/ci.yml`: Ruff, pytest, PostgreSQL migrations/integrity checks, Next.js production build and desktop/mobile Playwright.
+
+## Local development (synthetic data only)
+
+Requires Node.js 22+, Python 3.12+, PostgreSQL 16+ or Docker:
 
 ```bash
+git switch phase/12-live-dashboard
 cp apps/api/.env.example apps/api/.env
-# Set DATABASE_URL for local PostgreSQL, then:
+# Set local DATABASE_URL and fresh local secrets in apps/api/.env; never commit it.
 docker compose up -d db
 cd apps/api
 python -m venv .venv
-. .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+. .venv/bin/activate
 pip install -r requirements-dev.txt
 alembic upgrade head
+python -m app.bootstrap_admin
 uvicorn app.main:app --reload --port 8000
 ```
 
-In another terminal:
+Set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ORGANIZATION` and optionally `BOOTSTRAP_AMOUNT_PAISE` before running `bootstrap_admin`; it prompts for the password. The Windows equivalent activation path is `.venv\\Scripts\\Activate.ps1`.
+
+From a second terminal:
 
 ```bash
 cd apps/web
@@ -35,18 +50,6 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`; API liveness: `http://localhost:8000/health/live`; database readiness: `http://localhost:8000/health/ready`.
+Browse `http://localhost:3000`. Test with `python -m ruff check .`, `python -m pytest -q` from `apps/api`, and `npm test && npm run typecheck && npm run build` from `apps/web`. CI additionally exercises the PostgreSQL migrations and authenticated browser suite.
 
-**Local-only bootstrap:** Phase 03 will introduce Admin provisioning and secure login. No default credentials are installed. A committed `package-lock.json` enables reproducible `npm ci` installs in CI and deployments.
-
-## Test
-
-```bash
-cd apps/api && pytest -q
-cd apps/api && ruff check .
-cd apps/web && npm run typecheck && npm run build
-```
-
-## Workflow
-
-Use feature branches and PRs; verify CI before merging. Store secrets in the deployment provider, never in Git. Deploy only after the remaining security, financial and communication phases pass review and UAT. See `docs/PHASES.md`.
+**Release rule:** No production enablement or actual WhatsApp dispatch until all approved business policies, ordered PR integration, staging UAT, backup/restore, security, consent and provider checks pass. See `docs/PHASE_11_MESSAGING.md`, `docs/PHASE_12_DASHBOARD.md` and `docs/PHASES.md`.

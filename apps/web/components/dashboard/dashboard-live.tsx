@@ -80,7 +80,7 @@ export function DashboardLive(){
     m.due_paise,m.contributions_paise,m.payout_planned_paise,
     m.payout_disbursed_paise,
   )));
-  return <div className="dashboard-live" aria-label="Foundation dashboard">
+  return <section className="dashboard-live" aria-label="Foundation dashboard">
     <div className="dashboard-topline">
       <div>
         <h2>Overview <span className="dashboard-period">· {monthLabel(data.period_month)}</span></h2>
@@ -186,5 +186,5 @@ export function DashboardLive(){
       </section>
     </div>
     <p className="dashboard-disclaimer">{data.notice}</p>
-  </div>;
+  </section>;
 }
