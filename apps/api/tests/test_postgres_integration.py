@@ -14,9 +14,9 @@ from app.models import (
     Organization,
     OrganizationSettings,
     Prospect,
+    ProspectUpiIdentifier,
     Promoter,
     PromoterAssignment,
-    ProspectUpiIdentifier,
 )
 
 pytestmark = pytest.mark.skipif(
