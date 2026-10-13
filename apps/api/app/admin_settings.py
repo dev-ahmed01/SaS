@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
+from app.config import get_settings
 from app.models import AdminSession, AdminUser, AuditEvent, OrganizationSettings
 
 router = APIRouter(prefix="/v1/settings", tags=["Admin settings"])
@@ -98,6 +99,64 @@ def update_settings(
                 after_data=new,
             )
         )
+        database.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return settings_body(row)
+
+
+class AutomationChange(BaseModel):
+    """Separate high-impact operation; never part of general Settings PATCH."""
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+    confirmation: str = Field(min_length=1, max_length=32)
+
+
+@router.post("/automation")
+def change_automation(
+    payload: AutomationChange,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> dict:
+    """Audited organization kill switch; it never directly sends a message."""
+    expected = "ENABLE WHATSAPP" if payload.enabled else "DISABLE WHATSAPP"
+    if payload.confirmation != expected:
+        raise HTTPException(status_code=422, detail="Type the required exact confirmation")
+    admin = context[0]
+    row = database.scalars(
+        select(OrganizationSettings)
+        .where(OrganizationSettings.organization_id == admin.organization_id)
+        .with_for_update()
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Organization settings not found")
+
+    if payload.enabled:
+        cfg = get_settings()
+        if not (
+            cfg.app_env == "production"
+            and cfg.messaging_delivery_enabled
+            and cfg.messaging_sender_approved
+            and cfg.messaging_enable_after is not None
+            and cfg.messaging_enable_after.tzinfo is not None
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Approved production sender and activation cutoff are required",
+            )
+
+    previous = row.automation_enabled
+    if previous != payload.enabled:
+        row.automation_enabled = payload.enabled
+        database.add(AuditEvent(
+            organization_id=admin.organization_id,
+            actor_admin_id=admin.id,
+            action="settings.automation_changed",
+            entity_type="organization_settings",
+            entity_id=str(admin.organization_id),
+            before_data={"automation_enabled": previous},
+            after_data={"automation_enabled": payload.enabled},
+        ))
         database.commit()
     response.headers["Cache-Control"] = "no-store"
     return settings_body(row)

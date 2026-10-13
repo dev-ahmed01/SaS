@@ -78,6 +78,13 @@ test("responsive layout has no horizontal overflow and drawer controls work",asy
   }
 });
 
+test("WhatsApp cannot be enabled by a development Admin",async ({page})=>{
+  await page.goto("/settings");
+  await expect(page.getByRole("textbox",{name:"WhatsApp automation confirmation"})).toBeVisible();
+  await page.getByRole("textbox",{name:"WhatsApp automation confirmation"}).fill("ENABLE WHATSAPP");
+  await expect(page.getByRole("button",{name:"Enable WhatsApp automation"})).toBeDisabled();
+});
+
 test("settings are persisted, edited and can be reloaded",async ({page})=>{
   await page.goto("/settings");
   await expect(page.getByRole("heading",{name:"Organisation Settings"})).toBeVisible();

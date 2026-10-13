@@ -285,3 +285,48 @@ def test_valid_signed_client_ip_enforces_network_anti_spray(environment):
         "password": "test-only-very-long-password",
     }, headers=signed("203.0.113.20"))
     assert other.status_code == 200, other.text
+
+
+def test_automation_enable_is_separate_audited_fail_closed_admin_action(
+    environment, monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+
+    client, engine = environment
+    csrf = sign_in(client)
+    url = "/v1/settings/automation"
+    enable = {"enabled": True, "confirmation": "ENABLE WHATSAPP"}
+    assert client.post(url, json=enable).status_code == 403
+    assert client.post(url, headers={"X-CSRF-Token": csrf}, json={
+        **enable, "confirmation": "ENABLE",
+    }).status_code == 422
+    # A development environment never enables real delivery.
+    assert client.post(url, headers={"X-CSRF-Token": csrf},
+                       json=enable).status_code == 409
+    assert client.get("/v1/settings").json()["automation_enabled"] is False
+
+    monkeypatch.setattr("app.admin_settings.get_settings", lambda: SimpleNamespace(
+        app_env="production",
+        messaging_delivery_enabled=True,
+        messaging_sender_approved=True,
+        messaging_enable_after=utc_now() + timedelta(days=1),
+    ))
+    accepted = client.post(url, headers={"X-CSRF-Token": csrf}, json=enable)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["automation_enabled"] is True
+    assert client.post(url, headers={"X-CSRF-Token": csrf},
+                       json=enable).status_code == 200
+    stopped = client.post(url, headers={"X-CSRF-Token": csrf}, json={
+        "enabled": False, "confirmation": "DISABLE WHATSAPP",
+    })
+    assert stopped.status_code == 200, stopped.text
+    assert stopped.json()["automation_enabled"] is False
+    with Session(engine) as db:
+        events = db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "settings.automation_changed",
+        )).all()
+        assert len(events) == 2
+        assert events[0].before_data == {"automation_enabled": False}
+        assert events[0].after_data == {"automation_enabled": True}
+        assert events[1].before_data == {"automation_enabled": True}
+        assert events[1].after_data == {"automation_enabled": False}
