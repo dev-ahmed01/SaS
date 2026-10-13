@@ -54,6 +54,13 @@ jobs:
           python -m alembic upgrade head
           python -m alembic check
           python -m pytest -q tests/test_postgres_integration.py
+      - name: Destructive-scope-guarded synthetic PostgreSQL backup and restore
+        env:
+          APP_ENV: test
+          DATABASE_URL: postgresql+psycopg://sas_ci:sas_ci_ephemeral_password@127.0.0.1:5432/sas_ci
+          SAS_SYNTHETIC_RESTORE_CI: '1'
+        run: |
+          python -m app.synthetic_restore_ci
 
   frontend:
     runs-on: ubuntu-latest
