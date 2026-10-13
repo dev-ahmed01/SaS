@@ -1,9 +1,9 @@
 # Confirmed Sponsor a Salah business decisions
 
 - Admin-only Foundation web app using the approved left sidebar and Bricolage Grotesque/Poppins green-white UI.
-- Currency INR, initial monthly contribution ₹500, configurable per sponsor and by Admin without changing historical dues.
+- Currency INR. Approved 13 October 2026: new sponsorship commitments are positive multiples of ₹250, with a ₹250 default. Existing agreements and historical statements do not change. Actual recorded partial receipts may be smaller than ₹250.
 - Registration before first payment is allowed. Monthly accounting uses Asia/Kolkata.
-- A sponsor becomes Inactive after two consecutive missed complete months and does not receive scheduled reminders while Inactive. A payment can reactivate a sponsor. **Clarification required:** Phase 06 currently counts a full month's verified payment as the reactivation threshold; confirm whether partial payment should also count.
+- Approved 13 October 2026: two consecutive completed IST calendar months with zero net recorded contribution activity cause inactivity. Any positive net recorded receipt, even a partial receipt allocated to an older billing month, reactivates. Activity uses the recorded/verified IST date while balances use billing allocation. Reversed receipts do not count. Months without an obligation during archival do not form a missed-month streak. Inactive sponsors receive no scheduled reminders.
 - One current promoter per sponsor. Sponsor reminders are planned for the 5th (only eligible unpaid sponsors), consolidated promoter reminders for the 20th (one message per promoter).
 - **Latest Foundation direction:** Admin **manually enters** payments after checking actual receipt. Bank CSV/Excel statement importer and bank-specific reconciliation are deferred. Entries must include sponsor, amount, month, receipt date, payment method and a unique reference.
 - After entry, the system prepares a consent-checked **WhatsApp confirmation event** automatically. Actual delivery via Pabbly/WhatsApp Business is **not enabled** until sender, approved template, consent, secure authentication, deduplication, delivery callbacks, and retries are configured. Never claim sent/delivered without provider confirmation.
@@ -14,7 +14,7 @@
 
 1. Proof standards for manually entered UPI/bank payments and numbered cash receipts.
 2. Foundation authorization policy for reversals and potential second-person review for large amounts; the technical single-Admin reversal flow is implemented, but financial governance requires approval.
-3. Partial payment status/reactivation policy.
+3. Resolved: any positive net receipt reactivates while unpaid statement balances remain outstanding.
 4. WhatsApp Business/Pabbly setup, template approval and opt-in language.
 5. Payout categories, retention, backup drill, staging/UAT and production approval.
 
@@ -32,4 +32,4 @@
 - A sponsor is ineligible when archived, two completed missed months make them inactive, the current month is fully paid, or direct WhatsApp consent is missing. Never use a stale Prospects lifecycle cache to decide eligibility.
 - A single promoter message represents all eligible currently assigned unpaid sponsors; promoter activity and consent are required. No duplicate promoter notifications for each sponsor.
 - Preparation runs only on the configured IST day, is Admin-initiated/idempotent and records no provider deliveries. Phase 11 will add scheduling and secure Pabbly/WhatsApp delivery with live rechecking at dispatch.
-- **Business approval still pending** for partial payments/reactivation, direct reminders to registered New sponsors, and WhatsApp disclosure of assigned sponsor balances to a promoter.
+- Partial receipt reactivation is approved; direct reminders to registered New sponsors and promoter balance disclosures still require separate approval.
