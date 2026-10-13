@@ -746,8 +746,8 @@ test("mobile collection form stays clickable with populated recent history",asyn
     return {name:person.full_name,suffix};
   },suffix);
   await page.reload();
-  await expect(page.getByRole("region",{name:"Recently Recorded"})).toBeVisible();
-  await expect(page.getByRole("region",{name:"Recently Recorded"}).getByRole("row")).toHaveCount(11);
+  await expect(page.getByRole("region",{name:"Recent manual collections"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Recent manual collections"}).getByRole("row")).toHaveCount(11);
   const grid=page.locator(".manual-collections-workspace");
   await expect.poll(async()=>{
     const box=await grid.boundingBox();
