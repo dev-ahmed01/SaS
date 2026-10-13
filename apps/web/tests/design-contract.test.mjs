@@ -46,7 +46,11 @@ test("phase 2 never claims functional authentication, payment or reminder delive
   assert.match(modules,/disabled/);
   assert.match(ui,/disabled/);
   assert.match(modules,/No messages are being sent/);
-  assert.match(modules,/Waiting for live data/);
+  assert.match(modules,/DashboardLive/);
+  assert.doesNotMatch(modules,/Waiting for live data/);
+  const dashboard = read("../components/dashboard/dashboard-live.tsx");
+  assert.match(dashboard,/\/api\/admin\/dashboard/);
+  assert.match(dashboard,/not independently reconciled bank balances/);
   assert.doesNotMatch(modules,/\b(?:28,500|98 active sponsors|Payment succeeded)\b/);
 });
 
