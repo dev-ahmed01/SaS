@@ -1,6 +1,6 @@
 """Payout acceptance: recurring obligations, one-time payouts, and evidence integrity."""
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
