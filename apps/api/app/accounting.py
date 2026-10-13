@@ -125,10 +125,22 @@ def period_balance(
     start = prospect.start_month
     if start is None or period < start:
         return (0, 0, 0, False)
+    # A completed archive/restore cycle must never back-bill intervening
+    # months. The archive month itself retains its original obligation;
+    # restoration resumes the obligation in its actual IST calendar month.
+    for interval in getattr(prospect, "archive_intervals", ()):
+        final_month = month_start(_utc(interval.archived_at).astimezone(IST).date())
+        restored_month = (
+            month_start(_utc(interval.restored_at).astimezone(IST).date())
+            if interval.restored_at is not None else None
+        )
+        if period > final_month and (restored_month is None or period < restored_month):
+            return (0, _verified_sum(credits, period, now), 0, False)
+    # Defensive compatibility for old/partially migrated objects with a
+    # current archival marker. The explicit history above remains canonical.
     if prospect.archived_at is not None:
         final_month = month_start(_utc(prospect.archived_at).astimezone(IST).date())
         if period > final_month:
-            # Archival ends new recurring dues without erasing past statements.
             return (0, _verified_sum(credits, period, now), 0, False)
     due = _monthly_amount(rates, period)
     if due is None:

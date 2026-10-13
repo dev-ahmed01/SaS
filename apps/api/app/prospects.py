@@ -27,6 +27,7 @@ from app.models import (
     AuditEvent,
     OrganizationSettings,
     Prospect,
+    ProspectArchiveInterval,
     ProspectUpiIdentifier,
     SponsorshipRate,
 )
@@ -493,7 +494,14 @@ def archive_prospect(
     prospect = _get(database, admin, prospect_id, lock=True)
     _check_version(prospect, version)
     previous = prospect.version
-    prospect.archived_at = utc_now()
+    archived_at = utc_now()
+    if any(interval.restored_at is None for interval in prospect.archive_intervals):
+        raise HTTPException(status_code=409, detail="Archive history is inconsistent")
+    database.add(ProspectArchiveInterval(
+        organization_id=admin.organization_id, prospect_id=prospect.id,
+        archived_at=archived_at,
+    ))
+    prospect.archived_at = archived_at
     prospect.version += 1
     prospect.updated_at = utc_now()
     _audit(database, admin, prospect, "prospect.archived",
@@ -517,7 +525,15 @@ def restore_prospect(
     if prospect.archived_at is None:
         raise HTTPException(status_code=409, detail="Prospect is not archived")
     _check_version(prospect, version)
+    open_intervals = [
+        row for row in prospect.archive_intervals if row.restored_at is None
+    ]
+    if len(open_intervals) != 1:
+        raise HTTPException(
+            status_code=409, detail="Archive history needs operator repair"
+        )
     previous = prospect.version
+    open_intervals[0].restored_at = utc_now()
     prospect.archived_at = None
     prospect.version += 1
     prospect.updated_at = utc_now()

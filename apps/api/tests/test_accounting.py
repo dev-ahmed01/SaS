@@ -17,6 +17,7 @@ from app.models import (
     AuditEvent,
     Base,
     Prospect,
+    ProspectArchiveInterval,
     SponsorshipRate,
     VerifiedCredit,
 )
@@ -269,3 +270,46 @@ def test_archiving_preserves_old_months_but_stops_future_commitments(
     future = client.get("/v1/accounting/overview?month=2026-11").json()
     assert future["due_paise"] == 0
     assert future["total_sponsors"] == 0
+
+
+def test_archive_restore_preserves_paused_historical_months(
+    accounting_system, monkeypatch,
+):
+    """Restoring in November must never invent an October sponsor obligation."""
+    client, engine = accounting_system
+    csrf = login(client)
+    registered = _make_history(client, engine, csrf)
+    archived_time = datetime(2026, 9, 15, 12, tzinfo=UTC)
+    restored_time = datetime(2026, 11, 3, 12, tzinfo=UTC)
+
+    monkeypatch.setattr("app.prospects.utc_now", lambda: archived_time)
+    path = "/v1/prospects/" + registered["id"]
+    assert client.delete(
+        path, headers={**csrf, "If-Match": "1"},
+    ).status_code == 204
+
+    monkeypatch.setattr("app.prospects.utc_now", lambda: restored_time)
+    result = client.post(
+        path + "/restore", headers={**csrf, "If-Match": "2"},
+    )
+    assert result.status_code == 200, result.text
+
+    with Session(engine) as db:
+        person = db.get(Prospect, uuid.UUID(registered["id"]))
+        rows = db.scalars(select(ProspectArchiveInterval)).all()
+        assert len(rows) == 1
+        assert rows[0].restored_at == restored_time.replace(tzinfo=None) or (
+            rows[0].restored_at == restored_time
+        )
+        rates = list(db.scalars(select(SponsorshipRate).where(
+            SponsorshipRate.prospect_id == person.id,
+        )))
+        assert period_balance(
+            person, rates, [], date(2026, 9, 1), restored_time,
+        )[0] == 50000
+        assert period_balance(
+            person, rates, [], date(2026, 10, 1), restored_time,
+        ) == (0, 0, 0, False)
+        assert period_balance(
+            person, rates, [], date(2026, 11, 1), restored_time,
+        )[0] == 50000

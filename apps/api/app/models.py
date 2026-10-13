@@ -179,6 +179,39 @@ class Prospect(Base):
     upi_ids: Mapped[list["ProspectUpiIdentifier"]] = relationship(
         back_populates="prospect", cascade="save-update, merge", lazy="selectin"
     )
+    archive_intervals: Mapped[list["ProspectArchiveInterval"]] = relationship(
+        back_populates="prospect", cascade="save-update, merge", lazy="selectin",
+        order_by="ProspectArchiveInterval.archived_at",
+    )
+
+
+class ProspectArchiveInterval(Base):
+    """Append-only history of when future sponsorship dues were suspended."""
+
+    __tablename__ = "prospect_archive_intervals"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_archive_interval_prospect_org",
+        ),
+        UniqueConstraint(
+            "organization_id", "prospect_id", "archived_at",
+            name="uq_archive_interval_start",
+        ),
+        CheckConstraint(
+            "restored_at IS NULL OR restored_at >= archived_at",
+            name="ck_archive_interval_order",
+        ),
+        Index("ix_archive_interval_org_prospect", "organization_id", "prospect_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    archived_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    prospect: Mapped[Prospect] = relationship(back_populates="archive_intervals")
 
 
 class ProspectUpiIdentifier(Base):
