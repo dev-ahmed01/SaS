@@ -374,6 +374,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   const name="Reversal Browser Sponsor "+id;
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  const agreed=Number(await page.getByRole("spinbutton",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9847"+id);
   await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
@@ -383,7 +384,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.goto("/collections");
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill("500.00");
+  await page.getByRole("textbox",{name:"Amount received (₹)"}).fill(agreed.toFixed(2));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("REVERSAL"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   await page.getByRole("button",{name:"Save Collection"}).click();
@@ -413,7 +414,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
   const dueRow=ledger.getByRole("row",{name:new RegExp(name)});
   await expect(dueRow.getByRole("cell").nth(2)).toContainText("0.00");
-  await expect(dueRow.getByRole("cell").nth(3)).toContainText("500.00");
+  await expect(dueRow.getByRole("cell").nth(3)).toContainText(agreed.toFixed(2));
   await expect(dueRow.getByText("New",{exact:true})).toBeVisible();
 });
 
