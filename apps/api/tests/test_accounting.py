@@ -20,7 +20,27 @@ from app.models import (
     SponsorshipRate,
     VerifiedCredit,
 )
-from test_prospects import create as create_prospect, login
+
+def login(client):
+    response = client.post(
+        "/v1/auth/login",
+        json={"email": "office@foundation.org", "password": "synthetic-long-admin-password"},
+    )
+    assert response.status_code == 200
+    return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+
+
+def create_prospect(client, csrf, **fields):
+    return client.post(
+        "/v1/prospects", headers=csrf,
+        json={
+            "full_name": "Synthetic Sponsor",
+            "mobile_number": "+919876543210",
+            "area_city": "Bengaluru",
+            **fields,
+        },
+    )
+
 
 @pytest.fixture
 def accounting_system(monkeypatch):
