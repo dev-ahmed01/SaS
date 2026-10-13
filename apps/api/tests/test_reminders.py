@@ -46,6 +46,7 @@ def system(monkeypatch):
             db, email="office@foundation.org",
             password="synthetic-long-admin-password",
             organization_name="Emlen Foundation",
+            amount_paise=50000,
         )
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
     monkeypatch.setattr(

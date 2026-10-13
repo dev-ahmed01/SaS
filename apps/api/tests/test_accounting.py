@@ -56,6 +56,7 @@ def accounting_system(monkeypatch):
         provision_admin(
             db, email="office@foundation.org", password="synthetic-long-admin-password",
             organization_name="Emlen Foundation",
+            amount_paise=50000,
         )
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
     monkeypatch.setattr(
@@ -122,17 +123,17 @@ def test_partial_payment_is_accounted_but_not_falsely_marked_paid():
     assert period_balance(p, r, c, date(2026, 11, 1), CURRENT_UTC) == (
         50000, 25000, 25000, False
     )
-    assert evaluate_status(p, r, c, date(2026, 11, 1), CURRENT_UTC) == "inactive"
+    assert evaluate_status(p, r, c, date(2026, 11, 1), CURRENT_UTC) == "active"
     c.append(credit(date(2026, 11, 1), 25000))
     assert evaluate_status(p, r, c, date(2026, 11, 1), CURRENT_UTC) == "active"
 
 
 def test_registration_does_not_bill_prior_months_and_rate_is_effective_dated():
     p = sponsor(date(2026, 10, 1))
-    rates = [rate(date(2026, 10, 1)), rate(date(2026, 11, 1), 70000)]
+    rates = [rate(date(2026, 10, 1)), rate(date(2026, 11, 1), 75000)]
     assert period_balance(p, rates, [], date(2026, 9, 1), CURRENT_UTC)[0] == 0
     assert period_balance(p, rates, [], date(2026, 10, 1), CURRENT_UTC)[0] == 50000
-    assert period_balance(p, rates, [], date(2026, 11, 1), CURRENT_UTC)[0] == 70000
+    assert period_balance(p, rates, [], date(2026, 11, 1), CURRENT_UTC)[0] == 75000
     assert evaluate_status(p, rates, [], date(2026, 11, 1), CURRENT_UTC) == "new"
 
 
@@ -210,7 +211,7 @@ def test_only_verified_evidence_credits_pay_and_reactivate(accounting_system, mo
     one = client.get("/v1/accounting/overview?month=2026-11").json()
     assert one["verified_paise"] == 25000
     assert one["outstanding_paise"] == 25000
-    assert one["items"][0]["status"] == "inactive"
+    assert one["items"][0]["status"] == "active"
     with Session(engine) as db:
         record = db.get(Prospect, uuid.UUID(p["id"]))
         db.add(VerifiedCredit(
@@ -237,7 +238,7 @@ def test_next_month_rate_change_does_not_rewrite_current_due(accounting_system, 
     path = "/v1/prospects/" + record["id"]
     changed = client.patch(
         path, headers=csrf,
-        json={"version": 1, "monthly_contribution_paise": 70000}
+        json={"version": 1, "monthly_contribution_paise": 75000}
     )
     assert changed.status_code == 200, changed.text
     now = client.get("/v1/accounting/overview?month=2026-11").json()
@@ -247,7 +248,7 @@ def test_next_month_rate_change_does_not_rewrite_current_due(accounting_system, 
             SponsorshipRate.effective_month
         )).all()
         assert [(r.effective_month, r.amount_paise) for r in schedule] == [
-            (date(2026, 11, 1), 50000), (date(2026, 12, 1), 70000)
+            (date(2026, 11, 1), 50000), (date(2026, 12, 1), 75000)
         ]
 
 

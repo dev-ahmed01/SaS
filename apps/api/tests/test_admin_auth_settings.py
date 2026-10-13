@@ -31,6 +31,7 @@ def environment(monkeypatch: pytest.MonkeyPatch):
         provision_admin(
             database, organization_name="Emlen Foundation",
             email="admin@foundation.org", password="test-only-very-long-password",
+            amount_paise=50000,
         )
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
     monkeypatch.setattr(
@@ -76,7 +77,7 @@ def test_signed_out_session_denies_settings_and_user_details(environment) -> Non
     assert client.get("/v1/settings").status_code == 401
     assert client.get("/v1/auth/session").status_code == 401
     assert (
-        client.patch("/v1/settings", json={"default_contribution_paise": 30000}).status_code
+        client.patch("/v1/settings", json={"default_contribution_paise": 75000}).status_code
         == 401
     )
 
@@ -129,15 +130,15 @@ def test_settings_changes_are_audited_and_other_keys_cannot_be_set(environment) 
         "automation_enabled": False,
     }
     assert client.patch(
-        "/v1/settings", json={"default_contribution_paise": 30000}
+        "/v1/settings", json={"default_contribution_paise": 75000}
     ).status_code == 403
     response = client.patch(
         "/v1/settings",
         headers={"X-CSRF-Token": csrf},
-        json={"default_contribution_paise": 30000, "sponsor_reminder_day": 6},
+        json={"default_contribution_paise": 75000, "sponsor_reminder_day": 6},
     )
     assert response.status_code == 200, response.text
-    assert response.json()["default_contribution_paise"] == 30000
+    assert response.json()["default_contribution_paise"] == 75000
     assert response.json()["sponsor_reminder_day"] == 6
     assert response.json()["automation_enabled"] is False
     with Session(engine) as database:
@@ -149,7 +150,7 @@ def test_settings_changes_are_audited_and_other_keys_cannot_be_set(environment) 
             "default_contribution_paise": 50000, "sponsor_reminder_day": 5
         }
         assert events[0].after_data == {
-            "default_contribution_paise": 30000, "sponsor_reminder_day": 6
+            "default_contribution_paise": 75000, "sponsor_reminder_day": 6
         }
         assert events[0].actor_admin_id is not None
     for invalid in [
@@ -157,6 +158,8 @@ def test_settings_changes_are_audited_and_other_keys_cannot_be_set(environment) 
         {"automation_enabled": True},
         {"sponsor_reminder_day": 35},
         {"inactivity_months": 0},
+        {"inactivity_months": 3},
+        {"default_contribution_paise": 37500},
         {"default_contribution_paise": -1},
         {"default_contribution_paise": None},
         {},
@@ -218,7 +221,7 @@ def test_csrf_is_session_bound(environment) -> None:
     assert client.patch(
         "/v1/settings",
         headers={"X-CSRF-Token": "0" * 64},
-        json={"inactivity_months": 3},
+        json={"sponsor_reminder_day": 7},
     ).status_code == 403
     client.cookies.clear()
     other_csrf = sign_in(client)
@@ -226,12 +229,12 @@ def test_csrf_is_session_bound(environment) -> None:
     assert client.patch(
         "/v1/settings",
         headers={"X-CSRF-Token": csrf},
-        json={"inactivity_months": 3},
+        json={"sponsor_reminder_day": 7},
     ).status_code == 403
     assert client.patch(
         "/v1/settings",
         headers={"X-CSRF-Token": other_csrf},
-        json={"inactivity_months": 3},
+        json={"sponsor_reminder_day": 7},
     ).status_code == 200
 
 

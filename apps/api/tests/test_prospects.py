@@ -41,6 +41,7 @@ def system(monkeypatch):
         provision_admin(
             db, email="office@foundation.org", password="synthetic-long-admin-password",
             organization_name="Emlen Foundation",
+            amount_paise=50000,
         )
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
     monkeypatch.setattr(
@@ -195,7 +196,7 @@ def test_org_isolation_and_independent_contribution_defaults(system):
         db.add(OrganizationSettings(
             organization_id=other.id,
             currency_code="INR", timezone="Asia/Kolkata",
-            default_contribution_paise=70000,
+            default_contribution_paise=75000,
             sponsor_reminder_day=8, promoter_reminder_day=20,
             inactivity_months=2, automation_enabled=False,
         ))
@@ -219,7 +220,7 @@ def test_org_isolation_and_independent_contribution_defaults(system):
         headers={**other_csrf, "If-Match": "1"},
     ).status_code == 404
     new_item = create(client, other_csrf).json()
-    assert new_item["monthly_contribution_paise"] == 70000
+    assert new_item["monthly_contribution_paise"] == 75000
     assert client.get("/v1/prospects").json()["total"] == 1
 
 
