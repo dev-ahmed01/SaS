@@ -317,10 +317,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
               onChange={e=>setConfirmed(e.target.checked)}/>
               <span>I checked the Foundation's records and confirm the funds were disbursed.</span>
             </label>
-          </>:<p className="accounting-footnote">
-            The planned change to <strong>{mode==="pause"?"Paused":mode==="resume"?"Active":"Closed"}</strong> takes effect next month.
-            Closing a plan is irreversible from this interface.
-          </p>}
+          </>:mode==="close"?<p className="accounting-footnote">Closing a plan is irreversible.</p>:null}
           {error&&<p className="form-error" role="alert">{error}</p>}
           <div className="form-actions"><button type="button" className="btn btn-secondary"
             onClick={close} disabled={saving}>Cancel</button>
