@@ -6,11 +6,10 @@ import { csrfToken, normalizedPhone } from "./promoter-types";
 
 type FormValues = {
   full_name:string; mobile_number:string; whatsapp_number:string;
-  area_city:string; notes:string; whatsapp_opt_in:boolean;
+  whatsapp_opt_in:boolean;
 };
 const blank:FormValues={
-  full_name:"",mobile_number:"",whatsapp_number:"",area_city:"",
-  notes:"",whatsapp_opt_in:false,
+  full_name:"",mobile_number:"",whatsapp_number:"",whatsapp_opt_in:false,
 };
 export function PromoterEditor({
   initial,onSaved,onCancel,
@@ -19,8 +18,7 @@ export function PromoterEditor({
 }){
   const [form,setForm]=useState<FormValues>(initial?{
     full_name:initial.full_name,mobile_number:initial.mobile_number,
-    whatsapp_number:initial.whatsapp_number??"",area_city:initial.area_city,
-    notes:initial.notes??"",whatsapp_opt_in:initial.whatsapp_opt_in,
+    whatsapp_number:initial.whatsapp_number??"",whatsapp_opt_in:initial.whatsapp_opt_in,
   }:blank);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
@@ -41,8 +39,7 @@ export function PromoterEditor({
       const csrf=await csrfToken();
       const payload={
         full_name:form.full_name.trim(),mobile_number:mobile,
-        whatsapp_number:whatsapp,area_city:form.area_city.trim(),
-        notes:form.notes.trim()||null,whatsapp_opt_in:form.whatsapp_opt_in,
+        whatsapp_number:whatsapp,whatsapp_opt_in:form.whatsapp_opt_in,
         ...(initial?{version:initial.version}:{})
       };
       const response=await fetch(
@@ -57,7 +54,7 @@ export function PromoterEditor({
         setError(response.status===409
           ?"This phone is already registered, or the record changed. Refresh before retrying."
           :response.status===422
-            ?"Please check the name, area and phone number."
+            ?"Please check the name and phone number."
             :"Unable to save. No change has been confirmed.");
         return;
       }
@@ -72,12 +69,10 @@ export function PromoterEditor({
       <div className="form-grid">
         <label className="field"><span className="field-label">Full name <span className="required">*</span></span><input required maxLength={160} minLength={2} placeholder="Enter full name" value={form.full_name} onChange={e=>set("full_name",e.target.value)}/></label>
         <label className="field"><span className="field-label">Phone number <span className="required">*</span></span><input required type="tel" placeholder="+91 98765 43210" value={form.mobile_number} onChange={e=>set("mobile_number",e.target.value)}/></label>
-        <label className="field form-cell full"><span className="field-label">Area / City <span className="required">*</span></span><input required maxLength={120} minLength={2} placeholder="Enter area or city" value={form.area_city} onChange={e=>set("area_city",e.target.value)}/></label>
         <details className="optional-details">
           <summary>More details (optional)</summary>
           <div className="optional-fields">
             <label className="field"><span className="field-label">WhatsApp number</span><input type="tel" placeholder="Same as mobile if empty" value={form.whatsapp_number} onChange={e=>set("whatsapp_number",e.target.value)}/></label>
-            <label className="field full"><span className="field-label">Notes</span><textarea rows={2} maxLength={1500} placeholder="Optional notes" value={form.notes} onChange={e=>set("notes",e.target.value)}/></label>
             <label className="checkbox-field full"><input type="checkbox" checked={form.whatsapp_opt_in} onChange={e=>set("whatsapp_opt_in",e.target.checked)}/><span>WhatsApp communication consent recorded</span></label>
           </div>
         </details>
