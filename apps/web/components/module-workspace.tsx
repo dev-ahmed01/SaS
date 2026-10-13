@@ -3,6 +3,7 @@ import { AppShell } from "./app-shell";
 import { EmptyTable, ModuleTabs, PageHeading, Panel, PhaseNotice, PreviewButton, SelectField, TextField } from "./ui/primitives";
 import { Icon } from "./ui/icon";
 import { AdminSettingsForm } from "./admin-settings-form";
+import { DashboardLive } from "./dashboard/dashboard-live";
 import { ManualCollections } from "./collections/manual-collections";
 import { CollectionsAllWorkspace } from "./collections/collections-all-workspace";
 import { PayoutAdd, PayoutList } from "./payouts/payouts-workspace";
@@ -100,10 +101,9 @@ function Reminders({view}:{view:string}) {
 }
 
 function Dashboard() {
-  return <AppShell><PageHeading title="Dashboard" description="An overview of your masjid sponsorship operations."/>
-    <PhaseNotice phase="12" text="The Dashboard is built last, from verified Prospects, Collections, Payouts and reminder records."/>
-    <div className="metric-grid">{["Total sponsors","Active subscriptions","This month's collections","Recurring payouts"].map(x=><section className="metric-preview" key={x}><span>{x}</span><strong>—</strong><small>Waiting for live data</small></section>)}</div>
-    <Panel title="Recent Activity"><div className="empty-state"><Icon name="clock" size={28}/><h3>No activity yet</h3><p>Activity appears here once the corresponding modules are implemented.</p></div></Panel>
+  return <AppShell><PageHeading title="Dashboard"
+    description="A current overview of your masjid sponsorship operations."/>
+    <DashboardLive/>
   </AppShell>;
 }
 
