@@ -320,3 +320,26 @@ def test_new_collection_reference_and_request_fingerprints_are_keyed(system):
             }, sort_keys=True).encode()
         ).hexdigest()
     assert client.post("/v1/collections", headers=csrf, json=payload).status_code == 200
+
+
+def test_active_only_excludes_reversed_contributions(system):
+    client, _ = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=False)
+    payment = client.post("/v1/collections", headers=csrf, json=sample(person["id"]))
+    assert payment.status_code == 201, payment.text
+    active = client.get("/v1/collections?active_only=true")
+    assert active.status_code == 200
+    assert active.json()["total"] == 1
+    reversed_payment = client.post(
+        "/v1/collections/" + payment.json()["id"] + "/reverse",
+        headers=csrf,
+        json={
+            "request_id": str(uuid.uuid4()),
+            "reason_code": "duplicate_entry",
+            "confirmation": "REVERSE",
+        },
+    )
+    assert reversed_payment.status_code == 201, reversed_payment.text
+    assert client.get("/v1/collections?active_only=true").json()["total"] == 0
+    assert client.get("/v1/collections").json()["total"] == 1
