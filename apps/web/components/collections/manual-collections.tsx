@@ -7,6 +7,18 @@ type Prospect={id:string;full_name:string;mobile_number:string;monthly_contribut
 type Entry={id:string;sponsor_name:string;amount_paise:number;received_on:string;
   period_month:string;reference_mask:string;message_status:string;payment_method:string};
 type Page={items:Entry[];total:number};
+const deliveryLabel=(value:string):string=>({
+  awaiting_integration:"Awaiting provider setup",
+  suppressed:"Not eligible",
+  claimed:"Dispatch in progress",
+  accepted:"Provider accepted",
+  unknown:"Unconfirmed",
+  failed:"Provider rejected",
+  cancelled:"Cancelled",
+  sent:"Sent (confirmed)",
+  delivered:"Delivered (confirmed)",
+}[value]??"Unknown");
+
 const amount=(value:number)=>(value/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 const istDate=()=>new Intl.DateTimeFormat("en-CA",{
   timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit",
@@ -158,7 +170,7 @@ export function ManualCollections(){
           :records.items.map(item=><tr key={item.id}><td>{item.sponsor_name}</td>
             <td>{amount(item.amount_paise)}</td><td>{item.period_month.slice(0,7)}</td>
             <td>{item.reference_mask}</td>
-            <td>{item.message_status==="suppressed"?"Not eligible":"Awaiting setup"}</td></tr>)}</tbody>
+            <td>{deliveryLabel(item.message_status)}</td></tr>)}</tbody>
       </table></div>
     </section>
   </div>;

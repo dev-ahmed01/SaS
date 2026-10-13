@@ -118,8 +118,8 @@ export function WhatsAppEligibility(){
       </div>
     </section>
     <p className="reminder-no-send" role="status">
-      Delivery is disabled. Pabbly and WhatsApp Business have not been connected.
-      A prepared message is not a sent or delivered message.
+      Reminder preparation never sends. Provider dispatch requires separate Foundation
+      approval and a protected delivery worker. Prepared is not sent or delivered.
     </p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {message&&<p role="status" className="form-success">{message}</p>}

@@ -11,7 +11,7 @@ type Payment = {
   period_month: string;
   payment_method: string;
   reference_mask: string;
-  message_status: "awaiting_integration" | "suppressed";
+  message_status: string;
   reversed: boolean;
   reversal_reason: string | null;
 };
@@ -24,6 +24,18 @@ const reasons: {value:Reason;label:string}[] = [
   {value:"funds_not_received",label:"Funds were not received"},
   {value:"other",label:"Other entry error"},
 ];
+const deliveryLabel=(value:string):string=>({
+  awaiting_integration:"Awaiting provider setup",
+  suppressed:"Suppressed",
+  claimed:"Dispatch in progress",
+  accepted:"Provider accepted",
+  unknown:"Unconfirmed",
+  failed:"Provider rejected",
+  cancelled:"Cancelled",
+  sent:"Sent (confirmed)",
+  delivered:"Delivered (confirmed)",
+}[value]??"Unknown");
+
 const rupees = (paise:number) => (paise/100).toLocaleString("en-IN",{
   style:"currency",currency:"INR",
 });
@@ -98,7 +110,9 @@ export function CollectionsReview({onReversed}:{onReversed:()=>void}) {
       const result=await response.json();
       setNotice("Reversed the incorrect "+rupees(result.amount_paise)+
         " collection. Ledger and sponsor status were recalculated. "+
-        "Its pending WhatsApp confirmation was suppressed.");
+        (result.message_status==="suppressed"
+          ?"Its pending WhatsApp confirmation was suppressed."
+          :"An earlier provider transmission cannot be recalled. Verify recipient communication."));
       setSelected(null);setTyped("");requestId.current=null;
       setRefresh(n=>n+1);onReversed();
     } catch(err) {
@@ -137,7 +151,7 @@ export function CollectionsReview({onReversed}:{onReversed:()=>void}) {
             <td>{row.reference_mask}</td>
             <td><span className={"status-pill "+(row.reversed?"archived":"active")}>
               {row.reversed?"Reversed":"Recorded"}</span></td>
-            <td>{row.message_status==="suppressed"?"Suppressed":"Awaiting setup"}</td>
+            <td>{deliveryLabel(row.message_status)}</td>
             <td>{row.reversed?<span className="muted">No further action</span>
               :<button type="button" className="text-action" onClick={()=>choose(row)}>
                 Reverse entry
