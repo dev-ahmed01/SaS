@@ -56,8 +56,9 @@ test("reminder screens do not send messages before Phase 11",async ({page})=>{
   await expect(page.getByRole("link",{name:/WhatsApp Reminders/})).toBeVisible();
   await expect(page.getByRole("link",{name:/Email Reminders/})).toBeVisible();
   await page.getByRole("link",{name:/WhatsApp Reminders/}).click();
-  await expect(page.getByRole("button",{name:"Send WhatsApp Reminders"})).toBeDisabled();
-  await expect(page.getByText("No messages are being sent.")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
+  await expect(page.getByText(/Delivery is disabled/)).toBeVisible();
   await page.goto("/dashboard");
   await expect(page.getByText("Waiting for live data").first()).toBeVisible();
 });
@@ -654,4 +655,49 @@ test("Protected payout gateway rejects forged actions or unsupported routes",asy
     data:{},
   });
   expect(invalid.status()).toBe(404);
+});
+
+
+test("Reminders WhatsApp preview uses real sponsor eligibility with no sending",async ({page})=>{
+  const suffix=String(Date.now()%1000000).padStart(6,"0");
+  const name="Reminder Candidate "+suffix;
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Full name"}).fill(name);
+  await page.getByRole("textbox",{name:"Mobile number"}).fill("9857"+suffix);
+  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
+  await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await page.goto("/reminders/whatsapp");
+  await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
+  const targets=page.getByRole("region",{name:"Eligible reminder recipients"});
+  await expect(targets.getByRole("row",{name:new RegExp(name)})).toBeVisible();
+  await expect(page.getByText(/Delivery is disabled/)).toBeVisible();
+  await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
+  await page.getByRole("button",{name:"Promoters",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Consolidated promoter follow-ups"})).toBeVisible();
+  await expect(targets.getByRole("row",{name:new RegExp(name)})).toHaveCount(0);
+  await expect(page.getByRole("region",{name:"Reminder preparation history"})).toBeVisible();
+});
+
+test("Reminder proxy forbids unauthorized preparation and nonexistent operations",async ({page})=>{
+  await page.goto("/reminders/whatsapp");
+  const forged=await page.request.post("/api/admin/reminders/prepare",{
+    headers:{"Origin":"https://untrusted.example","Content-Type":"application/json"},
+    data:{kind:"sponsor",request_id:"00000000-0000-4000-8000-000000000001"},
+  });
+  expect(forged.status()).toBe(403);
+  const missingCsrf=await page.evaluate(async()=>{
+    const res=await fetch("/api/admin/reminders/prepare",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({kind:"sponsor",request_id:crypto.randomUUID()}),
+    });
+    return res.status;
+  });
+  expect(missingCsrf).toBe(403);
+  const wrongEndpoint=await page.request.post("/api/admin/reminders/send",{
+    headers:{"Origin":"http://127.0.0.1:3000","Content-Type":"application/json"},
+    data:{},
+  });
+  expect(wrongEndpoint.status()).toBe(404);
 });

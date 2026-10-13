@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.accounting import month_start
 from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
@@ -20,7 +19,6 @@ from app.models import (
     MessageOutbox,
     Organization,
     OrganizationSettings,
-    Promoter,
     PromoterAssignment,
     Prospect,
     ReminderBatch,
