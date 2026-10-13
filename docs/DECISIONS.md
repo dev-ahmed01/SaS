@@ -24,3 +24,12 @@
 - Creating a payout plan does not transfer money. Recording `paid` requires explicit Admin attestation and unique outgoing reference. No gateway/disbursement integration is authorized.
 - Recurring pause/resume/close becomes effective next IST calendar month; past obligations and payments are not rewritten. Status history remains auditable.
 - **Pending approval:** proof and authority for outgoing payouts, second-person approval threshold, adjustments and historical corrections, amount change policy and partial/advance disbursement rules.
+
+## Phase 10 — Reminder eligibility and safe preparation
+
+- The Admin **Reminders → WhatsApp** screen shows live sponsor/promoter previews in Kolkata time; it cannot send messages.
+- Default sponsor reminder day is the 5th, promoter follow-up the 20th; both are read from Admin Settings.
+- A sponsor is ineligible when archived, two completed missed months make them inactive, the current month is fully paid, or direct WhatsApp consent is missing. Never use a stale Prospects lifecycle cache to decide eligibility.
+- A single promoter message represents all eligible currently assigned unpaid sponsors; promoter activity and consent are required. No duplicate promoter notifications for each sponsor.
+- Preparation runs only on the configured IST day, is Admin-initiated/idempotent and records no provider deliveries. Phase 11 will add scheduling and secure Pabbly/WhatsApp delivery with live rechecking at dispatch.
+- **Business approval still pending** for partial payments/reactivation, direct reminders to registered New sponsors, and WhatsApp disclosure of assigned sponsor balances to a promoter.
