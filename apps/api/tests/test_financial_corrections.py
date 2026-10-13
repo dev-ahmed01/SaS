@@ -1,6 +1,5 @@
 """Phase 08 financial corrections: append-only voids and net accounting integrity."""
 import uuid
-from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
