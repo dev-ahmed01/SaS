@@ -278,3 +278,20 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .promoter-assign-search .field { max-width:420px; }
 .promoter-candidate-list { margin-top:9px; }
 @media(max-width:780px) { .promoter-assignments { margin:18px 16px; } }
+
+/* Phase 06: monthly accounting within the approved Collections shell. */
+.accounting-workspace { margin-top:24px; max-width:1100px; }
+.accounting-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+.accounting-heading h2 { margin:0 0 8px; font-size:19px; }
+.accounting-heading p,.accounting-list-heading p { font-size:11px; color:var(--muted); margin:0; max-width:570px; }
+.account-month-picker { width:175px; }
+.accounting-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:23px; }
+.accounting-metric { border:1px solid var(--line); border-radius:9px; background:var(--mint-light); padding:19px 18px; display:flex; flex-direction:column; gap:6px; }
+.accounting-metric span { font-size:11px; color:var(--muted); }
+.accounting-metric strong { font:600 20px var(--font-body); color:var(--forest-deep); }
+.accounting-details { border:1px solid var(--line); border-radius:9px; margin-top:20px; padding:20px; }
+.accounting-list-heading { display:flex; align-items:center; justify-content:space-between; gap:15px; flex-wrap:wrap; margin-bottom:18px; }
+.accounting-list-heading h3 { margin:0 0 6px; font-size:17px; }
+.accounting-footnote { font-size:11px; color:var(--muted); margin-top:18px; max-width:780px; }
+@media(max-width:1000px) { .accounting-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:540px) { .accounting-metrics { grid-template-columns:1fr; } .accounting-metric { padding:13px; } .accounting-metric strong { font-size:18px; } .accounting-details { padding:12px; } }
