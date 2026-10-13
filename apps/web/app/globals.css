@@ -386,3 +386,19 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .reminder-kind{width:100%;}
   .reminder-kind button{flex:1;}
 }
+
+/* Phase 11: delivery readiness, no send controls in the browser. */
+.delivery-status {max-width:1100px; margin:22px 0 26px; padding:20px;
+  border:1px solid var(--line); border-radius:10px; background:#fff;}
+.delivery-status .review-heading h3 {margin:0 0 6px; font-size:17px;}
+.delivery-status .review-heading p {color:var(--muted); font-size:11px;}
+.delivery-availability {padding:11px 13px; border-radius:7px;
+  background:var(--mint-light); font-size:11px; color:var(--forest-deep);}
+.delivery-metrics {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+.delivery-metric {padding:12px; border:1px solid var(--line); border-radius:8px;
+  display:flex; flex-direction:column; gap:7px;}
+.delivery-metric span {font-size:10px;color:var(--muted);}
+.delivery-metric strong {font:600 19px var(--font-body); color:var(--forest-deep);}
+@media(max-width:850px) {.delivery-metrics {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:530px) {.delivery-status {padding:13px;}
+  .delivery-metrics {grid-template-columns:1fr 1fr;}}

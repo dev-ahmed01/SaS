@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect,useRef,useState } from "react";
+import { MessageDeliveryStatus } from "./message-delivery-status";
 
 type Kind="sponsor"|"promoter";
 type Unpaid={prospect_id:string;full_name:string;outstanding_paise:number};
@@ -94,6 +95,7 @@ export function WhatsAppEligibility(){
   const isAlreadyPrepared=history?.items.some(batch=>batch.kind===kind&&
     batch.period_month===preview?.period_month);
   return <div className="reminder-workspace">
+    <MessageDeliveryStatus/>
     <section className="reminder-intro">
       <div>
         <h2>WhatsApp eligibility</h2>
