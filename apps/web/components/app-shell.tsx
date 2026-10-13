@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./ui/icon";
@@ -20,7 +20,30 @@ export function AppShell({children}:{children:React.ReactNode}) {
   const [mobileOpen,setMobileOpen] = useState(false);
   const [signOutError,setSignOutError] = useState("");
   const [signingOut,setSigningOut] = useState(false);
-  const closeDrawer = () => setMobileOpen(false);
+  const [profileOpen,setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const closeDrawer = () => { setMobileOpen(false); setProfileOpen(false); };
+  useEffect(()=>{
+    if(!profileOpen)return;
+    const onPointerDown=(event:PointerEvent)=>{
+      if(event.target instanceof Node && !profileRef.current?.contains(event.target)){
+        setProfileOpen(false);
+      }
+    };
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){
+        setProfileOpen(false);
+        profileButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown",onPointerDown);
+    document.addEventListener("keydown",onKeyDown);
+    return ()=>{
+      document.removeEventListener("pointerdown",onPointerDown);
+      document.removeEventListener("keydown",onKeyDown);
+    };
+  },[profileOpen]);
   async function signOut(){
     if(signingOut)return;
     setSigningOut(true);setSignOutError("");
@@ -56,10 +79,23 @@ export function AppShell({children}:{children:React.ReactNode}) {
           </Link>;
         })}
       </nav>
-
-      <div className="sidebar-bottom"><span className="avatar">A</span><span className="account-copy"><strong>Admin</strong><small>Masjid Management</small></span></div>
-      <button className="sidebar-logout" type="button" onClick={signOut} disabled={signingOut} aria-label="Sign out"><Icon name="logout" size={17}/><span>{signingOut?"Signing out…":"Sign out"}</span></button>
-      {signOutError&&<p role="alert" className="logout-error">{signOutError}</p>}
+      <div className="sidebar-art" aria-hidden="true"/>
+      <div ref={profileRef} className={"admin-profile"+(profileOpen?" open":"")}>
+        <button ref={profileButtonRef} type="button" className="sidebar-bottom"
+          aria-label="Admin account" aria-expanded={profileOpen} aria-controls="admin-profile-actions"
+          onClick={()=>setProfileOpen(open=>!open)}>
+          <span className="avatar">A</span>
+          <span className="account-copy"><strong>Admin</strong><small>Masjid Management</small></span>
+          <Icon name="chevron-down" size={17} className="profile-chevron"/>
+        </button>
+        {profileOpen&&<div className="admin-profile-menu" id="admin-profile-actions" aria-label="Admin actions">
+          <button className="sidebar-logout" type="button" onClick={signOut}
+            disabled={signingOut} aria-label="Sign out">
+            <Icon name="logout" size={17}/><span>{signingOut?"Signing out…":"Sign out"}</span>
+          </button>
+          {signOutError&&<p role="alert" className="logout-error">{signOutError}</p>}
+        </div>}
+      </div>
     </aside>
     <div className="app-content">
       <header className="topbar">
