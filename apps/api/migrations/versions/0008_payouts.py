@@ -21,6 +21,8 @@ def upgrade() -> None:
             sa.ForeignKey("organizations.id", ondelete="RESTRICT"),
             nullable=False,
         ),
+        sa.Column("create_request_id", sa.Uuid(), nullable=False),
+        sa.Column("create_hash", sa.String(64), nullable=False),
         sa.Column("payee_name", sa.String(160), nullable=False),
         sa.Column("purpose", sa.String(240), nullable=False),
         sa.Column("notes", sa.String(800)),
@@ -38,6 +40,9 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint(
             "organization_id", "id", name="uq_payout_plan_org_id",
+        ),
+        sa.UniqueConstraint(
+            "organization_id", "create_request_id", name="uq_payout_create_request",
         ),
         sa.CheckConstraint(
             "cadence IN ('recurring', 'one_time')", name="ck_payout_plan_cadence",
@@ -61,6 +66,7 @@ def upgrade() -> None:
         sa.Column("organization_id", sa.Uuid(), nullable=False),
         sa.Column("plan_id", sa.Uuid(), nullable=False),
         sa.Column("effective_month", sa.Date(), nullable=False),
+        sa.Column("request_id", sa.Uuid()),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column(
             "recorded_by_admin_id", sa.Uuid(),
@@ -78,6 +84,9 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "organization_id", "plan_id", "effective_month",
             name="uq_payout_term_month",
+        ),
+        sa.UniqueConstraint(
+            "organization_id", "request_id", name="uq_payout_term_request",
         ),
         sa.CheckConstraint(
             "status IN ('active', 'paused', 'closed')",

@@ -490,6 +490,7 @@ class PayoutPlan(Base):
     __tablename__ = "payout_plans"
     __table_args__ = (
         UniqueConstraint("organization_id", "id", name="uq_payout_plan_org_id"),
+        UniqueConstraint("organization_id", "create_request_id", name="uq_payout_create_request"),
         CheckConstraint(
             "cadence IN ('recurring', 'one_time')", name="ck_payout_plan_cadence",
         ),
@@ -507,6 +508,8 @@ class PayoutPlan(Base):
         Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"),
         nullable=False, index=True,
     )
+    create_request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    create_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     payee_name: Mapped[str] = mapped_column(String(160), nullable=False)
     purpose: Mapped[str] = mapped_column(String(240), nullable=False)
     notes: Mapped[str | None] = mapped_column(String(800))
@@ -536,6 +539,7 @@ class PayoutPlanTerm(Base):
             "organization_id", "plan_id", "effective_month",
             name="uq_payout_term_month",
         ),
+        UniqueConstraint("organization_id", "request_id", name="uq_payout_term_request"),
         CheckConstraint(
             "status IN ('active', 'paused', 'closed')",
             name="ck_payout_term_status",
@@ -546,6 +550,7 @@ class PayoutPlanTerm(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
     plan_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
     effective_month: Mapped[date] = mapped_column(Date, nullable=False)
+    request_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     recorded_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
