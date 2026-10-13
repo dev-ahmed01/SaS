@@ -46,7 +46,7 @@ export function MessageDeliveryStatus() {
       <p className="delivery-availability" role="status">
         {state.operationally_enabled
           ?"Provider dispatch is enabled by the Foundation. Only eligible, new messages are sent by the authenticated worker."
-          :"Live delivery is disabled or awaiting Foundation approval. Message records are not delivered WhatsApp messages."}
+          :"Delivery is disabled or awaiting Foundation approval. Message records are not delivered WhatsApp messages."}
       </p>
       <div className="delivery-metrics">
         {[
