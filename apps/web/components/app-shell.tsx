@@ -56,7 +56,7 @@ export function AppShell({children}:{children:React.ReactNode}) {
           </Link>;
         })}
       </nav>
-      <div className="sidebar-art" aria-hidden="true"/>
+
       <div className="sidebar-bottom"><span className="avatar">A</span><span className="account-copy"><strong>Admin</strong><small>Masjid Management</small></span></div>
       <button className="sidebar-logout" type="button" onClick={signOut} disabled={signingOut} aria-label="Sign out"><Icon name="logout" size={17}/><span>{signingOut?"Signing out…":"Sign out"}</span></button>
       {signOutError&&<p role="alert" className="logout-error">{signOutError}</p>}

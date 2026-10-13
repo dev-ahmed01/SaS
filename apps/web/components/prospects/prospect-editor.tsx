@@ -7,11 +7,7 @@ type EditValues = {
   full_name: string;
   mobile_number: string;
   whatsapp_number: string;
-  area_city: string;
   amount_rupees: string;
-  next_followup_on: string;
-  last_contact_on: string;
-  notes: string;
   upi_id: string;
   whatsapp_opt_in: boolean;
 };
@@ -20,8 +16,7 @@ const contributionOptions = [250,500,750,1000,1250,1500,1750,2000,2500,3000,5000
 
 const empty: EditValues = {
   full_name: "", mobile_number: "", whatsapp_number: "",
-  area_city: "", amount_rupees: "", next_followup_on: "",
-  last_contact_on: "", notes: "", upi_id: "", whatsapp_opt_in: false,
+  amount_rupees: "", upi_id: "", whatsapp_opt_in: false,
 };
 
 function toRupees(paise: number): string {
@@ -58,11 +53,8 @@ export function ProspectEditor({
       full_name:initial.full_name,
       mobile_number:initial.mobile_number,
       whatsapp_number:initial.whatsapp_number ?? "",
-      area_city:initial.area_city,
       amount_rupees:toRupees(initial.monthly_contribution_paise),
-      next_followup_on:initial.next_followup_on ?? "",
-      last_contact_on:initial.last_contact_on ?? "",
-      notes:initial.notes ?? "", upi_id:"", whatsapp_opt_in:initial.whatsapp_opt_in
+      upi_id:"", whatsapp_opt_in:initial.whatsapp_opt_in
     } : {...empty});
   const [ready, setReady] = useState(Boolean(initial));
   const [saving, setSaving] = useState(false);
@@ -70,6 +62,25 @@ export function ProspectEditor({
   const [upiError, setUpiError] = useState("");
   const [upiBusy, setUpiBusy] = useState(false);
   const [current, setCurrent] = useState<Prospect | undefined>(initial);
+  const [promoterSearch,setPromoterSearch] = useState("");
+  const [promoters,setPromoters] = useState<{id:string;full_name:string}[]>([]);
+  const [promoterId,setPromoterId] = useState("");
+  const [promoterError,setPromoterError] = useState("");
+
+  useEffect(()=>{
+    const controller = new AbortController();
+    const timer = setTimeout(()=>{
+      const params = new URLSearchParams({active:"true",q:promoterSearch,limit:"50"});
+      fetch("/api/admin/promoters?"+params,{cache:"no-store",signal:controller.signal})
+        .then(async response=>{
+          if(!response.ok)throw Error("Promoters unavailable");
+          return await response.json();
+        })
+        .then(page=>{if(!controller.signal.aborted){setPromoters(page.items);setPromoterError("");}})
+        .catch(()=>{if(!controller.signal.aborted)setPromoterError("Could not load promoters.");});
+    },200);
+    return ()=>{clearTimeout(timer);controller.abort();};
+  },[promoterSearch]);
 
   useEffect(() => {
     if (initial) return;
@@ -115,13 +126,9 @@ export function ProspectEditor({
         full_name:values.full_name.trim(),
         mobile_number:mobile,
         whatsapp_number:whatsapp,
-        area_city:values.area_city.trim(),
         ...(!current || !legacyUnchanged
           ? {monthly_contribution_paise:amount}
           : {}),
-        next_followup_on:values.next_followup_on || null,
-        last_contact_on:values.last_contact_on || null,
-        notes:values.notes.trim() || null,
         whatsapp_opt_in:values.whatsapp_opt_in,
       };
       if (current) body.version = current.version;
@@ -150,6 +157,17 @@ export function ProspectEditor({
       }
       const saved:Prospect = await response.json();
       setCurrent(saved);
+      if(promoterId){
+        const assigned=await fetch("/api/admin/promoters/"+promoterId+"/sponsors/"+saved.id,{
+          method:"PUT",credentials:"same-origin",
+          headers:{"X-CSRF-Token":csrf,"If-Match":String(saved.version)},
+        });
+        if(!assigned.ok){
+          setError("Prospect saved, but the promoter could not be linked. Retry the assignment or use the Promoters list.");
+          return;
+        }
+        setPromoterId("");
+      }
       if (!current) {
         registrationKey.current=null;
         setValues({...empty, amount_rupees:values.amount_rupees});
@@ -196,7 +214,6 @@ export function ProspectEditor({
       <div className="form-grid">
         <label className="field"><span className="field-label">Full name <span className="required">*</span></span><input required minLength={2} maxLength={160} value={values.full_name} onChange={e=>update("full_name",e.target.value)} placeholder="Enter full name"/></label>
         <label className="field"><span className="field-label">Mobile number <span className="required">*</span></span><input required type="tel" value={values.mobile_number} onChange={e=>update("mobile_number",e.target.value)} placeholder="+91 98765 43210"/></label>
-        <label className="field"><span className="field-label">Area / City <span className="required">*</span></span><input required minLength={2} maxLength={120} value={values.area_city} onChange={e=>update("area_city",e.target.value)} placeholder="Enter area or city"/></label>
         <label className="field"><span className="field-label">Monthly contribution (₹) <span className="required">*</span></span>
           <select aria-label="Monthly contribution (₹)" required disabled={!ready}
             value={contributionOptions.includes(Number(values.amount_rupees) as typeof contributionOptions[number])?values.amount_rupees:"other"}
@@ -214,10 +231,15 @@ export function ProspectEditor({
           <summary>More details (optional)</summary>
           <div className="optional-fields">
             <label className="field"><span className="field-label">WhatsApp number</span><input type="tel" value={values.whatsapp_number} onChange={e=>update("whatsapp_number",e.target.value)} placeholder="Same as mobile if empty"/></label>
-            <label className="field"><span className="field-label">Next follow-up date</span><input type="date" value={values.next_followup_on} onChange={e=>update("next_followup_on",e.target.value)}/></label>
-            <label className="field"><span className="field-label">Last contact date</span><input type="date" value={values.last_contact_on} onChange={e=>update("last_contact_on",e.target.value)}/></label>
+            <div className="field full"><label className="field-label" htmlFor="promoter-search">Link to promoter</label>
+              <input id="promoter-search" value={promoterSearch} onChange={e=>{setPromoterSearch(e.target.value);setPromoterId("");}} placeholder="Search promoters by name or number"/>
+              <select aria-label="Assign promoter" value={promoterId} onChange={e=>setPromoterId(e.target.value)}>
+                <option value="">No new assignment</option>
+                {promoters.map(promoter=><option key={promoter.id} value={promoter.id}>{promoter.full_name}</option>)}
+              </select>
+              {promoterError&&<span className="form-error" role="status">{promoterError}</span>}
+            </div>
             {!current&&<label className="field"><span className="field-label">UPI ID</span><input maxLength={193} value={values.upi_id} onChange={e=>update("upi_id",e.target.value)} placeholder="name@bank"/></label>}
-            <label className="field full"><span className="field-label">Notes</span><textarea rows={2} maxLength={1500} value={values.notes} onChange={e=>update("notes",e.target.value)} placeholder="Optional notes"/></label>
             <label className="checkbox-field full"><input type="checkbox" checked={values.whatsapp_opt_in} onChange={e=>update("whatsapp_opt_in",e.target.checked)}/><span>WhatsApp communication consent recorded</span></label>
           </div>
         </details>

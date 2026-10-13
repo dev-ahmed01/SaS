@@ -48,7 +48,7 @@ test("approved tabs remain functional and preview saves stay disabled",async ({p
   await page.goto("/collections");
   await expect(page.getByRole("button",{name:"Save Collection"})).toBeDisabled();
   await page.getByRole("link",{name:"Active",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"Active Collections"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Active collections"})).toBeVisible();
 });
 
 test("reminder screens do not send messages before Phase 11",async ({page})=>{
@@ -79,10 +79,8 @@ test("responsive layout has no horizontal overflow and drawer controls work",asy
 
 test("WhatsApp cannot be enabled by a development Admin",async ({page})=>{
   await page.goto("/settings");
-  await page.getByText("WhatsApp automation",{exact:true}).click();
-  await expect(page.getByRole("textbox",{name:"WhatsApp automation confirmation"})).toBeVisible();
-  await page.getByRole("textbox",{name:"WhatsApp automation confirmation"}).fill("ENABLE WHATSAPP");
-  await expect(page.getByRole("button",{name:"Enable WhatsApp automation"})).toBeDisabled();
+  await expect(page.getByText("WhatsApp automation",{exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Enable WhatsApp automation"})).toHaveCount(0);
 });
 
 test("settings are persisted, edited and can be reloaded",async ({page})=>{
@@ -146,7 +144,6 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(label);
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
   const search=page.getByRole("textbox",{name:"Search prospects"});
@@ -158,7 +155,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await row.getByRole("button",{name:"Edit"}).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("dialog").getByText("More details (optional)").click();
-  await page.getByRole("dialog").getByRole("textbox",{name:"Notes"}).fill("Synthetic test note");
+  await page.getByRole("dialog").getByRole("textbox",{name:"WhatsApp number"}).fill("9876543211");
   await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await search.fill(label);
@@ -174,7 +171,6 @@ test("Admin can archive and restore a prospect without deleting its record",asyn
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(label);
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543201");
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
   const search=page.getByRole("textbox",{name:"Search prospects"});
@@ -197,7 +193,6 @@ test("Admin creates and searches promoters in the approved Active and All views"
   await page.goto("/promoters");
   await page.getByRole("textbox",{name:"Full name"}).fill(label);
   await page.getByRole("textbox",{name:"Phone number"}).fill(number);
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/all$/);
   const find=page.getByRole("textbox",{name:"Search promoters"});
@@ -216,7 +211,6 @@ test("Admin can edit promoters and deactivate/reactivate unassigned promoters",a
   await page.goto("/promoters");
   await page.getByRole("textbox",{name:"Full name"}).fill(label);
   await page.getByRole("textbox",{name:"Phone number"}).fill(number);
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/all$/);
   const search=page.getByRole("textbox",{name:"Search promoters"});
@@ -226,7 +220,7 @@ test("Admin can edit promoters and deactivate/reactivate unassigned promoters",a
   await row.getByRole("button",{name:"Edit"}).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("dialog").getByText("More details (optional)").click();
-  await page.getByRole("dialog").getByRole("textbox",{name:"Notes"}).fill("Test follow-up");
+  await page.getByRole("dialog").getByRole("textbox",{name:"WhatsApp number"}).fill("9876543212");
   await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   row=page.getByRole("row",{name:new RegExp(label)});
@@ -244,13 +238,11 @@ test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",a
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(sponsor);
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9676"+String(key).padStart(6,"0"));
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
   await page.goto("/promoters");
   await page.getByRole("textbox",{name:"Full name"}).fill(promoter);
   await page.getByRole("textbox",{name:"Phone number"}).fill("9566"+String(key).padStart(6,"0"));
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/all$/);
   await page.getByRole("textbox",{name:"Search promoters"}).fill(promoter);
@@ -273,7 +265,6 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
   await page.goto("/collections/all");
@@ -310,17 +301,21 @@ test("Accounting rejects forged requests and never exposes payment write actions
 
 test("manual collection amount accepts only ₹250 denominations",async ({page})=>{
   await page.goto("/collections");
-  const amount=page.getByRole("spinbutton",{name:"Amount received (₹)"});
+  const tiers=page.getByRole("combobox",{name:"Amount received (₹)"});
+  for (const valid of ["250","500","750","1000"]) {
+    await tiers.selectOption(valid);
+    await expect(tiers).toHaveValue(valid);
+  }
+  await tiers.selectOption("other");
+  const amount=page.getByRole("spinbutton",{name:"Custom collection amount (₹)"});
   await expect(amount).toHaveAttribute("min","250");
   await expect(amount).toHaveAttribute("step","250");
   for (const invalid of ["125","375","700"]) {
     await amount.fill(invalid);
     expect(await amount.evaluate(element=>element.checkValidity())).toBe(false);
   }
-  for (const valid of ["250","500","750","1000"]) {
-    await amount.fill(valid);
-    expect(await amount.evaluate(element=>element.checkValidity())).toBe(true);
-  }
+  await amount.fill("15000");
+  expect(await amount.evaluate(element=>element.checkValidity())).toBe(true);
   // No sponsor is selected: this is input validation only, never a real receipt.
 });
 
@@ -347,7 +342,6 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9826"+id);
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByText("More details (optional)").click();
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -356,9 +350,9 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  const payment=page.getByRole("spinbutton",{name:"Amount received (₹)"});
+  const payment=page.getByRole("combobox",{name:"Amount received (₹)"});
   await expect(payment).toHaveValue("");
-  await payment.fill(agreed.toFixed(2));
+  await payment.selectOption(String(agreed));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
   const save=page.getByRole("button",{name:"Save Collection"});
   await expect(save).toBeDisabled();
@@ -385,14 +379,13 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9836"+id);
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/all$/);
   await page.goto("/collections");
   await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  await page.getByRole("spinbutton",{name:"Amount received (₹)"}).fill("500.00");
+  await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption("500");
   const receivedOn=await page.locator('input[type="date"]').inputValue();
   const month=await page.locator('input[type="month"]').inputValue();
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
@@ -427,7 +420,6 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9847"+id);
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByText("More details (optional)").click();
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -436,7 +428,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.goto("/collections");
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
-  await page.getByRole("spinbutton",{name:"Amount received (₹)"}).fill(agreed.toFixed(2));
+  await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption(String(agreed));
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("REVERSAL"+id);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
@@ -716,7 +708,6 @@ test("Reminders WhatsApp preview uses real sponsor eligibility with no sending",
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Full name"}).fill(name);
   await page.getByRole("textbox",{name:"Mobile number"}).fill("9857"+suffix);
-  await page.getByRole("textbox",{name:"Area / City"}).fill("Bengaluru");
   await page.getByText("More details (optional)").click();
   await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -802,7 +793,7 @@ test("mobile collection form stays clickable with populated recent history",asyn
   }).toBeLessThanOrEqual(413);
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(data.name);
   await page.getByRole("option",{name:new RegExp(data.name)}).click();
-  await page.getByRole("spinbutton",{name:"Amount received (₹)"}).fill("250.00");
+  await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption("250");
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("FINALHISTORY"+suffix);
   await page.getByRole("checkbox",{name:/Foundation's records/}).check();
   const save=page.getByRole("button",{name:"Save Collection"});

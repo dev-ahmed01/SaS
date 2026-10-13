@@ -19,6 +19,7 @@ const deliveryLabel=(value:string):string=>({
   delivered:"Delivered (confirmed)",
 }[value]??"Unknown");
 
+const contributionOptions=[250,500,750,1000,1250,1500,1750,2000,2500,3000,5000,10000];
 const amount=(value:number)=>(value/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 const istDate=()=>new Intl.DateTimeFormat("en-CA",{
   timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit",
@@ -29,6 +30,7 @@ export function ManualCollections(){
   const [results,setResults]=useState<Prospect[]>([]);
   const [selected,setSelected]=useState<Prospect|null>(null);
   const [rupees,setRupees]=useState("");
+  const [customAmount,setCustomAmount]=useState(false);
   const [receivedOn,setReceivedOn]=useState(istDate);
   const [period,setPeriod]=useState(()=>istDate().slice(0,7));
   const [method,setMethod]=useState("upi");
@@ -60,7 +62,7 @@ export function ManualCollections(){
 
   function select(prospect:Prospect){
     setSelected(prospect);setSearch(prospect.full_name);setResults([]);
-    setRupees("");setError("");
+    setRupees("");setCustomAmount(false);setError("");
     requestId.current=null;
   }
   function update(){setError("");setSuccess("");requestId.current=null;}
@@ -111,7 +113,7 @@ export function ManualCollections(){
             ?"No WhatsApp confirmation was prepared because consent is missing."
             :"WhatsApp status: "+deliveryLabel(data.message_status)+
               ". View authenticated delivery status in Reminders."));
-      setSelected(null);setSearch("");setRupees("");setReference("");
+      setSelected(null);setSearch("");setRupees("");setCustomAmount(false);setReference("");
       setConfirmed(false);requestId.current=null;setRefresh(x=>x+1);
     }catch{setError("Connection interrupted. Check the recent list before retrying.");}
     finally{setSaving(false);}
@@ -125,7 +127,7 @@ export function ManualCollections(){
             <label className="field"><span className="field-label">Sponsor <span className="required">*</span></span>
               <input aria-label="Search sponsor" autoComplete="off" required value={search}
                 placeholder="Search by name or mobile number"
-                onChange={e=>{setSearch(e.target.value);setSelected(null);setRupees("");update();}}/>
+                onChange={e=>{setSearch(e.target.value);setSelected(null);setRupees("");setCustomAmount(false);update();}}/>
             </label>
             {selected&&<p className="manual-selected">Selected: {selected.full_name} · {selected.mobile_number}
               · {selected.whatsapp_opt_in?"WhatsApp consent recorded":"No WhatsApp consent"}</p>}
@@ -136,9 +138,17 @@ export function ManualCollections(){
               </button>)}
             </div>}
           </div>
-          <label className="field"><span className="field-label">Amount received (₹) *</span>
-            <input aria-label="Amount received (₹)" required type="number" inputMode="numeric" min="250" step="250" max="10000000" value={rupees}
-              placeholder="250, 500, 750..." onChange={e=>{setRupees(e.target.value);update();}}/></label>
+          <div className="field"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
+            <select id="collection-amount" aria-label="Amount received (₹)" required value={customAmount?"other":rupees}
+              onChange={e=>{setCustomAmount(e.target.value==="other");setRupees(e.target.value==="other"?"":e.target.value);update();}}>
+              <option value="" disabled>Select amount</option>
+              {contributionOptions.map(value=><option key={value} value={value}>{value.toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0})}</option>)}
+              <option value="other">Other multiple of ₹250…</option>
+            </select>
+            {customAmount&&<input aria-label="Custom collection amount (₹)" required type="number" inputMode="numeric"
+              min="250" step="250" max="10000000" value={rupees} placeholder="Enter a multiple of ₹250"
+              onChange={e=>{setRupees(e.target.value);update();}}/>}
+          </div>
           <label className="field"><span className="field-label">Payment method *</span>
             <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>

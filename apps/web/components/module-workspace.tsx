@@ -120,7 +120,7 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="prospects" && ["add","inactive","all"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"all"}/>;
   if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
   if(module==="collections" && view==="add") return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
-  if(module==="collections" && view==="all") return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace/></AppShell>;
+  if(module==="collections" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"}/></AppShell>;
   if(module==="payouts" && view==="add") return <AppShell><PageHeading title="Payouts" description=""/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
   if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Payouts" description=""/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;

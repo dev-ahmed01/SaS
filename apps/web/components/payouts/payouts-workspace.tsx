@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -41,7 +40,6 @@ async function securedPost(path:string,body:unknown):Promise<Response>{
 }
 
 export function PayoutAdd(){
-  const router=useRouter();
   const [payee,setPayee]=useState("");
   const [purpose,setPurpose]=useState("");
   const [notes,setNotes]=useState("");
@@ -85,7 +83,7 @@ export function PayoutAdd(){
   return <section className="content-panel payouts-form" aria-label="Add payout plan">
     <div className="payout-panel-heading">
       <div><h2>Add payout</h2></div>
-      <button type="button" className="text-action" onClick={()=>router.push("/payouts/all")}>All payouts →</button>
+
     </div>
     <form onSubmit={submit}>
       <div className="form-grid">

@@ -284,6 +284,7 @@ def list_collections(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     db: Annotated[Session, Depends(db_session)],
     period_month: date | None = None,
+    active_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CollectionPage:
@@ -292,6 +293,12 @@ def list_collections(
         if period_month != month_start(period_month):
             raise HTTPException(status_code=422, detail="Invalid billing month")
         conditions.append(ManualCollection.period_month == period_month)
+    if active_only:
+        reversed_record = select(ManualCollectionReversal.id).where(
+            ManualCollectionReversal.organization_id == ManualCollection.organization_id,
+            ManualCollectionReversal.collection_id == ManualCollection.id,
+        ).exists()
+        conditions.append(~reversed_record)
     total = db.scalar(select(func.count(ManualCollection.id)).where(*conditions)) or 0
     rows = db.scalars(select(ManualCollection).where(*conditions)
         .order_by(ManualCollection.created_at.desc(), ManualCollection.id.desc())

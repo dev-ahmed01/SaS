@@ -86,21 +86,21 @@ export function PromoterList({view}:{view:"active"|"all"}){
     <div className="list-tools">
       <label className="search-control">
         <Icon name="search" size={17}/><span className="sr-only">Search promoters</span>
-        <input placeholder="Search by name, number or area…" value={search} onChange={e=>setSearch(e.target.value)}/>
+        <input placeholder="Search by name or number…" value={search} onChange={e=>setSearch(e.target.value)}/>
       </label>
     </div>
     {error&&<p className="form-error" role="alert">{error}</p>}
     <div className="table-scroll">
       <table className="data-table">
         <thead><tr><th scope="col">Name</th><th scope="col">Phone number</th>
-          <th scope="col">Area / City</th><th scope="col">Sponsors</th>
+          <th scope="col">Sponsors</th>
           <th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>
-          {loading?<tr><td colSpan={6}><div className="empty-state" role="status">Loading promoters…</div></td></tr>
-          :!data?.items.length?<tr><td colSpan={6}><div className="empty-state"><Icon name="users" size={29}/><h3>No promoters found</h3><p>{view==="active"?"Active promoters appear here after registration.":"Try another search or add a promoter."}</p></div></td></tr>
+          {loading?<tr><td colSpan={5}><div className="empty-state" role="status">Loading promoters…</div></td></tr>
+          :!data?.items.length?<tr><td colSpan={5}><div className="empty-state"><Icon name="users" size={29}/><h3>No promoters found</h3><p>{view==="active"?"Active promoters appear here after registration.":"Try another search or add a promoter."}</p></div></td></tr>
           :data.items.map(p=><tr key={p.id}>
             <td><strong className="table-name">{p.full_name}</strong></td>
-            <td>{p.mobile_number}</td><td>{p.area_city}</td>
+            <td>{p.mobile_number}</td>
             <td>{p.sponsor_count}</td>
             <td><span className={"status-pill "+(p.is_active?"active":"inactive")}>{p.is_active?"Active":"Inactive"}</span></td>
             <td><div className="row-actions">
