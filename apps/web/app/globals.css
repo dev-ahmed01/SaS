@@ -587,7 +587,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   left:0;
   right:0;
   bottom:70px;
-  width:100%;
+  /* Width is deliberately auto: 100% would size to the padded content box
+     and leave an unpainted strip beside the sidebar border. */
+  width:auto;
   height:clamp(150px,28vh,270px);
   min-height:0;
   margin:0;
@@ -599,8 +601,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
     url("/art/sponsor-salah-panorama.avif") type("image/avif"),
     url("/art/masjid-sidebar-premium.svg") type("image/svg+xml")
   );
-  background-size:auto 100%;
-  background-position:left bottom;
+  /* Fill the complete sidebar from edge to edge, without stretching the art. */
+  background-size:cover;
+  background-position:center bottom;
   background-repeat:no-repeat;
   -webkit-mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.45) 18%,#000 51%);
   mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.45) 18%,#000 51%);
