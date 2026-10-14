@@ -81,7 +81,9 @@ test("premium mosque illustrations remain scalable, unobstructed, and softly int
   assert.ok(bytes.length>12000 && bytes.length<150000,"keep high fidelity artwork reasonably small");
   assert.ok(css.includes('url("/art/sponsor-salah-panorama.avif")'));
   assert.ok(css.includes("background-image:image-set("));
-  assert.ok(css.includes("background-size:auto 100%"),"sidebar crop should be derived from same artwork");
+  assert.ok(css.includes("background-size:cover"),"sidebar artwork should fill its frame without stretching");
+  assert.ok(css.includes("width:auto;"),"sidebar illustration must span the entire padded sidebar");
+  assert.ok(css.includes("background-position:center bottom"),"center the landscape crop");
   assert.ok(css.includes("mask-image:linear-gradient"));
   assert.ok(shell.includes('className="sidebar-art"'));
   assert.ok(shell.includes('aria-label="Admin account"'));
