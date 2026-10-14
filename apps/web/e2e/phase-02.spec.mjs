@@ -71,6 +71,18 @@ test("desktop branding and landscape artwork have the right proportions",async (
   const art=page.locator(".sidebar-art");
   await expect(art).toBeVisible();
   await expect.poll(async()=>art.evaluate(el=>getComputedStyle(el).backgroundImage.includes("sponsor-salah-panorama.avif"))).toBe(true);
+  // The image must reach both edges of the padded sidebar on desktop and mobile.
+  await expect.poll(async()=>art.evaluate(el=>{
+    const sidebar=el.closest(".site-sidebar");
+    if(!sidebar)return false;
+    const artBounds=el.getBoundingClientRect();
+    const sidebarBounds=sidebar.getBoundingClientRect();
+    const style=getComputedStyle(el);
+    return Math.abs(artBounds.left-sidebarBounds.left)<=1
+      && Math.abs(artBounds.right-sidebarBounds.right)<=2
+      && style.backgroundSize==="cover"
+      && style.backgroundPosition==="50% 100%";
+  })).toBe(true);
   if(!isMobile){
     await expect.poll(async()=>sidebar.evaluate(el=>Math.round(el.getBoundingClientRect().width))).toBe(248);
     const metrics=await page.evaluate(()=>{
