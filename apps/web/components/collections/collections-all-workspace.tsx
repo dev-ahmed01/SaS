@@ -43,13 +43,13 @@ const rupees = (paise:number) => (paise/100).toLocaleString("en-IN",{
 export function CollectionsAllWorkspace({activeOnly=false,receivedOnly=false}:{activeOnly?:boolean;receivedOnly?:boolean}) {
   const [revision,setRevision] = useState(0);
   return <>
-    {!activeOnly&&<AccountingOverview key={revision}/>}
+    {!activeOnly&&!receivedOnly&&<AccountingOverview key={revision}/>}
     <CollectionsReview activeOnly={activeOnly||receivedOnly} receivedOnly={receivedOnly} onReversed={()=>setRevision(n=>n+1)}/>
   </>;
 }
 
 export function CollectionsReview({onReversed,activeOnly=false,receivedOnly=false}:{onReversed:()=>void;activeOnly?:boolean;receivedOnly?:boolean}) {
-  const [month,setMonth] = useState(()=>activeOnly?new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit"}).format(new Date()):"");
+  const [month,setMonth] = useState(()=>(activeOnly||receivedOnly)?new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit"}).format(new Date()):"");
   const [offset,setOffset] = useState(0);
   const [refresh,setRefresh] = useState(0);
   const [loading,setLoading] = useState(true);
