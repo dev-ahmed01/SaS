@@ -562,10 +562,14 @@ def create_rule(
     template = _template(database, admin, payload.template_id)
     if payload.trigger_kind == "monthly_sponsor":
         if payload.audience != "prospects" or payload.segment != "unpaid":
-            raise HTTPException(status_code=422, detail="Sponsor reminders require unpaid prospects")
+            raise HTTPException(
+                status_code=422, detail="Sponsor reminders require unpaid prospects"
+            )
     if payload.trigger_kind == "monthly_promoter":
         if payload.audience != "promoters" or payload.segment != "unpaid":
-            raise HTTPException(status_code=422, detail="Promoter reminders require unpaid assignments")
+            raise HTTPException(
+                status_code=422, detail="Promoter reminders require unpaid assignments"
+            )
     if payload.segment == "inactive" and template.category == "reminder":
         raise HTTPException(status_code=422, detail="Inactive contacts cannot receive reminders")
     row = CommunicationRule(
