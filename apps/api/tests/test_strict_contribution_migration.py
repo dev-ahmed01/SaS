@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import ManualCollection, Organization, Prospect, VerifiedCredit
+from app.models import ManualCollection, Organization, VerifiedCredit
 
 
 def _receipt(db: Session, organization_id, sponsor_id, amount: int, label: str):
@@ -51,18 +51,25 @@ def test_new_denomination_policy_preserves_historical_receipt(tmp_path, monkeypa
             org = Organization(name="Synthetic pre-policy organization")
             db.add(org)
             db.flush()
-            sponsor = Prospect(
-                organization_id=org.id, full_name="Synthetic historical sponsor",
-                mobile_number="+919876512333", area_city="Bengaluru",
-                monthly_contribution_paise=50000,
-                start_month=date(2026, 10, 1), lifecycle_status="new",
-                whatsapp_opt_in=False, version=1,
-            )
-            db.add(sponsor)
-            db.flush()
-            old = _receipt(db, org.id, sponsor.id, 12500, "hist-a")
+            sponsor_id = uuid.uuid4()
+            # Use a version-specific INSERT so future model fields aren't
+            # included when testing pre-migration schema behavior.
+            db.execute(text("""
+                INSERT INTO prospects (
+                  id, organization_id, full_name, mobile_number, area_city,
+                  monthly_contribution_paise, version, start_month,
+                  lifecycle_status, whatsapp_opt_in
+                ) VALUES (
+                  :id, :org_id, :name, :mobile, :city, 50000, 1, :start, 'new', 0
+                )
+            """), {
+                "id": sponsor_id.hex, "org_id": org.id.hex,
+                "name": "Synthetic historical sponsor",
+                "mobile": "+919876512333", "city": "Bengaluru", "start": "2026-10-01",
+            })
+            old = _receipt(db, org.id, sponsor_id, 12500, "hist-a")
             db.commit()
-            original_id, org_id, sponsor_id = old.id, org.id, sponsor.id
+            original_id, org_id = old.id, org.id
         engine.dispose()
 
         command.upgrade(config, "head")
