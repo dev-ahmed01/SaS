@@ -73,7 +73,7 @@ export function AccountingOverview(){
         <thead><tr><th>Sponsor</th><th>Due</th><th>Received / Outstanding</th>
           <th>Status</th><th>Month paid</th></tr></thead>
         <tbody>{loading?<tr><td colSpan={5}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
-        :!data?.items.length?<tr><td colSpan={6}><div className="empty-state"><h3>No sponsorships for this month</h3><p>Register sponsors to create commitments.</p></div></td></tr>
+        :!data?.items.length?<tr><td colSpan={5}><div className="empty-state"><h3>No sponsorships for this month</h3><p>Register sponsors to create commitments.</p></div></td></tr>
         :data.items.map(row=><tr key={row.prospect_id}>
           <td><strong className="table-name">{row.name}</strong></td>
           <td>{money(row.due_paise)}</td>
