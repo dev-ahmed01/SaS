@@ -525,17 +525,49 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
-  await expect(page.getByText("Received / Outstanding").first()).toBeVisible();
+  await expect(page.getByRole("region",{name:"Monthly sponsorship ledger"})
+    .getByRole("columnheader",{name:"Received",exact:true})).toBeVisible();
   const row=page.getByRole("row",{name:new RegExp(name)});
   await expect(row).toBeVisible();
   const amount=agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
   await expect(row.getByRole("cell").nth(1)).toContainText(amount);
   await expect(row.getByRole("cell").nth(2)).toContainText("0.00");
-  await expect(row.getByRole("cell").nth(2)).toContainText(amount);
+  await expect(row.getByRole("cell").nth(2)).not.toContainText(amount+" outstanding");
   await expect(row.getByText("New",{exact:true})).toBeVisible();
   await expect(row.getByText("No",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Refresh sponsor statuses"}).click();
   await expect(page.getByText(/Checked .* sponsors/)).toBeVisible();
+});
+
+test("All Collections has one received field, aligned month control and readable IST clock",async ({page,isMobile})=>{
+  await page.goto("/collections/all");
+  const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
+  const cards=ledger.locator(".accounting-metric");
+  await expect(cards).toHaveCount(3);
+  await expect(ledger.locator(".accounting-metrics").getByText("Received",{exact:true})).toBeVisible();
+  await expect(ledger.getByRole("columnheader",{name:"Received",exact:true})).toBeVisible();
+  await expect(ledger.getByRole("columnheader",{name:/Outstanding/})).toHaveCount(0);
+  await expect(ledger.getByText("Received / Outstanding")).toHaveCount(0);
+  const heading=ledger.getByRole("heading",{name:"Monthly sponsorship ledger"});
+  const month=ledger.getByLabel("Accounting month (IST)");
+  const headingBox=await heading.boundingBox();
+  const firstCardBox=await cards.first().boundingBox();
+  const lastCardBox=await cards.last().boundingBox();
+  const monthBox=await month.boundingBox();
+  expect(headingBox&&firstCardBox&&lastCardBox&&monthBox).toBeTruthy();
+  expect(Math.abs(headingBox.x-firstCardBox.x)).toBeLessThan(3);
+  if(!isMobile){
+    expect(Math.abs(monthBox.x+monthBox.width-(lastCardBox.x+lastCardBox.width))).toBeLessThan(4);
+  }
+  const clock=page.locator(".topbar-ist-clock");
+  await expect(clock).not.toContainText("Loading time");
+  await expect(clock).toContainText("IST");
+  const style=await clock.evaluate(node=>({
+    fontSize:parseFloat(getComputedStyle(node).fontSize),
+    fontWeight:Number(getComputedStyle(node).fontWeight),
+  }));
+  expect(style.fontWeight).toBeGreaterThanOrEqual(600);
+  expect(style.fontSize).toBeGreaterThanOrEqual(isMobile?11:14);
 });
 
 test("Accounting rejects forged requests and never exposes payment write actions",async ({page})=>{
