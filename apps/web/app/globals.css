@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Poppins:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Poppins:wght@400;500;600&display=swap");
 
 /* The approved October 12 desktop boards are the Phase 02 visual reference. */
 :root {
@@ -915,4 +915,90 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .pipeline-stage-row .icon-button:first-of-type {grid-column:3;grid-row:1;}
   .pipeline-stage-row .pipeline-delete {grid-column:4;grid-row:1;}
   .promoter-detail-actions {grid-template-columns:1fr;}
+}
+
+/* October CRM polish: true 800-weight headings and legible two-level branding. */
+.brand-copy strong {
+  font-size:19px;
+  font-weight:800;
+  letter-spacing:-.045em;
+  line-height:1.14;
+}
+.brand-copy small {
+  font-size:12.5px;
+  font-weight:500;
+  line-height:1.35;
+  letter-spacing:-.01em;
+}
+.topbar-name {
+  font-size:clamp(38px,3.7vw,49px);
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.045em;
+}
+.prospect-field-row select[aria-label="Sponsorship Tokens"] {
+  font-weight:500;
+  color:var(--forest-deep);
+}
+.prospect-field-row input[aria-label="Custom sponsorship tokens"] {
+  margin-top:9px;
+}
+.prospects-table.crm-table {
+  min-width:1000px;
+  width:100%;
+  table-layout:fixed;
+}
+.prospects-table.crm-table th,.prospects-table.crm-table td {
+  padding:13px 8px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:11px;
+}
+.prospects-table.crm-table th:nth-child(1) {width:8%;}
+.prospects-table.crm-table th:nth-child(2) {width:13%;}
+.prospects-table.crm-table th:nth-child(3) {width:12%;}
+.prospects-table.crm-table th:nth-child(4) {width:8%;}
+.prospects-table.crm-table th:nth-child(5) {width:11%;}
+.prospects-table.crm-table th:nth-child(6) {width:8%;}
+.prospects-table.crm-table th:nth-child(7) {width:10%;}
+.prospects-table.crm-table th:nth-child(8) {width:11%;}
+.prospects-table.crm-table th:nth-child(9) {width:9%;}
+.prospects-table.crm-table th:nth-child(10) {width:10%;}
+.prospects-table .crm-person-link {
+  display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+}
+.prospects-table .crm-ellipsis {
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.prospects-table .crm-pipeline-label {min-width:0;max-width:100%;gap:5px;}
+.prospects-table .crm-stage-cell {gap:4px;}
+.prospects-table .crm-action-cell,
+.prospects-table th:last-child {
+  position:sticky;
+  right:0;
+  z-index:1;
+  padding-inline:5px;
+  background:#fff;
+  box-shadow:-3px 0 9px rgba(16,55,38,.045);
+  overflow:visible;
+}
+.prospects-table th:last-child {background:#f3f8f5;z-index:2;}
+.prospects-table tr:hover .crm-action-cell {background:#fbfdfa;}
+.crm-row-actions {
+  display:block;
+  width:100%;
+  min-width:0;
+  padding:8px 5px;
+  color:var(--forest-deep);
+  background:#f5faf7;
+  border:1px solid var(--line);
+  border-radius:7px;
+  font:500 10.5px var(--font-body);
+}
+.crm-row-actions:focus-visible {outline:2px solid var(--forest);outline-offset:2px;}
+.crm-list-tools .search-control {width:min(100%,640px);}
+@media(max-width:780px) {
+  .topbar-name {font-size:clamp(28px,6vw,36px);font-weight:800;}
+  .brand-copy strong {font-size:19px;}
+  .brand-copy small {font-size:12px;}
 }
