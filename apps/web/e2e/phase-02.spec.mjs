@@ -399,7 +399,7 @@ test("Admin creates and searches promoters with the requested CRM fields",async 
   await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
   const headers=await page.locator(".promoter-crm-table thead th").allTextContents();
   expect(headers).toEqual(["Created","Full Name","Mobile","City","Sponsors","Status"]);
-  await tabs.getByRole("link",{name:"Active"}).click();
+  await tabs.getByRole("link",{name:"Active",exact:true}).click();
   await expect(page.getByRole("region",{name:"Active Promoters"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search promoters"}).fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
