@@ -28,6 +28,9 @@ export type Prospect = {
   whatsapp_opt_in: boolean;
   lifecycle_status: ProspectStatus;
   crm_stage: CrmStage;
+  pipeline_stage_id: string | null;
+  pipeline_stage_name: string | null;
+  pipeline_stage_color: string | null;
   crm_inactive_reason: string | null;
   crm_inactive_note: string | null;
   crm_stage_changed_at: string | null;

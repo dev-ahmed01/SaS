@@ -3,7 +3,7 @@ import { ModuleWorkspace } from "../../../components/module-workspace";
 import { requireAdminSession } from "../../../lib/admin-guard";
 
 const valid: Record<string,string[]> = {
-  dashboard:["add"],prospects:["add","all","active","inactive"],promoters:["add","active","all"],
+  dashboard:["add"],prospects:["add","all","active","inactive","stages"],promoters:["add","active","all","inactive"],
   collections:["add","active","all"],payouts:["add","active","all"],
   reminders:["add","whatsapp","email"],settings:["add"]
 };
@@ -15,7 +15,7 @@ export async function generateMetadata({params}:{params:Promise<{module:string;v
 
 export default async function ModuleRoute({params}:{params:Promise<{module:string;view?:string[]}>}) {
   const {module,view}=await params;
-  const target=view?.[0]??(module==="prospects"?"all":"add");
+  const target=view?.[0]??(["prospects","promoters"].includes(module)?"all":"add");
   if(!valid[module]?.includes(target) || (view && view.length!==1))notFound();
   await requireAdminSession();
   return <ModuleWorkspace module={module} view={target}/>;

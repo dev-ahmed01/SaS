@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -30,6 +30,10 @@ router = APIRouter(prefix="/v1/promoters", tags=["Admin promoters"])
 class PromoterCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     full_name: str = Field(min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+    occupation: str | None = Field(default=None, max_length=120)
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(default="", max_length=120)
@@ -43,6 +47,11 @@ class PromoterCreate(BaseModel):
         if len(cleaned) < 2:
             raise ValueError("At least two characters are required")
         return cleaned
+
+    @field_validator("first_name", "last_name", "occupation")
+    @classmethod
+    def clean_profile(cls, value: str | None) -> str | None:
+        return (_clean_text(value) or None) if value is not None else None
 
     @field_validator("area_city")
     @classmethod
@@ -67,9 +76,13 @@ class PromoterPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=1)
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+    occupation: str | None = Field(default=None, max_length=120)
     mobile_number: str | None = Field(default=None, min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
-    area_city: str | None = Field(default=None, min_length=2, max_length=120)
+    area_city: str | None = Field(default=None, max_length=120)
     notes: str | None = Field(default=None, max_length=1500)
     whatsapp_opt_in: bool | None = None
     is_active: bool | None = None
@@ -81,10 +94,13 @@ class PromoterPatch(BaseModel):
         for field in ("full_name", "mobile_number", "area_city", "whatsapp_opt_in", "is_active"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError("Required fields cannot be cleared")
+        for field in ("first_name", "last_name", "occupation"):
+            if field in self.model_fields_set and getattr(self, field) is not None:
+                setattr(self, field, _clean_text(getattr(self, field)) or None)
         for field in ("full_name", "area_city"):
             if field in self.model_fields_set:
                 cleaned = _clean_text(getattr(self, field))
-                if len(cleaned) < 2:
+                if len(cleaned) < 2 and (field != "area_city" or cleaned):
                     raise ValueError("At least two characters are required")
                 setattr(self, field, cleaned)
         for field in ("mobile_number", "whatsapp_number"):
@@ -98,6 +114,10 @@ class PromoterPatch(BaseModel):
 class PromoterRead(BaseModel):
     id: uuid.UUID
     full_name: str
+    first_name: str | None
+    last_name: str | None
+    email: str | None
+    occupation: str | None
     mobile_number: str
     whatsapp_number: str | None
     area_city: str
@@ -146,6 +166,8 @@ def _count(db: Session, promoter: Promoter) -> int:
 def _present(db: Session, promoter: Promoter) -> PromoterRead:
     return PromoterRead(
         id=promoter.id, full_name=promoter.full_name,
+        first_name=promoter.first_name, last_name=promoter.last_name,
+        email=promoter.email, occupation=promoter.occupation,
         mobile_number=promoter.mobile_number, whatsapp_number=promoter.whatsapp_number,
         area_city=promoter.area_city, notes=promoter.notes,
         whatsapp_opt_in=promoter.whatsapp_opt_in, is_active=promoter.is_active,
@@ -212,6 +234,8 @@ def list_promoters(
             Promoter.full_name.ilike(term, escape="\\"),
             Promoter.mobile_number.ilike(term, escape="\\"),
             Promoter.area_city.ilike(term, escape="\\"),
+            Promoter.email.ilike(term, escape="\\"),
+            Promoter.occupation.ilike(term, escape="\\"),
         ))
     total = database.scalar(select(func.count(Promoter.id)).where(*filters)) or 0
     rows = database.scalars(

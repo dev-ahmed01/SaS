@@ -26,8 +26,9 @@ REQUIRED_TABLES = (
     "audit_events",
     "message_outbox",
     "prospect_stage_transitions",
+    "prospect_stage_definitions",
 )
-EXPECTED_MIGRATION = "0014_prospect_crm_profile"
+EXPECTED_MIGRATION = "0015_promoters_pipeline"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
@@ -111,6 +112,12 @@ def audit_database(engine) -> dict:
                     LEFT JOIN payout_plans plan ON plan.id=p.plan_id
                        AND plan.organization_id=p.organization_id
                     WHERE plan.id IS NULL
+                """,
+                "prospect_pipeline_stage_tenants": """
+                    SELECT COUNT(*) FROM prospects p
+                    LEFT JOIN prospect_stage_definitions s
+                      ON s.id=p.pipeline_stage_id AND s.organization_id=p.organization_id
+                    WHERE p.pipeline_stage_id IS NOT NULL AND s.id IS NULL
                 """,
                 "crm_stage_history_tenants": """
                     SELECT COUNT(*) FROM prospect_stage_transitions h

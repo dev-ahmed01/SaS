@@ -32,6 +32,7 @@ from app.models import (
     PromoterAssignment,
     Prospect,
     ProspectArchiveInterval,
+    ProspectStageDefinition,
     ProspectStageTransition,
     ProspectUpiIdentifier,
     SponsorshipRate,
@@ -67,6 +68,7 @@ class ProspectFields(BaseModel):
     email: EmailStr | None = None
     occupation: str | None = Field(default=None, max_length=120)
     start_month: date | None = None
+    pipeline_stage_id: uuid.UUID | None = None
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(default="", max_length=120)
@@ -147,6 +149,7 @@ class ProspectUpdate(BaseModel):
     last_name: str | None = Field(default=None, max_length=80)
     email: EmailStr | None = None
     occupation: str | None = Field(default=None, max_length=120)
+    pipeline_stage_id: uuid.UUID | None = None
     mobile_number: str | None = Field(default=None, min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str | None = Field(default=None, max_length=120)
@@ -235,6 +238,9 @@ class ProspectRead(BaseModel):
     days_inactive: int | None
     assigned_promoter_id: uuid.UUID | None
     assigned_promoter_name: str | None
+    pipeline_stage_id: uuid.UUID | None
+    pipeline_stage_name: str | None
+    pipeline_stage_color: str | None
     stage_history: list[StageHistoryRead]
     mobile_number: str
     whatsapp_number: str | None
@@ -259,6 +265,17 @@ class ProspectPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+def _validate_pipeline(
+    db: Session, admin: AdminUser, stage_id: uuid.UUID,
+) -> None:
+    exists = db.scalar(select(ProspectStageDefinition.id).where(
+        ProspectStageDefinition.organization_id == admin.organization_id,
+        ProspectStageDefinition.id == stage_id,
+    ))
+    if exists is None:
+        raise HTTPException(status_code=422, detail="Select an existing prospect stage")
 
 
 def _upi_normalized(raw: str) -> str:
@@ -307,6 +324,8 @@ def _read(prospect: Prospect, status_override: str | None = None,
         changed_at = changed_at.replace(tzinfo=UTC)
     days_inactive = (max(0, (utc_now() - changed_at).days)
                      if prospect.crm_stage == "inactive" and changed_at else None)
+    pipeline = (db.get(ProspectStageDefinition, prospect.pipeline_stage_id)
+                if db is not None and prospect.pipeline_stage_id else None)
     return ProspectRead(
         id=prospect.id,
         full_name=prospect.full_name,
@@ -321,6 +340,9 @@ def _read(prospect: Prospect, status_override: str | None = None,
         days_inactive=days_inactive,
         assigned_promoter_id=promoter.promoter_id if promoter else None,
         assigned_promoter_name=promoter.full_name if promoter else None,
+        pipeline_stage_id=prospect.pipeline_stage_id,
+        pipeline_stage_name=pipeline.name if pipeline else None,
+        pipeline_stage_color=pipeline.color if pipeline else None,
         stage_history=[StageHistoryRead(
             from_stage=row.from_stage, to_stage=row.to_stage,
             reason=row.reason, note=row.note, changed_at=row.changed_at,
@@ -540,6 +562,8 @@ def create_prospect(
     if ids:
         for identifier in ids:
             _upi_digest(identifier)
+    if payload.pipeline_stage_id is not None:
+        _validate_pipeline(database, admin, payload.pipeline_stage_id)
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
     })
@@ -614,6 +638,8 @@ def update_prospect(
     updated = payload.model_dump(exclude_unset=True, exclude={"version"})
     changed = {field: value for field, value in updated.items()
                if getattr(prospect, field) != value}
+    if "pipeline_stage_id" in changed and changed["pipeline_stage_id"] is not None:
+        _validate_pipeline(database, admin, changed["pipeline_stage_id"])
     if "monthly_contribution_paise" in changed and not valid_commitment(
         changed["monthly_contribution_paise"]
     ):

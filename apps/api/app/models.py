@@ -147,6 +147,12 @@ class Prospect(Base):
         ),
         Index("ix_prospects_org_status", "organization_id", "lifecycle_status", "archived_at"),
         Index("ix_prospects_org_crm_stage", "organization_id", "crm_stage", "archived_at"),
+        Index("ix_prospects_org_pipeline_stage", "organization_id", "pipeline_stage_id"),
+        ForeignKeyConstraint(
+            ["organization_id", "pipeline_stage_id"],
+            ["prospect_stage_definitions.organization_id", "prospect_stage_definitions.id"],
+            ondelete="RESTRICT", name="fk_prospect_pipeline_stage_org",
+        ),
         CheckConstraint("crm_stage IN ('active','inactive')", name="ck_prospect_crm_stage"),
     )
 
@@ -165,6 +171,7 @@ class Prospect(Base):
     crm_stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     crm_inactive_reason: Mapped[str | None] = mapped_column(String(64))
     crm_inactive_note: Mapped[str | None] = mapped_column(String(500))
+    pipeline_stage_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
     whatsapp_number: Mapped[str | None] = mapped_column(String(16))
     area_city: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -201,6 +208,33 @@ class Prospect(Base):
         order_by="ProspectArchiveInterval.archived_at",
     )
 
+
+
+class ProspectStageDefinition(Base):
+    """Admin-configured pipeline stage, separate from CRM active status."""
+    __tablename__ = "prospect_stage_definitions"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_stage_definition_org_id"),
+        UniqueConstraint("organization_id", "name_key", name="uq_stage_definition_org_name"),
+        Index("ix_stage_definitions_org_sort", "organization_id", "sort_order", "name_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(300))
+    color: Mapped[str] = mapped_column(String(7), nullable=False)
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class ProspectStageTransition(Base):
@@ -304,6 +338,10 @@ class Promoter(Base):
         Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    first_name: Mapped[str | None] = mapped_column(String(80))
+    last_name: Mapped[str | None] = mapped_column(String(80))
+    email: Mapped[str | None] = mapped_column(String(320))
+    occupation: Mapped[str | None] = mapped_column(String(120))
     mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
     whatsapp_number: Mapped[str | None] = mapped_column(String(16))
     area_city: Mapped[str] = mapped_column(String(120), nullable=False)

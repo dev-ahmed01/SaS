@@ -15,6 +15,7 @@ from app.messaging import admin_router as messaging_admin_router
 from app.messaging import internal_router as messaging_internal_router
 from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
+from app.prospect_stages import router as prospect_stages_router
 from app.prospects import router as prospects_router
 from app.reminders import router as reminders_router
 
@@ -22,6 +23,7 @@ app = FastAPI(title="Sponsor a Salah API", version="0.11.0", docs_url=None, redo
 app.include_router(auth_router)
 app.include_router(settings_router)
 app.include_router(prospects_router)
+app.include_router(prospect_stages_router)
 app.include_router(promoters_router)
 app.include_router(accounting_router)
 app.include_router(collections_router)

@@ -115,8 +115,8 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="dashboard"&&view==="add") return <Dashboard/>;
   if(module==="settings"&&view==="add") return <Settings/>;
   if(module==="reminders") return <Reminders view={view}/>;
-  if(module==="prospects" && ["add","inactive","all"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"all"}/>;
-  if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
+  if(module==="prospects" && ["add","inactive","active","all","stages"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"active"|"all"|"stages"}/>;
+  if(module==="promoters" && ["add","active","inactive","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"inactive"|"all"}/>;
   if(module==="collections" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
   if(module==="collections" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"}/></AppShell>;
   if(module==="payouts" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;

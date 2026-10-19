@@ -298,12 +298,12 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   const name="Stage Candidate "+(Date.now()%1000000);
   await page.goto("/prospects");
   const tabs=page.getByRole("navigation",{name:"Module views"});
-  await expect(tabs.getByRole("link")).toHaveCount(4);
+  await expect(tabs.getByRole("link")).toHaveCount(5);
   await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
-    "All Prospects","Add Prospects","Active","Inactive"
+    "All Prospects","Add Prospects","Active","Inactive","Stages"
   ]);
   const columns=await tabs.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(" ").length);
-  expect(columns).toBe(4);
+  expect(columns).toBe(5);
   await tabs.getByRole("link",{name:"Add Prospect"}).click();
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9765432100");
@@ -334,51 +334,104 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await expect(page.getByRole("row",{name:new RegExp(name)})).toBeVisible();
 });
 
-test("Admin creates and searches promoters in the approved Active and All views",async ({page})=>{
+test("Prospect pipeline stages can be added, edited, assigned and safely deleted",async ({page})=>{
+  const stage="Pipeline Stage "+(Date.now()%1000000);
+  const person="Pipeline Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects/stages");
+  await expect(page.getByRole("region",{name:"Manage prospect stages"})).toBeVisible();
+  await page.getByRole("textbox",{name:/Name/}).fill(stage);
+  await page.getByRole("textbox",{name:/Description/}).fill("Initial contact completed");
+  await page.getByRole("button",{name:"Choose color #0f766e"}).click();
+  await page.getByRole("spinbutton",{name:"Order"}).fill("3");
+  await page.getByRole("button",{name:"Add Stage"}).click();
+  await expect(page.getByText(stage,{exact:true})).toBeVisible();
+  await expect(page.getByText("0 prospects")).toBeVisible();
+  await page.getByRole("button",{name:"Edit stage "+stage}).click();
+  const renamed=stage+" edited";
+  await page.getByRole("textbox",{name:/Name/}).fill(renamed);
+  await page.getByRole("button",{name:"Save Stage"}).click();
+  await expect(page.getByText(renamed,{exact:true})).toBeVisible();
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(person);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9876432101");
+  await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption({label:renamed});
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await expect(page.getByText(renamed,{exact:true})).toBeVisible();
+  await page.goto("/prospects/stages");
+  await expect(page.getByText("1 prospects")).toBeVisible();
+  await page.getByRole("button",{name:"Delete stage "+renamed}).click();
+  const dialog=page.getByRole("dialog",{name:"Confirm stage deletion"});
+  await expect(dialog.getByRole("button",{name:"Delete stage"})).toBeDisabled();
+  await dialog.getByRole("button",{name:"Cancel"}).click();
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(person);
+  await page.getByRole("row",{name:new RegExp(person)}).getByRole("link",{name:person}).click();
+  await page.getByRole("button",{name:/Edit details/}).click();
+  await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption("");
+  await page.getByRole("button",{name:"Save Changes"}).click();
+  await page.goto("/prospects/stages");
+  await page.getByRole("button",{name:"Delete stage "+renamed}).click();
+  await page.getByRole("dialog",{name:"Confirm stage deletion"})
+    .getByRole("button",{name:"Delete stage"}).click();
+  await expect(page.getByText(renamed,{exact:true})).toHaveCount(0);
+});
+
+test("Admin creates and searches promoters with the requested CRM fields",async ({page})=>{
   const label="Phase5 Promoter "+(Date.now()%1000000);
   const number="9876"+String(Date.now()%1000000).padStart(6,"0");
   await page.goto("/promoters");
-  await page.getByRole("textbox",{name:"Full name"}).fill(label);
-  await page.getByRole("textbox",{name:"Phone number"}).fill(number);
+  const tabs=page.getByRole("navigation",{name:"Module views"});
+  await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
+    "All Promoters","Add Promoters","Active","Inactive"
+  ]);
+  await tabs.getByRole("link",{name:"Add Promoters"}).click();
+  await page.getByRole("textbox",{name:/First Name/}).fill(label);
+  await page.getByRole("textbox",{name:/Mobile/}).fill(number);
+  await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
+  await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
-  await expect(page).toHaveURL(/\/promoters\/all$/);
+  await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
+  await expect(page.getByText("Teacher")).toBeVisible();
+  await page.goto("/promoters");
   const find=page.getByRole("textbox",{name:"Search promoters"});
   await find.fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
-  await expect(page.getByRole("row",{name:new RegExp(label)}).getByText("Active",{exact:true})).toBeVisible();
-  await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Active"}).click();
+  const headers=await page.locator(".promoter-crm-table thead th").allTextContents();
+  expect(headers).toEqual(["Created","Full Name","Mobile","City","Sponsors","Status"]);
+  await tabs.getByRole("link",{name:"Active",exact:true}).click();
   await expect(page.getByRole("region",{name:"Active Promoters"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search promoters"}).fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
 });
 
-test("Admin can edit promoters and deactivate/reactivate unassigned promoters",async ({page})=>{
+test("Admin edits promoter cards and changes status with confirmation",async ({page})=>{
   const label="Toggle Promoter "+(Date.now()%1000000);
   const number="9786"+String(Date.now()%1000000).padStart(6,"0");
-  await page.goto("/promoters");
-  await page.getByRole("textbox",{name:"Full name"}).fill(label);
-  await page.getByRole("textbox",{name:"Phone number"}).fill(number);
+  await page.goto("/promoters/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(label);
+  await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
-  await expect(page).toHaveURL(/\/promoters\/all$/);
-  const search=page.getByRole("textbox",{name:"Search promoters"});
-  await search.fill(label);
-  let row=page.getByRole("row",{name:new RegExp(label)});
+  await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
+  await page.getByRole("button",{name:/Edit details/}).click();
+  await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
+  await page.getByRole("button",{name:"Save Changes"}).click();
+  await expect(page.getByText("Architect")).toBeVisible();
+  await page.getByRole("button",{name:/^Deactivate/}).click();
+  const confirm=page.getByRole("dialog",{name:"Confirm promoter status"});
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button",{name:"Confirm"}).click();
+  await expect(page.getByText("Inactive",{exact:true}).first()).toBeVisible();
+  await page.goto("/promoters/inactive");
+  await page.getByRole("textbox",{name:"Search promoters"}).fill(label);
+  const row=page.getByRole("row",{name:new RegExp(label)});
   await expect(row).toBeVisible();
-  await row.getByRole("button",{name:"Edit"}).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("dialog").getByText("More details (optional)").click();
-  await page.getByRole("dialog").getByRole("textbox",{name:"WhatsApp number"}).fill("9876543212");
-  await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  row=page.getByRole("row",{name:new RegExp(label)});
-  page.once("dialog",d=>d.accept());
-  await row.getByRole("button",{name:"Deactivate"}).click();
-  await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
-  await row.getByRole("button",{name:"Reactivate"}).click();
-  await expect(row.getByText("Active",{exact:true})).toBeVisible();
+  await row.getByRole("button",{name:/Reactivate/}).click();
+  await page.getByRole("dialog",{name:"Confirm promoter status"}).getByRole("button",{name:"Confirm"}).click();
+  await expect(row).toHaveCount(0);
 });
 
-test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",async ({page})=>{
+test("Promoter details safely assign and unassign a sponsor",async ({page})=>{
   const key=Date.now()%1000000;
   const sponsor="Phase5 Sponsor "+key;
   const promoter="Phase5 Liaison "+key;
@@ -387,23 +440,19 @@ test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",a
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9676"+String(key).padStart(6,"0"));
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await page.goto("/promoters");
-  await page.getByRole("textbox",{name:"Full name"}).fill(promoter);
-  await page.getByRole("textbox",{name:"Phone number"}).fill("9566"+String(key).padStart(6,"0"));
+  await page.goto("/promoters/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(promoter);
+  await page.getByRole("textbox",{name:/Mobile/}).fill("9566"+String(key).padStart(6,"0"));
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
-  await expect(page).toHaveURL(/\/promoters\/all$/);
-  await page.getByRole("textbox",{name:"Search promoters"}).fill(promoter);
-  await page.getByRole("row",{name:new RegExp(promoter)}).getByRole("button",{name:"Edit"}).click();
-  const dialog=page.getByRole("dialog");
-  await dialog.getByRole("textbox",{name:"Find sponsor"}).fill(sponsor);
-  await expect(dialog.getByText(sponsor,{exact:true})).toBeVisible();
+  await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
+  const section=page.getByRole("region",{name:"Sponsor assignments"});
+  await section.getByRole("textbox",{name:"Find sponsor"}).fill(sponsor);
+  await expect(section.getByText(sponsor,{exact:true})).toBeVisible();
   page.once("dialog",d=>d.accept());
-  await dialog.getByRole("button",{name:"Assign",exact:true}).click();
-  await expect(dialog.getByRole("button",{name:"Unassign"})).toBeVisible();
-  await dialog.getByRole("button",{name:"Unassign"}).click();
-  await expect(dialog.getByText("No sponsors assigned to this promoter.")).toBeVisible();
-  await dialog.getByRole("button",{name:"Close edit"}).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await section.getByRole("button",{name:"Assign",exact:true}).click();
+  await expect(section.getByRole("button",{name:"Unassign"})).toBeVisible();
+  await section.getByRole("button",{name:"Unassign"}).click();
+  await expect(section.getByText("No sponsors assigned to this promoter.")).toBeVisible();
 });
 
 test("Collections All shows real monthly commitments, not imaginary deposits",async ({page})=>{
