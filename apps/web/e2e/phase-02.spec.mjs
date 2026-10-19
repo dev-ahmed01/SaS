@@ -334,6 +334,49 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await expect(page.getByRole("row",{name:new RegExp(name)})).toBeVisible();
 });
 
+test("Prospect pipeline stages can be added, edited, assigned and safely deleted",async ({page})=>{
+  const stage="Pipeline Stage "+(Date.now()%1000000);
+  const person="Pipeline Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects/stages");
+  await expect(page.getByRole("region",{name:"Manage prospect stages"})).toBeVisible();
+  await page.getByRole("textbox",{name:/Name/}).fill(stage);
+  await page.getByRole("textbox",{name:/Description/}).fill("Initial contact completed");
+  await page.getByRole("button",{name:"Choose color #0f766e"}).click();
+  await page.getByRole("spinbutton",{name:"Order"}).fill("3");
+  await page.getByRole("button",{name:"Add Stage"}).click();
+  await expect(page.getByText(stage,{exact:true})).toBeVisible();
+  await expect(page.getByText("0 prospects")).toBeVisible();
+  await page.getByRole("button",{name:"Edit stage "+stage}).click();
+  const renamed=stage+" edited";
+  await page.getByRole("textbox",{name:/Name/}).fill(renamed);
+  await page.getByRole("button",{name:"Save Stage"}).click();
+  await expect(page.getByText(renamed,{exact:true})).toBeVisible();
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(person);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9876432101");
+  await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption({label:renamed});
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await expect(page.getByText(renamed,{exact:true})).toBeVisible();
+  await page.goto("/prospects/stages");
+  await expect(page.getByText("1 prospects")).toBeVisible();
+  await page.getByRole("button",{name:"Delete stage "+renamed}).click();
+  const dialog=page.getByRole("dialog",{name:"Confirm stage deletion"});
+  await expect(dialog.getByRole("button",{name:"Delete stage"})).toBeDisabled();
+  await dialog.getByRole("button",{name:"Cancel"}).click();
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(person);
+  await page.getByRole("row",{name:new RegExp(person)}).getByRole("link",{name:person}).click();
+  await page.getByRole("button",{name:/Edit details/}).click();
+  await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption("");
+  await page.getByRole("button",{name:"Save Changes"}).click();
+  await page.goto("/prospects/stages");
+  await page.getByRole("button",{name:"Delete stage "+renamed}).click();
+  await page.getByRole("dialog",{name:"Confirm stage deletion"})
+    .getByRole("button",{name:"Delete stage"}).click();
+  await expect(page.getByText(renamed,{exact:true})).toHaveCount(0);
+});
+
 test("Admin creates and searches promoters with the requested CRM fields",async ({page})=>{
   const label="Phase5 Promoter "+(Date.now()%1000000);
   const number="9876"+String(Date.now()%1000000).padStart(6,"0");
