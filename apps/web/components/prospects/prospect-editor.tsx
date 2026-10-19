@@ -8,7 +8,7 @@ import type { PipelineStage } from "./pipeline-types";
 type Values = {
   first_name:string;last_name:string;country_code:string;phone:string;
   email:string;city:string;occupation:string;tokens:string;start_month:string;
-  promoter_id:string;pipeline_stage_id:string;upi_id:string;whatsapp_opt_in:boolean;
+  promoter_id:string;pipeline_stage_id:string;whatsapp_opt_in:boolean;
 };
 type PromoterOption = {id:string;full_name:string;is_active:boolean};
 
@@ -37,6 +37,10 @@ function monthOptions(){
   });
 }
 const months=monthOptions();
+const tokenChoices=[...Array.from({length:40},(_,index)=>index+1),50,75,100];
+const formatRupees=(amount:number)=>amount.toLocaleString("en-IN",{
+  style:"currency",currency:"INR",maximumFractionDigits:0,
+});
 function initialValues(initial?:Prospect):Values {
   const [code,phone]=parts(initial?.mobile_number??"");
   const name=initial?.first_name??initial?.full_name.split(" ")[0]??"";
@@ -47,7 +51,7 @@ function initialValues(initial?:Prospect):Values {
     tokens:String((initial?.monthly_contribution_paise??25000)/25000),
     start_month:initial?.start_month?.slice(0,7)??monthNow(),
     promoter_id:initial?.assigned_promoter_id??"",
-    pipeline_stage_id:initial?.pipeline_stage_id??"",upi_id:"",
+    pipeline_stage_id:initial?.pipeline_stage_id??"",
     whatsapp_opt_in:initial?.whatsapp_opt_in??false,
   };
 }
@@ -69,8 +73,6 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   const [stages,setStages]=useState<PipelineStage[]>([]);
   const [stagesError,setStagesError]=useState("");
   const [current,setCurrent]=useState<Prospect|undefined>(initial);
-  const [upiBusy,setUpiBusy]=useState(false);
-  const [upiError,setUpiError]=useState("");
   const requestId=useRef<string|null>(null);
   const isEdit=Boolean(initial);
 
@@ -133,7 +135,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         requestId.current??=crypto.randomUUID();
         body.request_id=requestId.current;
         body.start_month=values.start_month+"-01";
-        body.upi_ids=values.upi_id.trim()?[values.upi_id.trim()]:[];
+        body.upi_ids=[];
       }
       const response=await fetch("/api/admin/prospects"+(current?"/"+current.id:""),{
         method:current?"PATCH":"POST",credentials:"same-origin",
@@ -168,22 +170,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
     finally{setSaving(false);}
   }
 
-  async function changeUpi(id?:string){
-    if(!current||upiBusy)return;
-    setUpiBusy(true);setUpiError("");
-    try{
-      const csrf=await getCsrf();
-      const response=await fetch("/api/admin/prospects/"+current.id+"/upi-ids"+(id?"/"+id:""),{
-        method:id?"DELETE":"POST",credentials:"same-origin",
-        headers:{"X-CSRF-Token":csrf,...(id?{"If-Match":String(current.version)}:{"Content-Type":"application/json"})},
-        ...(id?{}:{body:JSON.stringify({version:current.version,upi_id:values.upi_id.trim()})}),
-      });
-      if(!response.ok){setUpiError("Could not update payment ID. Reload and retry.");return;}
-      setCurrent(await response.json() as Prospect);
-      set("upi_id","");
-    }catch{setUpiError("Connection problem updating payment ID.");}
-    finally{setUpiBusy(false);}
-  }
+
   return <section className="prospect-form-panel" aria-label={isEdit?"Edit Prospect":"Add Prospect"}>
     <div className="prospect-form-intro">
       <h2>{isEdit?"Edit prospect":"New prospect"}</h2>
@@ -195,7 +182,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
           <label className="field"><span className="field-label">First Name *</span>
             <input required minLength={2} maxLength={80} autoComplete="given-name"
               value={values.first_name} onChange={e=>set("first_name",e.target.value)} placeholder="First name"/></label>
-          <label className="field"><span className="field-label">Last Name (optional)</span>
+          <label className="field"><span className="field-label">Last Name</span>
             <input maxLength={80} autoComplete="family-name"
               value={values.last_name} onChange={e=>set("last_name",e.target.value)} placeholder="Last name"/></label>
         </div>
@@ -207,25 +194,36 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
           <label className="field"><span className="field-label">WhatsApp / Mobile *</span>
             <input required inputMode="tel" autoComplete="tel-national" value={values.phone}
               onChange={e=>set("phone",e.target.value)} placeholder="98765 43210"/></label>
-          <label className="field"><span className="field-label">Email (optional)</span>
+          <label className="field"><span className="field-label">Email</span>
             <input type="email" autoComplete="email" maxLength={320} value={values.email}
               onChange={e=>set("email",e.target.value)} placeholder="name@example.com"/></label>
         </div>
         <div className="prospect-field-row two">
-          <label className="field"><span className="field-label">City (optional)</span>
+          <label className="field"><span className="field-label">City</span>
             <input maxLength={120} autoComplete="address-level2" value={values.city}
               onChange={e=>set("city",e.target.value)} placeholder="City"/></label>
-          <label className="field"><span className="field-label">Occupation (optional)</span>
+          <label className="field"><span className="field-label">Occupation</span>
             <input maxLength={120} value={values.occupation}
               onChange={e=>set("occupation",e.target.value)} placeholder="Occupation"/></label>
         </div>
         <div className="prospect-field-row two">
-          <label className="field"><span className="field-label">Sponsorship Tokens (₹250 each) *</span>
-            <input type="number" min="1" max="40000" step="1" required value={values.tokens}
-              onChange={e=>set("tokens",e.target.value)} aria-label="Sponsorship Tokens"/>
+          <label className="field"><span className="field-label">Sponsorship Tokens *</span>
+            <select required aria-label="Sponsorship Tokens"
+              value={tokenChoices.includes(Number(values.tokens))?values.tokens:"custom"}
+              onChange={e=>set("tokens",e.target.value==="custom"?"101":e.target.value)}>
+              {tokenChoices.map(count=><option value={count} key={count}>
+                {formatRupees(count*250)} · {count} {count===1?"token":"tokens"}
+              </option>)}
+              <option value="custom">Custom quantity</option>
+            </select>
+            {!tokenChoices.includes(Number(values.tokens))&&
+              <input type="number" min="1" max="40000" step="1" required
+                aria-label="Custom sponsorship tokens" value={values.tokens}
+                onChange={e=>set("tokens",e.target.value)}
+                placeholder="Enter whole ₹250 tokens"/>}
             <span className="field-helper">{Number.isInteger(Number(values.tokens))&&Number(values.tokens)>0
-              ?(Number(values.tokens)*250).toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0})+" / month"
-              :"Whole tokens only"}</span></label>
+              ?formatRupees(Number(values.tokens)*250)+" / month"
+              :"Choose whole ₹250 tokens"}</span></label>
           <label className="field"><span className="field-label">Tentative Start (month)</span>
             <select value={values.start_month} disabled={isEdit}
               onChange={e=>set("start_month",e.target.value)} aria-label="Tentative Start">
@@ -236,14 +234,14 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             {isEdit&&<span className="field-helper">Start month is locked once registered to protect accounting history.</span>}</label>
         </div>
         <div className="prospect-field-row two">
-          <label className="field"><span className="field-label">Select Promoter (optional)</span>
+          <label className="field"><span className="field-label">Select Promoter</span>
             <select aria-label="Select Promoter" value={values.promoter_id} onChange={e=>set("promoter_id",e.target.value)}>
               <option value="">Unassigned</option>
               {initial?.assigned_promoter_id&&!promoters.some(p=>p.id===initial.assigned_promoter_id)&&
                 <option value={initial.assigned_promoter_id}>{initial.assigned_promoter_name??"Existing promoter"}</option>}
               {promoters.map(p=><option value={p.id} key={p.id}>{p.full_name}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">Prospect Stage (optional)</span>
+          <label className="field"><span className="field-label">Prospect Stage</span>
             <select aria-label="Prospect Stage" value={values.pipeline_stage_id}
               onChange={e=>set("pipeline_stage_id",e.target.value)}>
               <option value="">No stage selected</option>
@@ -263,22 +261,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>
           <span>WhatsApp reminder consent recorded</span>
         </label>
-        <details className="prospect-advanced">
-          <summary>Payment identifiers (optional)</summary>
-          <label className="field"><span className="field-label">UPI ID</span>
-            <input maxLength={193} value={values.upi_id} onChange={e=>set("upi_id",e.target.value)}
-              placeholder="payer@bank"/></label>
-          {isEdit&&current&&<div className="upi-items">
-            {current.upi_ids.map(item=><div className="upi-row" key={item.id}>
-              <span>{item.masked_vpa}</span>
-              <button type="button" className="text-action" disabled={upiBusy}
-                onClick={()=>changeUpi(item.id)}>Remove</button>
-            </div>)}
-            <button type="button" className="btn btn-secondary" disabled={!values.upi_id.trim()||upiBusy||current.upi_ids.length>=5}
-              onClick={()=>changeUpi()}>Add UPI ID</button>
-            {upiError&&<p className="form-error" role="alert">{upiError}</p>}
-          </div>}
-        </details>
+
       </div>
       {error&&<p className="form-error" role="alert">{error}</p>}
       <div className="form-actions prospect-form-actions">

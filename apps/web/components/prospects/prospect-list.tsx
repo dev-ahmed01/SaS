@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../ui/icon";
 import { StageDialog } from "./stage-dialog";
@@ -18,9 +19,9 @@ const displayMonth=(date:string|null)=>date
   :"—";
 
 export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
+  const router=useRouter();
   const [search,setSearch]=useState("");
   const [q,setQ]=useState("");
-  const [includeArchived,setIncludeArchived]=useState(false);
   const [offset,setOffset]=useState(0);
   const [revision,setRevision]=useState(0);
   const [page,setPage]=useState<ProspectPage|null>(null);
@@ -31,15 +32,14 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
     const timer=setTimeout(()=>{setQ(search);setOffset(0);},250);
     return ()=>clearTimeout(timer);
   },[search]);
-  useEffect(()=>setOffset(0),[view,includeArchived]);
+  useEffect(()=>setOffset(0),[view]);
   const load=useCallback(async(signal:AbortSignal)=>{
-    const params=new URLSearchParams({limit:"20",offset:String(offset),q,
-      include_archived:String(view==="all"&&includeArchived)});
+    const params=new URLSearchParams({limit:"20",offset:String(offset),q});
     if(view!=="all")params.set("crm_stage",view);
     const r=await fetch("/api/admin/prospects?"+params,{cache:"no-store",signal});
     if(!r.ok)throw Error(r.status===401?"Your session expired. Sign in again.":"Could not load prospects.");
     return await r.json() as ProspectPage;
-  },[offset,q,view,includeArchived]);
+  },[offset,q,view]);
   useEffect(()=>{
     const controller=new AbortController();
     setLoading(true);setError("");
@@ -55,21 +55,17 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
       <label className="search-control"><Icon name="search" size={18}/><span className="sr-only">Search prospects</span>
         <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search names, WhatsApp, city, email…"/></label>
-      <div className="crm-list-tools-right">
-        {view==="all"&&<label className="archive-toggle"><input type="checkbox" checked={includeArchived}
-          onChange={e=>setIncludeArchived(e.target.checked)}/> Include archived</label>}
-        <span className="crm-record-count">{page?.total??0} {page?.total===1?"prospect":"prospects"}</span>
-      </div>
+
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
     <div className="table-scroll crm-table-scroll">
       <table className="data-table prospects-table crm-table">
         <thead><tr>
-          {["Created","Full Name","Mobile","City","Sponsorship","Start","Promoter","Stage"].map(name=>
+          {["Created","Full Name","Mobile","City","Sponsorship","Start","Promoter","Stage","Status","Action"].map(name=>
             <th key={name} scope="col">{name}</th>)}
         </tr></thead>
         <tbody>
-          {loading?<tr><td colSpan={8}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
+          {loading?<tr><td colSpan={10}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
           :!page||page.items.length===0?<tr><td colSpan={8}>
             <div className="crm-list-empty"><Icon name="users" size={29}/>
               <h2>{view==="inactive"?"No inactive prospects":view==="active"?"No active prospects":"No prospects yet"}</h2>
@@ -86,20 +82,31 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
             <td className="crm-money">{money(p.monthly_contribution_paise)}</td>
             <td>{displayMonth(p.start_month)}</td>
             <td>{p.assigned_promoter_name||"Unassigned"}</td>
-            <td>
-              <div className="crm-stage-cell">
-                <span className="crm-pipeline-label">
-                  <span className="pipeline-stage-dot" style={{backgroundColor:p.pipeline_stage_color??"#94a3b8"}}/>
-                  {p.pipeline_stage_name??"Unassigned"}
-                </span>
-                <span className={"status-pill "+p.crm_stage}>{p.crm_stage==="active"?"Active":"Inactive"}</span>
-                {p.crm_stage==="inactive"&&<span className="crm-stage-muted" title={reasonLabel(p.crm_inactive_reason)}>
-                  {p.days_inactive??0} days inactive</span>}
-                {!p.archived_at&&<button type="button" className="text-action crm-stage-change"
-                  onClick={()=>setStageProspect(p)}
-                  aria-label={(p.crm_stage==="active"?"Mark ":"Reactivate ")+p.full_name+(p.crm_stage==="active"?" inactive":"")}>
-                  {p.crm_stage==="active"?"Mark inactive":"Reactivate"}</button>}
-              </div>
+            <td title={p.pipeline_stage_name??"Unassigned"}>
+              <span className="crm-pipeline-label">
+                <span className="pipeline-stage-dot"
+                  style={{backgroundColor:p.pipeline_stage_color??"#94a3b8"}}/>
+                <span className="crm-ellipsis">{p.pipeline_stage_name??"Unassigned"}</span>
+              </span>
+            </td>
+            <td><div className="crm-stage-cell">
+              <span className={"status-pill "+p.crm_stage}>
+                {p.crm_stage==="active"?"Active":"Inactive"}</span>
+              {p.crm_stage==="inactive"&&<span className="crm-stage-muted"
+                title={reasonLabel(p.crm_inactive_reason)}>
+                {p.days_inactive??0} days</span>}
+            </div></td>
+            <td className="crm-action-cell">
+              <select className="crm-row-actions" value="" aria-label={"Actions for "+p.full_name}
+                onChange={e=>{
+                  const action=e.target.value;
+                  if(action==="status")setStageProspect(p);
+                  if(action==="details")router.push("/prospects/"+p.id);
+                }}>
+                <option value="">Actions ▾</option>
+                <option value="status">{p.crm_stage==="active"?"Mark Inactive":"Mark Active"}</option>
+                <option value="details">View details</option>
+              </select>
             </td>
           </tr>)}
         </tbody>

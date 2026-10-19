@@ -77,6 +77,24 @@ npm run dev
 
 Open [http://localhost:3000/login](http://localhost:3000/login). On localhost the login field accepts `Admin` as username; type the password entered in Terminal 1.
 
+## Optional: populate 100 synthetic CRM prospects
+
+**Only on a disposable local demo database**, after creating your Admin and running migrations. The seed command refuses staging/production and requires local demo mode with messaging disabled.
+
+From `C:\Users\Admin\Desktop\SaS\apps\api`:
+
+```powershell
+# Read-only preview; no records are added.
+.\.venv\Scripts\python.exe -m app.seed_local_crm
+
+# Only when you confirm the local database contains NO real donor information:
+.\.venv\Scripts\python.exe -m app.seed_local_crm --apply --confirm-synthetic-only
+```
+
+It creates **100 clearly named Demo prospects and 10 Demo promoters**, with sample cities, ₹250-tier sponsorship commitments, 75 Active and 25 Inactive CRM statuses, inactivity reasons, optional promoter assignments, and example pipeline stages if none have been configured. Existing stage definitions are retained. This does **not** create payments, verified credits, WhatsApp consent or outbox messages; it changes local dashboard commitment metrics. Rerunning the same command does not duplicate the synthetic people.
+
+Seed data is never loaded automatically at startup or added to production. Back up your existing database if it contains anything important. Do not share the seeded database as genuine financial data.
+
 ## 5. Troubleshooting
 
 - `py -3.12` not found: install Python 3.12 with its Windows launcher and reopen VS Code.
