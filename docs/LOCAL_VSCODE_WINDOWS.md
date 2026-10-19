@@ -95,6 +95,25 @@ It creates **100 clearly named Demo prospects and 10 Demo promoters**, with samp
 
 Seed data is never loaded automatically at startup or added to production. Back up your existing database if it contains anything important. Do not share the seeded database as genuine financial data.
 
+### Optional: populate separate synthetic finance examples
+
+The previous CRM seed populates sponsor commitments only. To exercise **Received**, **Outstanding**, **Planned** and **Disbursed**, you may additionally seed a strictly disposable demo database.
+
+```powershell
+cd "C:\Users\Admin\Desktop\SaS\apps\api"
+# Preview — does not write financial records:
+.\.venv\Scripts\python.exe -m app.seed_local_finance
+
+# ONLY if the database is entirely synthetic and disposable:
+.\.venv\Scripts\python.exe -m app.seed_local_finance --apply --confirm-synthetic-only
+```
+
+The finance script refuses to run if a non-Demo contact or payout exists, and refuses staging/production, real Admin credentials, or enabled messaging. It requires the 100 synthetic CRM prospects to be present. It adds **20 example incoming receipts**, **2 example reversals**, **12 planned payouts** and **5 example outgoing disbursements**, all attached to synthetic `Demo` records. The script is idempotent.
+
+**These examples are not real money received or paid.** They deliberately affect the *local demo's* accounting and dashboard figures, so never run them against actual Foundation records or represent screenshots as verified charity collections. Bank transfers are never initiated, and all collection WhatsApp events are suppressed.
+
+If this fails with `Non-demo prospects exist`, that is an intentional financial safety check. Do not bypass it or erase your current data: create a separate disposable development database for the showcase.
+
 ## 5. Troubleshooting
 
 - `py -3.12` not found: install Python 3.12 with its Windows launcher and reopen VS Code.
