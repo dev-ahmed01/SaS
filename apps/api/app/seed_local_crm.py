@@ -22,6 +22,9 @@ from app.db import get_engine
 from app.models import (
     AdminUser,
     AuditEvent,
+    CommunicationCampaign,
+    CommunicationRule,
+    CommunicationTemplate,
     PayoutPlan,
     PayoutPlanTerm,
     Promoter,
@@ -65,6 +68,8 @@ def seed_synthetic_crm(
     created = {
         "prospects": 0, "promoters": 0, "stage_definitions": 0,
         "assignments": 0, "stage_events": 0, "payout_plans": 0,
+        "communication_templates": 0, "communication_campaigns": 0,
+        "communication_rules": 0,
     }
     stage_defs = list(database.scalars(
         select(ProspectStageDefinition).where(
@@ -212,6 +217,78 @@ def seed_synthetic_crm(
             recorded_by_admin_id=admin_id,
         ))
         created["payout_plans"] += 1
+
+    # Planning fixtures only. Every contact remains without WhatsApp consent,
+    # and nothing enters the existing Pabbly delivery worker.
+    examples = [
+        ("Demo — Community update", "whatsapp", "update",
+         "Assalamu Alaikum {{name}}, here is the Foundation's monthly update."),
+        ("Demo — Sponsorship follow-up", "whatsapp", "reminder",
+         "Assalamu Alaikum {{name}}, please review this month's sponsorship."),
+        ("Demo — Promoter update", "whatsapp", "update",
+         "Assalamu Alaikum {{name}}, we have an update for our promoters."),
+        ("Demo — Thank you", "email", "thank_you",
+         "Dear {{name}}, thank you for supporting the Foundation."),
+    ]
+    templates = []
+    for index, (name, channel, category, body) in enumerate(examples, start=1):
+        template = database.scalars(select(CommunicationTemplate).where(
+            CommunicationTemplate.organization_id == organization_id,
+            CommunicationTemplate.name_key == name.casefold(),
+        )).one_or_none()
+        if not template:
+            template = CommunicationTemplate(
+                organization_id=organization_id, name=name, name_key=name.casefold(),
+                channel=channel, category=category, body=body,
+                subject="Thank you from Emlen Foundation" if channel == "email" else None,
+                provider_template_id=None, version=1,
+            )
+            database.add(template)
+            created["communication_templates"] += 1
+        templates.append(template)
+    database.flush()
+
+    for index in range(1, 4):
+        request_id = _fixed_uuid(organization_id, "campaign", index)
+        if database.scalar(select(CommunicationCampaign.id).where(
+            CommunicationCampaign.organization_id == organization_id,
+            CommunicationCampaign.request_id == request_id,
+        )):
+            continue
+        template = templates[index - 1]
+        scheduled = index == 2
+        database.add(CommunicationCampaign(
+            organization_id=organization_id, request_id=request_id,
+            title=f"Demo — Communication plan {index}",
+            template_id=template.id, channel=template.channel,
+            audience="promoters" if index == 3 else "prospects",
+            segment="unpaid" if index == 2 else "active",
+            category=template.category, body=template.body,
+            subject=template.subject, provider_template_id=None,
+            status="scheduled" if scheduled else "draft",
+            planned_for=now + timedelta(days=4) if scheduled else None,
+            eligible_snapshot=0, candidate_snapshot=0,
+            created_by_admin_id=admin_id,
+        ))
+        created["communication_campaigns"] += 1
+    for index, (title, trigger, segment, audience) in enumerate((
+        ("Demo — Monthly sponsor follow-up", "monthly_sponsor", "unpaid", "prospects"),
+        ("Demo — Promoter notification", "monthly_promoter", "unpaid", "promoters"),
+    ), start=1):
+        exists = database.scalar(select(CommunicationRule.id).where(
+            CommunicationRule.organization_id == organization_id,
+            CommunicationRule.name_key == title.casefold(),
+        ))
+        if exists:
+            continue
+        template = templates[1 if index == 1 else 2]
+        database.add(CommunicationRule(
+            organization_id=organization_id,
+            name=title, name_key=title.casefold(), trigger_kind=trigger,
+            channel=template.channel, audience=audience,
+            segment=segment, template_id=template.id, version=1,
+        ))
+        created["communication_rules"] += 1
 
     if any(created.values()):
         database.add(AuditEvent(
