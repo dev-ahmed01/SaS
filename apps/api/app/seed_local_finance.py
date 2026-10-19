@@ -9,7 +9,6 @@ import hashlib
 import hmac
 import uuid
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -18,9 +17,18 @@ from app.accounting import evaluate_status, ist_today, month_start
 from app.config import get_settings
 from app.db import get_engine
 from app.models import (
-    AdminUser, AuditEvent, ManualCollection, ManualCollectionReversal,
-    MessageOutbox, PayoutPayment, PayoutPlan, PayoutPlanTerm, Promoter, Prospect,
-    SponsorshipRate, VerifiedCredit,
+    AdminUser,
+    AuditEvent,
+    ManualCollection,
+    ManualCollectionReversal,
+    MessageOutbox,
+    PayoutPayment,
+    PayoutPlan,
+    PayoutPlanTerm,
+    Promoter,
+    Prospect,
+    SponsorshipRate,
+    VerifiedCredit,
 )
 from app.seed_local_crm import _fixed_uuid
 
@@ -199,7 +207,7 @@ def main() -> None:
     parser.add_argument("--confirm-synthetic-only", action="store_true")
     args = parser.parse_args()
     settings = get_settings()
-    if settings.app_env != "development" or not settings.local_demo_login_enabled or settings.messaging_delivery_enabled:
+    if (\n        settings.app_env != "development"\n        or not settings.local_demo_login_enabled\n        or settings.messaging_delivery_enabled\n    ):
         raise SystemExit("Refusing: must use local demo database with all messaging disabled")
     if not settings.auth_secret or len(settings.auth_secret)<32:
         raise SystemExit("Unique local AUTH_SECRET of 32+ characters required")
