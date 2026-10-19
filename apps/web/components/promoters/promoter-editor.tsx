@@ -86,7 +86,7 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
             <input required minLength={2} maxLength={80} autoComplete="given-name"
               placeholder="First name" value={form.first}
               onChange={e=>set("first",e.target.value)}/></label>
-          <label className="field"><span className="field-label">Last Name (optional)</span>
+          <label className="field"><span className="field-label">Last Name</span>
             <input maxLength={80} autoComplete="family-name" placeholder="Last name"
               value={form.last} onChange={e=>set("last",e.target.value)}/></label>
         </div>
@@ -101,16 +101,16 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
             <input type="tel" required inputMode="tel" autoComplete="tel-national"
               value={form.mobile} onChange={e=>set("mobile",e.target.value)}
               placeholder="98765 43210"/></label>
-          <label className="field"><span className="field-label">Email (optional)</span>
+          <label className="field"><span className="field-label">Email</span>
             <input type="email" maxLength={320} autoComplete="email"
               value={form.email} onChange={e=>set("email",e.target.value)}
               placeholder="name@example.com"/></label>
         </div>
         <div className="prospect-field-row two">
-          <label className="field"><span className="field-label">City (optional)</span>
+          <label className="field"><span className="field-label">City</span>
             <input maxLength={120} autoComplete="address-level2" value={form.city}
               onChange={e=>set("city",e.target.value)} placeholder="City"/></label>
-          <label className="field"><span className="field-label">Occupation (optional)</span>
+          <label className="field"><span className="field-label">Occupation</span>
             <input maxLength={120} value={form.occupation}
               onChange={e=>set("occupation",e.target.value)} placeholder="Occupation"/></label>
         </div>
