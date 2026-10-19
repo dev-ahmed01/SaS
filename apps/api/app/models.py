@@ -830,6 +830,95 @@ class CommunicationRule(Base):
     )
 
 
+class CommunicationConsentEvent(Base):
+    """Append-only, channel-specific consent/revocation evidence.
+
+    Historical whatsapp_opt_in flags remain intact. An Admin may attest an
+    explicit grant with a reference; missing proof never grants email permission.
+    """
+    __tablename__ = "communication_consent_events"
+    __table_args__ = (
+        CheckConstraint("recipient_kind IN ('prospect','promoter')",
+                        name="ck_comm_consent_kind"),
+        CheckConstraint("channel IN ('whatsapp','email')",
+                        name="ck_comm_consent_channel"),
+        CheckConstraint("decision IN ('opted_in','opted_out')",
+                        name="ck_comm_consent_decision"),
+        Index("ix_comm_consent_person", "organization_id", "recipient_kind",
+              "recipient_id", "channel", "recorded_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
+    )
+    recipient_kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    channel: Mapped[str] = mapped_column(String(12), nullable=False)
+    decision: Mapped[str] = mapped_column(String(12), nullable=False)
+    source: Mapped[str] = mapped_column(String(80), nullable=False)
+    evidence_reference: Mapped[str | None] = mapped_column(String(160))
+    actor_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CommunicationPreparation(Base):
+    """One immutable, simulation-only consent check, never a dispatch job."""
+    __tablename__ = "communication_preparations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "campaign_id"],
+            ["communication_campaigns.organization_id", "communication_campaigns.id"],
+            ondelete="RESTRICT", name="fk_comm_prep_campaign_org",
+        ),
+        UniqueConstraint("organization_id", "id", name="uq_comm_prep_org_id"),
+        UniqueConstraint("organization_id", "request_id", name="uq_comm_prep_request"),
+        Index("ix_comm_prep_campaign", "organization_id", "campaign_id", "evaluated_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    eligible_count: Mapped[int] = mapped_column(nullable=False)
+    suppressed_count: Mapped[int] = mapped_column(nullable=False)
+    created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CommunicationRecipientSnapshot(Base):
+    """Recipient-level review decision; no address/body stored, no delivery state."""
+    __tablename__ = "communication_recipient_snapshots"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "preparation_id"],
+            ["communication_preparations.organization_id", "communication_preparations.id"],
+            ondelete="RESTRICT", name="fk_comm_recipient_prep_org",
+        ),
+        UniqueConstraint("preparation_id", "recipient_kind", "recipient_id",
+                         name="uq_comm_recipient_once"),
+        CheckConstraint("recipient_kind IN ('prospect','promoter')",
+                        name="ck_comm_recipient_kind"),
+        CheckConstraint("channel IN ('whatsapp','email')",
+                        name="ck_comm_recipient_channel"),
+        CheckConstraint("status IN ('eligible','suppressed')",
+                        name="ck_comm_recipient_state"),
+        Index("ix_comm_recipient_org_prep", "organization_id", "preparation_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    preparation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    recipient_kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    channel: Mapped[str] = mapped_column(String(12), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    suppression_reason: Mapped[str | None] = mapped_column(String(32))
+
+
 class ReminderBatch(Base):
     """An Admin-prepared monthly candidate batch; never delivery authorization."""
 
