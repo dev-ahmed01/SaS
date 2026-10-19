@@ -210,7 +210,7 @@ export function PayoutList({view}:{view:"all"|"active"|"planned"}){
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
       <input aria-label="Payout accounting month" type="month" value={period}
         onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
-    <div className="finance-forecast" aria-label="Monthly payout forecast">
+    <div className="finance-forecast" role="region" aria-label="Monthly payout forecast">
       <div><span>Planned</span><strong>{plans?money(plans.forecast_due_paise):"—"}</strong></div>
       <div><span>Disbursed</span><strong>{plans?money(plans.forecast_paid_paise):"—"}</strong></div>
       <div><span>Still to pay</span><strong>{plans?money(plans.forecast_outstanding_paise):"—"}</strong></div>
