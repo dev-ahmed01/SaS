@@ -115,7 +115,8 @@ export function ProspectDetails({id}:{id:string}){
           </Card>
           <Card title="Promoter & CRM">
             <Info label="Assigned promoter" value={record.assigned_promoter_name||"Unassigned"}/>
-            <Info label="CRM stage" value={record.crm_stage==="active"?"Active":"Inactive"}/>
+            <Info label="Prospect stage" value={record.pipeline_stage_name||"Unassigned"}/>
+            <Info label="CRM status" value={record.crm_stage==="active"?"Active":"Inactive"}/>
             <Info label="Reason for inactivity" value={record.crm_stage==="inactive"?reasonLabel(record.crm_inactive_reason):"—"}/>
             <Info label="Inactive since" value={record.crm_stage==="inactive"?dateFmt(record.crm_stage_changed_at):"—"}/>
             <Info label="Days inactive" value={record.days_inactive!==null?String(record.days_inactive):"—"}/>
