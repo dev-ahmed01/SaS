@@ -28,13 +28,13 @@ const definitions: Record<Module,{name:string;singular:string;phase:string;descr
   },
   collections:{
     name:"Collections",singular:"Collection",phase:"08",description:"Track recurring monthly contributions and recorded UPI collections.",
-    tabs:[{id:"add",label:"Add",href:"/collections"},{id:"active",label:"Active",href:"/collections/active"},{id:"all",label:"All",href:"/collections/all"}],
+    tabs:[{id:"add",label:"Record Collection",href:"/collections"},{id:"active",label:"Received This Month",href:"/collections/active"},{id:"all",label:"All Collections",href:"/collections/all"}],
     fields:[{label:"Sponsor name",placeholder:"Select sponsor",required:true,kind:"select"},{label:"Amount (₹)",placeholder:"Enter amount",required:true,kind:"number"},{label:"Collection date",placeholder:"Select date",required:true,kind:"date"},{label:"Payment method",placeholder:"Select method",required:true,kind:"select"},{label:"Reference / Notes",placeholder:"Transaction reference or notes",kind:"textarea"}],
     columns:["Sponsor name","Amount (₹)","Collection date","Payment method","Status","Actions"],search:"Search sponsor name or transaction reference"
   },
   payouts:{
     name:"Payouts",singular:"Payout",phase:"09",description:"Record recurring and one-time outgoing payments.",
-    tabs:[{id:"add",label:"Add Payout",href:"/payouts"},{id:"active",label:"Active",href:"/payouts/active"},{id:"all",label:"All",href:"/payouts/all"}],
+    tabs:[{id:"add",label:"Add Payout",href:"/payouts"},{id:"active",label:"Recurring Plans",href:"/payouts/active"},{id:"all",label:"All Payouts",href:"/payouts/all"}],
     fields:[{label:"Payee name",placeholder:"Enter payee name",required:true},{label:"Amount (₹)",placeholder:"Enter amount",required:true,kind:"number"},{label:"Date",placeholder:"Select date",required:true,kind:"date"},{label:"Purpose",placeholder:"Select purpose",required:true,kind:"select"},{label:"Notes",placeholder:"Enter any notes",kind:"textarea"}],
     columns:["Payee name","Amount (₹)","Date","Purpose","Frequency","Actions"],search:"Search payee or payment purpose"
   }
