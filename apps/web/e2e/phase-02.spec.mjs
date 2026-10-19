@@ -77,7 +77,7 @@ test("approved tabs remain functional and preview saves stay disabled",async ({p
   await expect(page.getByRole("region",{name:"All Prospects"})).toBeVisible();
   await page.goto("/collections");
   await expect(page.getByRole("button",{name:"Save Collection"})).toBeDisabled();
-  await page.getByRole("link",{name:"Active",exact:true}).click();
+  await page.getByRole("link",{name:"Received This Month",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Received this month"})).toBeVisible();
 });
 
