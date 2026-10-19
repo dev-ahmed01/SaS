@@ -53,7 +53,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   return <section className="crm-list" aria-label={title}>
     <div className="crm-list-tools">
       <label className="search-control"><Icon name="search" size={18}/><span className="sr-only">Search prospects</span>
-        <input type="search" value={search} onChange={e=>setSearch(e.target.value)}
+        <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search names, WhatsApp, city, email…"/></label>
       <div className="crm-list-tools-right">
         {view==="all"&&<label className="archive-toggle"><input type="checkbox" checked={includeArchived}
