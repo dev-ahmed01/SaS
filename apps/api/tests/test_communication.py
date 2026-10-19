@@ -370,3 +370,105 @@ def test_email_requires_documented_consent_and_preflight_is_tenant_scoped(system
         "recipient_kind": "prospect", "recipient_id": identifier, "channel": "email",
         "decision": "opted_out", "source": "administrative opt-out",
     }).status_code == 404
+
+
+
+def test_contact_consent_read_is_minimal_latest_and_tenant_scoped(system):
+    client, engine = system
+    assert client.get(
+        "/v1/communication/consent-events",
+        params={"recipient_kind": "prospect", "recipient_id": str(uuid.uuid4())},
+    ).status_code == 401
+    csrf = login(client)
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Consent View Sponsor",
+        "mobile_number": "+919876543299",
+        "email": "private@example.org",
+        "area_city": "Bengaluru",
+        "monthly_contribution_paise": 25000,
+        "whatsapp_opt_in": True,
+    })
+    assert created.status_code == 201, created.text
+    identifier = created.json()["id"]
+    route = "/v1/communication/consent-events"
+    params = {"recipient_kind": "prospect", "recipient_id": identifier}
+    empty = client.get(route, params=params)
+    assert empty.status_code == 200
+    assert empty.headers["cache-control"] == "no-store"
+    assert empty.json() == []
+    opt_in = {
+        **params, "channel": "email", "decision": "opted_in",
+        "source": "signed form", "evidence_reference": "private-proof-301",
+    }
+    assert client.post(route, headers=csrf, json=opt_in).status_code == 201
+    assert client.post(route, headers=csrf, json={
+        **params, "channel": "email", "decision": "opted_out",
+        "source": "user stop request",
+    }).status_code == 201
+    assert client.post(route, headers=csrf, json={
+        **params, "channel": "whatsapp", "decision": "opted_in",
+        "source": "consent request", "evidence_reference": "record-340",
+    }).status_code == 201
+    last = client.get(route, params=params)
+    assert last.status_code == 200
+    assert len(last.json()) == 2
+    events = {item["channel"]: item for item in last.json()}
+    assert events["email"]["decision"] == "opted_out"
+    assert events["whatsapp"]["decision"] == "opted_in"
+    assert "private-proof-301" not in last.text
+    assert "private@example.org" not in last.text
+    assert "+919876543299" not in last.text
+    assert client.get(route, params={
+        "recipient_kind": "promoter", "recipient_id": identifier,
+    }).status_code == 404
+    with Session(engine) as db:
+        org = Organization(name="Unrelated tenant")
+        db.add(org)
+        db.flush()
+        db.add(AdminUser(
+            organization_id=org.id, email="isolation@example.org",
+            password_hash=hash_password("another-secure-password"),
+            is_active=True,
+        ))
+        db.commit()
+    other_csrf = login(client, "isolation@example.org", "another-secure-password")
+    assert client.get(route, params=params).status_code == 404
+    assert client.post(route, headers=other_csrf, json={
+        **params, "channel": "email", "decision": "opted_out",
+        "source": "untrusted user",
+    }).status_code == 404
+    assert client.get(route, params={
+        "recipient_kind": "bad", "recipient_id": identifier,
+    }).status_code == 422
+
+
+def test_archived_prospect_cannot_be_granted_consent_but_may_opt_out(system):
+    client, _ = system
+    csrf = login(client)
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Archived Consent Contact",
+        "mobile_number": "+919876543298",
+        "area_city": "Bengaluru",
+        "monthly_contribution_paise": 25000,
+    })
+    assert created.status_code == 201, created.text
+    identifier = created.json()["id"]
+    assert client.delete(
+        "/v1/prospects/" + identifier, headers={**csrf, "If-Match": "1"},
+    ).status_code == 204
+    route = "/v1/communication/consent-events"
+    fields = {
+        "recipient_kind": "prospect", "recipient_id": identifier,
+        "channel": "whatsapp", "source": "recipient called",
+    }
+    grant = client.post(route, headers=csrf, json={
+        **fields, "decision": "opted_in", "evidence_reference": "record-123",
+    })
+    assert grant.status_code == 409
+    revoke = client.post(route, headers=csrf, json={
+        **fields, "decision": "opted_out",
+    })
+    assert revoke.status_code == 201
+    assert client.get(route, params={
+        "recipient_kind": "prospect", "recipient_id": identifier,
+    }).json()[0]["decision"] == "opted_out"

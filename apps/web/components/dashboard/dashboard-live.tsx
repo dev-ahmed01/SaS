@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
 type Month = {
   period_month:string;due_paise:number;contributions_paise:number;
@@ -43,36 +44,37 @@ function Metric({label,value,detail,href}:{
 }
 
 export function DashboardLive(){
-  const [data,setData]=useState<Overview|null>(null);
+  const [data,setData]=useState<Overview|null>(()=>recentSnapshot<Overview>("/api/admin/dashboard"));
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [revision,setRevision]=useState(0);
   useEffect(()=>{
     const controller=new AbortController();
-    setLoading(true);setError("");
+    const cached=recentSnapshot<Overview>("/api/admin/dashboard");
+    setData(cached);setLoading(!cached);setError("");
     fetch("/api/admin/dashboard",{cache:"no-store",signal:controller.signal})
       .then(async response=>{
         if(!response.ok)throw Error("Dashboard unavailable");
         return await response.json() as Overview;
       })
-      .then(result=>{if(!controller.signal.aborted)setData(result);})
+      .then(result=>{if(!controller.signal.aborted){rememberSnapshot("/api/admin/dashboard",result);setData(result);}})
       .catch(()=>{
         if(!controller.signal.aborted){
-          setData(null);setError("Unable to load the current Dashboard. Please retry.");
+          setError("Unable to refresh the Dashboard. Please retry.");
         }
       })
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
   },[revision]);
 
-  if(error){
+  if(error&&!data){
     return <section className="dashboard-error" aria-label="Foundation dashboard">
       <p role="alert">{error}</p>
       <button type="button" className="btn btn-primary"
         onClick={()=>setRevision(x=>x+1)}>Retry</button>
     </section>;
   }
-  if(loading||!data){
+  if(!data){
     return <section className="dashboard-loading" role="status"
       aria-label="Foundation dashboard">Loading current records…</section>;
   }

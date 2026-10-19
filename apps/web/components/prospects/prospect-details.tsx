@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
+import { ContactConsent } from "../communication/contact-consent";
 import { ProspectEditor } from "./prospect-editor";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
@@ -106,6 +107,9 @@ export function ProspectDetails({id}:{id:string}){
             <Info label="Email" value={record.email||"—"}/>
             <Info label="WhatsApp consent" value={record.whatsapp_opt_in?"Recorded":"Not recorded"}/>
           </Card>
+          <ContactConsent recipientKind="prospect" recipientId={record.id}
+            legacyWhatsAppOptIn={record.whatsapp_opt_in}
+            allowGrant={!Boolean(record.archived_at)}/>
           <Card title="Sponsorship">
             <Info label="Monthly sponsorship" value={money(record.monthly_contribution_paise)}/>
             <Info label="Tokens" value={String(record.monthly_contribution_paise/25000)+" × ₹250"}/>

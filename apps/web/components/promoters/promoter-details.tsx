@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
+import { ContactConsent } from "../communication/contact-consent";
 import { PromoterEditor } from "./promoter-editor";
 import { PromoterSponsors } from "./promoter-sponsors";
 import type { Promoter } from "./promoter-types";
@@ -99,6 +100,9 @@ export function PromoterDetails({id}:{id:string}){
             <Info label="Email" value={record.email??""}/>
             <Info label="WhatsApp consent" value={record.whatsapp_opt_in?"Recorded":"Not recorded"}/>
           </Card>
+          <ContactConsent recipientKind="promoter" recipientId={record.id}
+            legacyWhatsAppOptIn={record.whatsapp_opt_in}
+            allowGrant={record.is_active}/>
           <Card title="Assignments & status">
             <Info label="Sponsors" value={String(record.sponsor_count)}/>
             <Info label="Status" value={record.is_active?"Active":"Inactive"}/>

@@ -68,6 +68,38 @@ test("all seven approved modules have a secure navigable destination",async ({pa
   }
 });
 
+test("module changes preserve one sidebar and IST clock without repeated loading",async ({page,isMobile})=>{
+  await page.goto("/dashboard");
+  const clock=page.locator(".topbar-ist-clock");
+  await expect(clock).not.toContainText("Loading time");
+  await page.evaluate(()=>{
+    window.__originalAppShell=document.querySelector(".app-frame");
+    window.__originalClock=document.querySelector(".topbar-ist-clock");
+  });
+  for(const name of ["Prospects","Promoters","Collections","Payouts","Communication","Dashboard"]){
+    if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+    await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name,exact:true}).click();
+    await expect(page.locator(".app-frame")).toHaveCount(1);
+    await expect(page.locator(".topbar-ist-clock")).not.toContainText("Loading time");
+    if(name==="Promoters")await expect(page.getByText("Loading promoters…")).toHaveCount(0);
+    const result=await page.evaluate(()=>({
+      frame:window.__originalAppShell===document.querySelector(".app-frame"),
+      clock:window.__originalClock===document.querySelector(".topbar-ist-clock"),
+    }));
+    expect(result).toEqual({frame:true,clock:true});
+  }
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Promoters",exact:true}).click();
+  await expect(page.getByRole("region",{name:"All Promoters"})).toBeVisible();
+  await expect(page.getByText("Loading promoters…")).toHaveCount(0);
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Prospects",exact:true}).click();
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Promoters",exact:true}).click();
+  await expect(page.getByRole("region",{name:"All Promoters"})).toBeVisible();
+  await expect(page.getByText("Loading promoters…")).toHaveCount(0);
+});
+
 test("approved tabs remain functional and preview saves stay disabled",async ({page})=>{
   await page.goto("/prospects/add");
   await expect(page.getByRole("button",{name:"Add Prospect"})).toBeEnabled();
@@ -967,6 +999,66 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await expect(page.getByText("Monthly demo "+key,{exact:true})).toBeVisible();
   const savedRule=page.locator(".comm-list-card").filter({hasText:"Monthly demo "+key});
   await expect(savedRule.getByText("Inactive · delivery not connected")).toBeVisible();
+});
+
+test("Admin attests contact consent and reviews a campaign without sending",async ({page})=>{
+  const suffix=String(Date.now()%1000000).padStart(6,"0");
+  const sponsor="Consent Campaign "+suffix;
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9851"+suffix);
+  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  const contactUrl=page.url();
+  const permission=page.getByRole("region",{name:"Communication consent"});
+  await expect(permission.getByText("Reminder checkbox only")).toBeVisible();
+  await permission.getByRole("button",{name:"Update"}).first().click();
+  await permission.getByRole("combobox",{name:"Consent decision"}).selectOption("opted_in");
+  await permission.getByRole("textbox",{name:"Consent source"}).fill("Recipient signed form");
+  await permission.getByRole("textbox",{name:"Consent evidence reference"}).fill("CONSENT-"+suffix);
+  await permission.getByRole("checkbox",{name:/checked the recipient/}).check();
+  await permission.getByRole("button",{name:"Record opt-in"}).click();
+  await expect(permission.getByText("Admin-attested opt-in")).toBeVisible();
+
+  await page.goto("/communication");
+  await page.getByRole("textbox",{name:"Campaign name"}).fill("Consent update "+suffix);
+  await page.getByRole("textbox",{name:"Message body"}).fill("Assalamu Alaikum, a Foundation update.");
+  await page.getByRole("button",{name:"Save draft"}).click();
+  await expect(page.getByText(/No message has been sent or queued/)).toBeVisible();
+  await page.goto("/communication/campaigns");
+  const campaign=page.getByRole("row",{name:new RegExp("Consent update "+suffix)});
+  await expect(campaign).toBeVisible();
+  await campaign.getByRole("button",{name:"Review"}).click();
+  const review=page.getByRole("region",{name:"Recipient review"});
+  await expect(review.getByText("Not checked yet.")).toBeVisible();
+  await review.getByRole("button",{name:"Check recipients"}).click();
+  await expect(review.getByText("Simulation only · no messages sent.")).toBeVisible();
+  await expect(review.locator(".comm-review-counts strong").first()).toBeVisible();
+  const numbers=await review.locator(".comm-review-counts strong").allTextContents();
+  expect(Number(numbers[0])).toBeGreaterThanOrEqual(1);
+  await page.goto(contactUrl);
+  const consent=page.getByRole("region",{name:"Communication consent"});
+  await consent.getByRole("button",{name:"Update"}).first().click();
+  await consent.getByRole("textbox",{name:"Consent source"}).fill("Recipient requested stop");
+  await consent.getByRole("button",{name:"Record opt-out"}).click();
+  await expect(consent.getByText("Opted out")).toBeVisible();
+  await page.goto("/communication/campaigns");
+  const latest=page.getByRole("row",{name:new RegExp("Consent update "+suffix)});
+  await latest.getByRole("button",{name:"Review"}).click();
+  const rereview=page.getByRole("region",{name:"Recipient review"});
+  await rereview.getByRole("button",{name:"Check recipients"}).click();
+  await expect.poll(async()=>Number(
+    (await rereview.locator(".comm-review-counts strong").first().textContent())||"0"
+  )).toBeLessThan(Number(numbers[0]));
+  const data=await page.evaluate(async(title)=>{
+    const response=await fetch("/api/admin/communication/campaigns",{cache:"no-store"});
+    const campaigns=await response.json();
+    const target=campaigns.find(row=>row.title===title);
+    const latest=await fetch("/api/admin/communication/campaigns/"+target.id+"/preparations",{cache:"no-store"});
+    return await latest.json();
+  },"Consent update "+suffix);
+  expect(data[0].delivery_activated).toBe(false);
 });
 
 test("Communication proxy blocks forged-origin writes and has no unapproved send endpoint",async ({page})=>{

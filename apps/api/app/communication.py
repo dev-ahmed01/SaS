@@ -367,6 +367,51 @@ def _preparation_read(row: CommunicationPreparation) -> PreparationRead:
     )
 
 
+@router.get("/consent-events", response_model=list[ConsentDecisionRead])
+def read_consent(
+    recipient_kind: Literal["prospect", "promoter"],
+    recipient_id: uuid.UUID,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+) -> list[ConsentDecisionRead]:
+    """Latest documented decision per channel for a tenant-owned contact.
+
+    Read path deliberately excludes proof references and recipient addresses.
+    Absence of an event is not an opt-in; legacy reminder consent is separate.
+    """
+    organization_id = context[0].organization_id
+    model = Prospect if recipient_kind == "prospect" else Promoter
+    exists = database.scalar(select(model.id).where(
+        model.organization_id == organization_id,
+        model.id == recipient_id,
+    ))
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+    events = database.scalars(select(CommunicationConsentEvent).where(
+        CommunicationConsentEvent.organization_id == organization_id,
+        CommunicationConsentEvent.recipient_kind == recipient_kind,
+        CommunicationConsentEvent.recipient_id == recipient_id,
+    ).order_by(
+        CommunicationConsentEvent.recorded_at.desc(),
+        CommunicationConsentEvent.id.desc(),
+    )).all()
+    latest: dict[str, CommunicationConsentEvent] = {}
+    for event in events:
+        if event.channel not in latest:
+            latest[event.channel] = event
+    response.headers["Cache-Control"] = "no-store"
+    return [ConsentDecisionRead(
+        id=event.id,
+        recipient_kind=event.recipient_kind,
+        recipient_id=event.recipient_id,
+        channel=event.channel,
+        decision=event.decision,
+        source=event.source,
+        recorded_at=event.recorded_at,
+    ) for event in latest.values()]
+
+
 @router.post("/consent-events", response_model=ConsentDecisionRead, status_code=201)
 def record_consent(
     payload: ConsentDecisionInput,
@@ -382,6 +427,11 @@ def record_consent(
     )).one_or_none()
     if person is None:
         raise HTTPException(status_code=404, detail="Recipient not found")
+    if payload.decision == "opted_in" and (
+        (isinstance(person, Prospect) and person.archived_at is not None) or
+        (isinstance(person, Promoter) and not person.is_active)
+    ):
+        raise HTTPException(status_code=409, detail="Inactive contact cannot be opted in")
     if payload.decision == "opted_in" and (
         (payload.channel == "email" and not person.email) or
         (payload.channel == "whatsapp" and not (

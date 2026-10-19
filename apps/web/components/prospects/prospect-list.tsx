@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect,ProspectPage } from "./prospects-types";
@@ -24,7 +25,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   const [q,setQ]=useState("");
   const [offset,setOffset]=useState(0);
   const [revision,setRevision]=useState(0);
-  const [page,setPage]=useState<ProspectPage|null>(null);
+  const [page,setPage]=useState<ProspectPage|null>(()=>recentSnapshot<ProspectPage>("/api/admin/prospects?"+new URLSearchParams({limit:"20",offset:"0",q:"",...(view!=="all"?{crm_stage:view}:{})})));
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [stageProspect,setStageProspect]=useState<Prospect|null>(null);
@@ -42,8 +43,12 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   },[offset,q,view]);
   useEffect(()=>{
     const controller=new AbortController();
-    setLoading(true);setError("");
-    load(controller.signal).then(result=>{if(!controller.signal.aborted)setPage(result);})
+    const params=new URLSearchParams({limit:"20",offset:String(offset),q});
+    if(view!=="all")params.set("crm_stage",view);
+    const key="/api/admin/prospects?"+params;
+    const cached=recentSnapshot<ProspectPage>(key);
+    setPage(cached);setLoading(!cached);setError("");
+    load(controller.signal).then(result=>{if(!controller.signal.aborted){rememberSnapshot(key,result);setPage(result);}})
       .catch(e=>{if(!controller.signal.aborted)setError(e.message);})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
@@ -65,7 +70,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
             <th key={name} scope="col">{name}</th>)}
         </tr></thead>
         <tbody>
-          {loading?<tr><td colSpan={10}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
+          {loading&&!page?<tr><td colSpan={10}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
           :!page||page.items.length===0?<tr><td colSpan={8}>
             <div className="crm-list-empty"><Icon name="users" size={29}/>
               <h2>{view==="inactive"?"No inactive prospects":view==="active"?"No active prospects":"No prospects yet"}</h2>
