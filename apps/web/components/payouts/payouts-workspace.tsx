@@ -156,6 +156,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
     return ()=>controller.abort();
   },[view,period,offset,refresh]);
   function open(plan:Plan,action:typeof mode){
+    if(loading)return; // Stale navigation snapshots are read-only until refresh completes.
     setChosen(plan);setMode(action);setPaymentDate(dateIST());setMethod("upi");
     setReference("");setConfirmed(false);setError("");setNotice("");request.current=null;
   }
@@ -222,17 +223,17 @@ export function PayoutList({view}:{view:"all"|"active"}){
           <td><div className="payout-actions">
             {plan.current_month_due_paise>0&&plan.current_month_paid_paise===0&&
               period<=dateIST().slice(0,7)&&
-              <button type="button" className="text-action" onClick={()=>open(plan,"paid")}>
+              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"paid")}>
                 Record paid</button>}
             {plan.cadence==="recurring"&&!plan.next_status&&plan.status==="active"&&
-              <button type="button" className="text-action" onClick={()=>open(plan,"pause")}>
+              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"pause")}>
                 Pause</button>}
             {plan.cadence==="recurring"&&!plan.next_status&&plan.status==="paused"&&
-              <button type="button" className="text-action" onClick={()=>open(plan,"resume")}>
+              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"resume")}>
                 Resume</button>}
             {plan.cadence==="recurring"&&!plan.next_status&&
               ["active","paused"].includes(plan.status)&&
-              <button type="button" className="text-action" onClick={()=>open(plan,"close")}>
+              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"close")}>
                 Close plan</button>}
           </div></td></tr>)}</tbody>
     </table></div>
