@@ -80,14 +80,14 @@ export function PayoutAdd(){
     }catch(e){setError(e instanceof Error?e.message:"Unable to save payout plan.");}
     finally{setSaving(false);}
   }
-  return <section className="content-panel payouts-form" aria-label="Add payout plan">
+  return <section className="content-panel payouts-form finance-form-panel" aria-label="Add payout plan">
     <div className="payout-panel-heading">
-      <div><h2>Add payout</h2></div>
+      <div><h2>Add payout</h2><p className="finance-form-caption">Plan an outgoing commitment. Record actual disbursement only after funds leave the account.</p></div>
 
     </div>
     <form onSubmit={submit}>
-      <div className="form-grid">
-        <label className="field form-cell full"><span className="field-label">Payee name *</span>
+      <div className="form-grid finance-form-grid">
+        <label className="field"><span className="field-label">Payee name *</span>
           <input required aria-label="Payee name" maxLength={160} minLength={2}
             value={payee} placeholder="Enter recipient or organization"
             onChange={e=>{setPayee(e.target.value);change();}}/></label>
@@ -99,23 +99,25 @@ export function PayoutAdd(){
         <label className="field"><span className="field-label">Amount (₹) *</span>
           <input required aria-label="Payout amount (₹)" inputMode="decimal" value={value}
             placeholder="5000.00" onChange={e=>{setValue(e.target.value);change();}}/></label>
-        <label className="field form-cell full"><span className="field-label">Purpose *</span>
+        <label className="field"><span className="field-label">Purpose *</span>
           <input required aria-label="Payout purpose" minLength={3} maxLength={240}
             value={purpose} placeholder="e.g. Facility support"
             onChange={e=>{setPurpose(e.target.value);change();}}/></label>
-        {kind==="one_time"&&<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
+        {kind==="one_time"?<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
           <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
-            onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
-        <details className="optional-details"><summary>Schedule and notes (optional)</summary>
-          <div className="optional-fields">
-            {kind==="recurring"&&<label className="field"><span className="field-label">First payment month (IST) *</span>
-              <input required type="month" aria-label="First payment month (IST)" value={start}
-                onChange={e=>{setStart(e.target.value);change();}}/></label>}
-            <label className="field full"><span className="field-label">Notes</span>
-              <textarea rows={2} aria-label="Payout notes" maxLength={800} value={notes}
-                onChange={e=>{setNotes(e.target.value);change();}}/></label>
-          </div>
-        </details>
+            onChange={e=>{setScheduled(e.target.value);change();}}/></label>
+          :<label className="field"><span className="field-label">First payment month (IST) *</span>
+            <input required type="month" aria-label="First payment month (IST)" value={start}
+              onChange={e=>{setStart(e.target.value);change();}}/></label>}
+        <label className="field form-cell full"><span className="field-label">Notes</span>
+          <textarea rows={3} aria-label="Payout notes" maxLength={800} value={notes}
+            placeholder="Reference, expected timing, or internal context"
+            onChange={e=>{setNotes(e.target.value);change();}}/></label>
+      </div>
+      <div className="finance-plan-preview" aria-label="Payout forecast preview">
+        <span>{kind==="recurring"?"Expected monthly outgoing":"Planned one-time outgoing"}</span>
+        <strong>{money(amountPaise(value)??0)}</strong>
+        <small>{kind==="recurring"?"Beginning "+start:"Scheduled "+scheduled}</small>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
