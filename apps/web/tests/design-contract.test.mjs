@@ -40,6 +40,18 @@ test("each module has the approved horizontal tab structure", () => {
   assert.match(ui,/aria-current/);
 });
 
+test("Collections ledger displays received only with aligned controls and a legible clock", () => {
+  const ledger=read("../components/accounting/accounting-overview.tsx");
+  assert.match(ledger,/\["Received",data\?money\(data\.verified_paise\)/);
+  assert.match(ledger,/<th scope="col">Received<\/th>/);
+  assert.doesNotMatch(ledger,/Received \/ Outstanding|finance-paired-values/);
+  assert.match(css,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(css,/\.accounting-heading \{/);
+  assert.match(css,/\.account-month-picker \{/);
+  assert.match(css,/\.topbar-ist-clock \{/);
+  assert.match(css,/font:600 14px\/1\.3 var\(--font-body\)/);
+});
+
 test("Communication is compose-first and combines templates with automation", () => {
   for(const label of ["Compose","Campaigns","Templates & Automations"]){
     assert.ok(communication.includes(label),label);
