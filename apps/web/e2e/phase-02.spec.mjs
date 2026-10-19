@@ -88,7 +88,7 @@ test("Communication replaces Reminders with a safe compose-first workspace",asyn
   await expect(page.getByRole("heading",{name:"New message"})).toBeVisible();
   const tabs=page.getByRole("navigation",{name:"Communication views"});
   await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
-    "Compose","Campaigns","Templates","Automations"
+    "Compose","Campaigns","Templates & Automations"
   ]);
   await expect(page.getByRole("button",{name:"Save draft"})).toBeVisible();
   await expect(page.getByRole("button",{name:/^Send now/})).toHaveCount(0);
@@ -493,13 +493,13 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
-  await expect(page.getByText("Verified collections")).toBeVisible();
+  await expect(page.getByText("Received / Outstanding").first()).toBeVisible();
   const row=page.getByRole("row",{name:new RegExp(name)});
   await expect(row).toBeVisible();
   const amount=agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
   await expect(row.getByRole("cell").nth(1)).toContainText(amount);
   await expect(row.getByRole("cell").nth(2)).toContainText("0.00");
-  await expect(row.getByRole("cell").nth(3)).toContainText(amount);
+  await expect(row.getByRole("cell").nth(2)).toContainText(amount);
   await expect(row.getByText("New",{exact:true})).toBeVisible();
   await expect(row.getByText("No",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Refresh sponsor statuses"}).click();
@@ -590,7 +590,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await save.click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
   await expect(page.getByText(/has not been sent/)).toBeVisible();
-  await expect(page.getByRole("region",{name:"Recent manual collections"}).getByText(name)).toBeVisible();
+  await expect(page.getByRole("region",{name:"Recent manual collections"})).toHaveCount(0);
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
   const row=page.getByRole("region",{name:"Monthly sponsorship ledger"}).getByRole("row",{name:new RegExp(name)});
@@ -660,31 +660,30 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.getByRole("button",{name:"Save Collection"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
   await page.goto("/collections/all");
-  const review=page.getByRole("region",{name:"Collection review"});
-  const historyRow=review.getByRole("row",{name:new RegExp(name)});
-  await expect(historyRow).toBeVisible();
-  await expect(historyRow.getByText("Recorded",{exact:true})).toBeVisible();
-  await historyRow.getByRole("button",{name:"Reverse entry"}).click();
-
-  const dialog=page.getByRole("dialog",{name:"Reverse collection entry"});
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText(name,{exact:true})).toBeVisible();
-  const submit=dialog.getByRole("button",{name:"Confirm reversal"});
-  await expect(submit).toBeDisabled();
-  await dialog.getByRole("combobox",{name:"Reason for reversal"}).selectOption("funds_not_received");
-  await dialog.getByRole("textbox",{name:"Type REVERSE to confirm"}).fill("REVERSE");
-  await submit.click();
-  await expect(dialog).toHaveCount(0);
-  await expect(review.getByRole("status")).toContainText(/Reversed the incorrect/);
-  const reversed=review.getByRole("row",{name:new RegExp(name)});
-  await expect(reversed.getByText("Reversed",{exact:true})).toBeVisible();
-  await expect(reversed.getByText("Suppressed",{exact:true})).toBeVisible();
-  await expect(reversed.getByRole("button",{name:"Reverse entry"})).toHaveCount(0);
-
+  await expect(page.getByRole("region",{name:"Collection review"})).toHaveCount(0);
+  const reversed=await page.evaluate(async(name)=>{
+    const headers={"Content-Type":"application/json"};
+    const session=await fetch("/api/admin/session",{cache:"no-store"});
+    headers["X-CSRF-Token"]=(await session.json()).csrf_token;
+    const all=await fetch("/api/admin/collections?limit=100",{cache:"no-store"});
+    const target=(await all.json()).items.find(row=>row.sponsor_name===name);
+    if(!target)throw Error("Recorded collection not found");
+    const result=await fetch("/api/admin/collections/"+target.id+"/reverse",{
+      method:"POST",headers,body:JSON.stringify({
+        request_id:crypto.randomUUID(),reason_code:"funds_not_received",
+        confirmation:"REVERSE",
+      }),
+    });
+    return result.status;
+  },name);
+  expect(reversed).toBe(201);
+  await page.reload();
   const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
   const dueRow=ledger.getByRole("row",{name:new RegExp(name)});
   await expect(dueRow.getByRole("cell").nth(2)).toContainText("0.00");
-  await expect(dueRow.getByRole("cell").nth(3)).toContainText(agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2}));
+  await expect(dueRow.getByRole("cell").nth(2)).toContainText(
+    agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})
+  );
   await expect(dueRow.getByText("New",{exact:true})).toBeVisible();
 });
 
@@ -927,22 +926,17 @@ test("Protected payout gateway rejects forged actions or unsupported routes",asy
 });
 
 
-test("Communication audience preview respects WhatsApp consent without dispatch",async ({page})=>{
-  const suffix=String(Date.now()%1000000).padStart(6,"0");
-  const name="Communication Candidate "+suffix;
-  await page.goto("/prospects/add");
-  await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9857"+suffix);
-  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
-  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+test("Communication is a full-width, preview-free CRM composer",async ({page})=>{
   await page.goto("/communication");
-  const audience=page.getByRole("complementary",{name:"Message review"});
-  await expect(audience.getByText(name,{exact:true})).toBeVisible();
-  await expect(page.getByRole("button",{name:"Save draft"})).toBeVisible();
-  await page.getByRole("button",{name:"Email"}).click();
-  await expect(audience.getByText(/requires an email provider and recorded email consent/)).toBeVisible();
-  await expect(page.getByRole("navigation",{name:"Communication views"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"New message"})).toBeVisible();
+  await expect(page.getByRole("complementary",{name:"Message review"})).toHaveCount(0);
+  await expect(page.getByText("Choose who, what, and when.")).toHaveCount(0);
+  await expect(page.getByText("New campaigns require channel activation")).toHaveCount(0);
+  await expect(page.getByRole("navigation",{name:"Communication views"}).getByRole("link")).toHaveCount(3);
+  await page.goto("/communication/automations");
+  await expect(page).toHaveURL(/\\/communication\\/templates$/);
+  await expect(page.getByRole("heading",{name:"New template"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
 });
 
 test("Communication templates, campaign plans and rules persist across navigation",async ({page})=>{
@@ -1040,8 +1034,7 @@ test("mobile collection form stays clickable with populated recent history",asyn
     return {name:person.full_name,suffix};
   },suffix);
   await page.reload();
-  await expect(page.getByRole("region",{name:"Recent manual collections"})).toBeVisible();
-  await expect(page.getByRole("region",{name:"Recent manual collections"}).getByRole("row")).toHaveCount(11);
+  await expect(page.getByRole("region",{name:"Recent manual collections"})).toHaveCount(0);
   const grid=page.locator(".manual-collections-workspace");
   await expect.poll(async()=>{
     const box=await grid.boundingBox();
