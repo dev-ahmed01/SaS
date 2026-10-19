@@ -9,6 +9,9 @@ from app.bootstrap_admin import provision_admin
 from app.models import (
     AdminUser,
     Base,
+    CommunicationCampaign,
+    CommunicationRule,
+    CommunicationTemplate,
     PayoutPayment,
     PayoutPlan,
     Promoter,
@@ -45,6 +48,8 @@ def test_synthetic_seed_creates_one_hundred_prospects_and_is_idempotent():
         assert counts == {
             "prospects": 100, "promoters": 10, "stage_definitions": 4,
             "assignments": 80, "stage_events": 25, "payout_plans": 20,
+            "communication_templates": 4, "communication_campaigns": 3,
+            "communication_rules": 2,
         }
         rows = db.scalars(select(Prospect)).all()
         assert len(rows) == 100
@@ -61,12 +66,16 @@ def test_synthetic_seed_creates_one_hundred_prospects_and_is_idempotent():
         assert db.scalar(select(func.count(VerifiedCredit.id))) == 0
         assert db.scalar(select(func.count(PayoutPlan.id))) == 20
         assert db.scalar(select(func.count(PayoutPayment.id))) == 0
+        assert db.scalar(select(func.count(CommunicationTemplate.id))) == 4
+        assert db.scalar(select(func.count(CommunicationCampaign.id))) == 3
+        assert db.scalar(select(func.count(CommunicationRule.id))) == 2
         again = seed_synthetic_crm(db, admin.organization_id, admin.id)
         db.commit()
         assert all(n == 0 for n in again.values())
         assert db.scalar(select(func.count(Prospect.id))) == 100
         assert db.scalar(select(func.count(Promoter.id))) == 10
         assert db.scalar(select(func.count(PayoutPlan.id))) == 20
+        assert db.scalar(select(func.count(CommunicationCampaign.id))) == 3
     engine.dispose()
 
 
