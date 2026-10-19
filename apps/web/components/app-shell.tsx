@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./ui/icon";
@@ -16,7 +16,16 @@ const navigation: { name: string; href: string; icon: IconName }[] = [
   {name:"Settings",href:"/settings",icon:"settings"},
 ];
 
+const ShellMounted = createContext(false);
+
 export function AppShell({children}:{children:React.ReactNode}) {
+  // Preserve one sidebar, navigation state and IST clock across module changes.
+  // Existing page-level wrappers stay compatible but never produce nested frames.
+  const alreadyMounted=useContext(ShellMounted);
+  return alreadyMounted?<>{children}</>:<AppShellFrame>{children}</AppShellFrame>;
+}
+
+function AppShellFrame({children}:{children:React.ReactNode}) {
   const pathname = usePathname();
   const [mobileOpen,setMobileOpen] = useState(false);
   const [signOutError,setSignOutError] = useState("");
@@ -61,7 +70,7 @@ export function AppShell({children}:{children:React.ReactNode}) {
     finally{setSigningOut(false);}
   }
 
-  return <div className="app-frame">
+  return <ShellMounted.Provider value={true}><div className="app-frame">
     <a href="#main-content" className="skip-link">Skip to content</a>
     {mobileOpen && <button className="drawer-scrim" aria-label="Close navigation" onClick={closeDrawer}/>}
     <aside className={"site-sidebar"+(mobileOpen?" mobile-open":"")} aria-label="Main navigation">
@@ -106,5 +115,5 @@ export function AppShell({children}:{children:React.ReactNode}) {
       </header>
       <main id="main-content" className="page-content">{children}</main>
     </div>
-  </div>;
+  </div></ShellMounted.Provider>;
 }
