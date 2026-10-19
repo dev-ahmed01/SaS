@@ -15,6 +15,9 @@ from app.models import (
     AdminUser,
     Base,
     CommunicationCampaign,
+    CommunicationConsentEvent,
+    CommunicationPreparation,
+    CommunicationRecipientSnapshot,
     CommunicationRule,
     CommunicationTemplate,
     MessageDispatch,
@@ -237,3 +240,133 @@ def test_cross_tenant_campaign_and_template_are_not_visible(system):
         "/v1/communication/campaigns/"+created["id"]+"/cancel",
         headers=second, json={},
     ).status_code == 404
+
+
+def test_preflight_requires_explicit_consent_and_never_dispatches(system):
+    client, engine = system
+    csrf = login(client)
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Test Recipient",
+        "mobile_number": "+919876540111",
+        "email": "consented@example.org",
+        "area_city": "Bengaluru",
+        "whatsapp_opt_in": True,
+        "monthly_contribution_paise": 25000,
+    })
+    assert person.status_code == 201, person.text
+    identifier = person.json()["id"]
+    campaign = create_campaign(client, csrf)
+    assert campaign.status_code == 201, campaign.text
+    campaign_id = campaign.json()["id"]
+    url = "/v1/communication/campaigns/" + campaign_id + "/preparations"
+    assert client.post(url, json={}).status_code == 403
+    assert client.post(url, headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": False,
+    }).status_code == 422
+
+    identifier1 = str(uuid.uuid4())
+    request = {"request_id": identifier1, "simulation_only": True}
+    first = client.post(url, headers=csrf, json=request)
+    assert first.status_code == 201, first.text
+    assert first.json()["eligible_count"] == 0
+    assert first.json()["suppressed_count"] == 1
+    assert first.json()["delivery_activated"] is False
+    assert client.post(url, headers=csrf, json=request).status_code == 200
+
+    consent = "/v1/communication/consent-events"
+    assert client.post(consent, json={}).status_code == 403
+    assert client.post(consent, headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": identifier,
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "signed paper form",
+    }).status_code == 422
+    attested = client.post(consent, headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": identifier,
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "signed paper form", "evidence_reference": "archive-123",
+    })
+    assert attested.status_code == 201, attested.text
+    assert "evidence_reference" not in attested.json()
+    preview = client.get(
+        "/v1/communication/audience?audience=prospects&segment=active"
+        "&channel=whatsapp&category=update"
+    )
+    assert preview.json()["eligible_count"] == 1
+    second = client.post(url, headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert second.status_code == 201, second.text
+    assert second.json()["eligible_count"] == 1
+
+    opted_out = client.post(consent, headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": identifier,
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "recipient requested stop",
+    })
+    assert opted_out.status_code == 201, opted_out.text
+    third = client.post(url, headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert third.status_code == 201, third.text
+    assert third.json()["eligible_count"] == 0
+    assert third.json()["suppressed_count"] == 1
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 2
+        assert db.scalar(select(func.count(CommunicationPreparation.id))) == 3
+        assert db.scalar(select(func.count(CommunicationRecipientSnapshot.id))) == 3
+        assert db.scalar(select(func.count(MessageDispatch.id))) == 0
+        assert db.scalars(select(CommunicationRecipientSnapshot).order_by(
+            CommunicationRecipientSnapshot.id
+        )).all()
+    assert client.get(url).status_code == 200
+    assert len(client.get(url).json()) == 3
+
+
+def test_email_requires_documented_consent_and_preflight_is_tenant_scoped(system):
+    client, engine = system
+    csrf = login(client)
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Email Recipient",
+        "mobile_number": "+919876540112",
+        "email": "email@example.org",
+        "area_city": "Bengaluru",
+        "monthly_contribution_paise": 25000,
+    })
+    assert person.status_code == 201, person.text
+    identifier = person.json()["id"]
+    campaign = create_campaign(client, csrf, channel="email", subject="Foundation notice")
+    assert campaign.status_code == 201, campaign.text
+    campaign_id = campaign.json()["id"]
+    url = "/v1/communication/campaigns/" + campaign_id + "/preparations"
+    assert client.get("/v1/communication/audience?channel=email").json()[
+        "eligible_count"
+    ] == 0
+    response = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": identifier, "channel": "email",
+        "decision": "opted_in", "source": "documented affirmative request",
+        "evidence_reference": "email-consent-log-1",
+    })
+    assert response.status_code == 201, response.text
+    result = client.post(url, headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert result.status_code == 201, result.text
+    assert result.json()["eligible_count"] == 1
+    with Session(engine) as db:
+        other = Organization(name="Isolated tenant")
+        db.add(other)
+        db.flush()
+        db.add(AdminUser(
+            organization_id=other.id, email="other-contact@example.org",
+            password_hash=hash_password("different-password"), is_active=True,
+        ))
+        db.commit()
+    another = login(client, "other-contact@example.org", "different-password")
+    assert client.get(url).status_code == 404
+    assert client.post(url, headers=another, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    }).status_code == 404
+    assert client.post("/v1/communication/consent-events", headers=another, json={
+        "recipient_kind": "prospect", "recipient_id": identifier, "channel": "email",
+        "decision": "opted_out", "source": "administrative opt-out",
+    }).status_code == 404
