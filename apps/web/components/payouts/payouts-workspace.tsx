@@ -127,7 +127,7 @@ export function PayoutAdd(){
   </section>;
 }
 
-export function PayoutList({view}:{view:"all"|"active"}){
+export function PayoutList({view}:{view:"all"|"active"|"planned"}){
   const [period,setPeriod]=useState(()=>dateIST().slice(0,7));
   const [offset,setOffset]=useState(0);
   const [paymentOffset,setPaymentOffset]=useState(0);
@@ -147,7 +147,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const request=useRef<string|null>(null);
   useEffect(()=>{
     const controller=new AbortController();
-    const params=new URLSearchParams({view,month:period,offset:String(offset),limit:"20"});
+    const params=new URLSearchParams({view:view==="planned"?"all":view,month:period,offset:String(offset),limit:"20"});
     setLoading(true);
     fetch("/api/admin/payouts/plans?"+params,{cache:"no-store",signal:controller.signal})
       .then(async r=>{
@@ -203,9 +203,9 @@ export function PayoutList({view}:{view:"all"|"active"}){
     }catch(e){setError(e instanceof Error?e.message:"Unable to confirm action.");}
     finally{setSaving(false);}
   }
-  return <section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
+  return <section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":view==="planned"?"Planned payout commitments":"All payout plans"}>
     <div className="payout-list-title"><div>
-      <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
+      <h2>{view==="active"?"Active recurring payouts":view==="planned"?"Planned payouts":"All payouts"}</h2>
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
       <input aria-label="Payout accounting month" type="month" value={period}
         onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
@@ -214,16 +214,17 @@ export function PayoutList({view}:{view:"all"|"active"}){
     <div className="table-scroll"><table className="data-table">
       <thead><tr><th scope="col">Payee</th><th scope="col">Purpose</th>
         <th scope="col">Frequency</th><th scope="col">Commitment</th>
-        <th scope="col">Paid in month</th><th scope="col">Status</th>
+        <th scope="col">Paid in month</th><th scope="col">To pay</th><th scope="col">Status</th>
         <th scope="col">Actions</th></tr></thead>
-      <tbody>{loading?<tr><td colSpan={7}>Loading payouts…</td></tr>
-        :!plans?.items.length?<tr><td colSpan={7}><div className="empty-state">
+      <tbody>{loading?<tr><td colSpan={8}>Loading payouts…</td></tr>
+        :!plans?.items.length?<tr><td colSpan={8}><div className="empty-state">
           <h3>No payout plans</h3><p>Create an outgoing commitment using Add Payout.</p>
         </div></td></tr>
         :plans.items.map(plan=><tr key={plan.id}>
           <td><strong className="table-name">{plan.payee_name}</strong></td>
           <td>{plan.purpose}</td><td>{plan.cadence==="recurring"?"Monthly":"One-time"}</td>
           <td>{money(plan.amount_paise)}</td><td>{money(plan.current_month_paid_paise)}</td>
+          <td>{money(Math.max(0,plan.current_month_due_paise-plan.current_month_paid_paise))}</td>
           <td><span className={"status-pill "+plan.status}>
             {plan.status==="paid"?"Paid":plan.status==="scheduled"?"Scheduled"
               :plan.status==="overdue"?"Overdue":plan.status==="paused"?"Paused"
@@ -328,5 +329,58 @@ export function PayoutList({view}:{view:"all"|"active"}){
         </form>
       </div>
     </section></div>}
+  </section>;
+}
+
+
+export function PayoutDisbursements(){
+  const [offset,setOffset]=useState(0);
+  const [month,setMonth]=useState("");
+  const [data,setData]=useState<PaymentPage|null>(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    const controller=new AbortController();
+    const query=new URLSearchParams({limit:"20",offset:String(offset)});
+    if(month)query.set("month",month);
+    setLoading(true);setError("");
+    fetch("/api/admin/payouts/payments?"+query,{cache:"no-store",signal:controller.signal})
+      .then(async r=>{if(!r.ok)throw Error("Could not load outgoing payments.");return r.json() as Promise<PaymentPage>;})
+      .then(rows=>{if(!controller.signal.aborted)setData(rows);})
+      .catch(e=>{if(!controller.signal.aborted)setError(e.message);})
+      .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    return ()=>controller.abort();
+  },[offset,month]);
+  return <section className="payout-history finance-list-panel" aria-label="Disbursed payouts">
+    <div className="payout-list-title">
+      <h2>Disbursed payouts</h2>
+      <label className="field payout-month"><span className="field-label">Payment month</span>
+        <input type="month" aria-label="Disbursement month" value={month}
+          onChange={e=>{setMonth(e.target.value);setOffset(0);}}/></label>
+    </div>
+    {error&&<p className="form-error" role="alert">{error}</p>}
+    <div className="table-scroll finance-table-scroll"><table className="data-table">
+      <thead><tr><th>Payee</th><th>Amount</th><th>Paid on</th>
+        <th>Month</th><th>Method</th><th>Reference</th><th>Status</th></tr></thead>
+      <tbody>{loading?<tr><td colSpan={7}>Loading outgoing payments…</td></tr>
+        :!data?.items.length?<tr><td colSpan={7}>No disbursements recorded for this period.</td></tr>
+        :data.items.map(payment=><tr key={payment.id}>
+          <td><strong>{payment.payee_name}</strong></td><td>{money(payment.amount_paise)}</td>
+          <td>{payment.paid_on}</td><td>{payment.period_month.slice(0,7)}</td>
+          <td>{payment.payment_method.replace("_"," ")}</td>
+          <td>{payment.reference_mask}</td>
+          <td><span className="status-pill paid">Recorded paid</span></td>
+        </tr>)}</tbody>
+    </table></div>
+    <div className="table-footer paging-footer">
+      <span>{data?"Showing "+(data.total?offset+1:0)+"–"+
+        Math.min(offset+20,data.total)+" of "+data.total:"Loading…"}</span>
+      <div className="paging-actions">
+        <button className="btn btn-secondary" type="button" disabled={loading||offset===0}
+          onClick={()=>setOffset(n=>Math.max(0,n-20))}>Previous</button>
+        <button className="btn btn-secondary" type="button" disabled={loading||!data||offset+20>=data.total}
+          onClick={()=>setOffset(n=>n+20)}>Next</button>
+      </div>
+    </div>
   </section>;
 }
