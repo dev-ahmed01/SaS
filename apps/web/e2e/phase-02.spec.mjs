@@ -63,6 +63,7 @@ test("all seven approved modules have a secure navigable destination",async ({pa
 });
 
 test("approved tabs remain functional and preview saves stay disabled",async ({page})=>{
+  await page.goto("/prospects");
   await expect(page.getByRole("button",{name:"Add Prospect"})).toBeEnabled();
   await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Inactive"}).click();
   await expect(page.getByRole("region",{name:"Inactive Prospects"})).toBeVisible();
