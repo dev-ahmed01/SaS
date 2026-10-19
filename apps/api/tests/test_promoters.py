@@ -235,3 +235,36 @@ def test_location_is_optional_for_new_promoter(system):
     })
     assert response.status_code == 201, response.text
     assert response.json()["area_city"] == ""
+
+
+def test_promoter_crm_profile_fields_and_status_filter(system):
+    client, _ = system
+    csrf = login(client)
+    r = add(client, csrf, full_name="Amina Noor", first_name="Amina",
+            last_name="Noor", email="amina@example.org", area_city="Bengaluru",
+            occupation="Teacher")
+    assert r.status_code == 201, r.text
+    item = r.json()
+    assert item["first_name"] == "Amina"
+    assert item["last_name"] == "Noor"
+    assert item["email"] == "amina@example.org"
+    assert item["occupation"] == "Teacher"
+    assert client.get("/v1/promoters?q=amina@example.org").json()["total"] == 1
+    assert client.get("/v1/promoters?q=Teacher").json()["total"] == 1
+    assert client.get("/v1/promoters?active=false").json()["total"] == 0
+    updated = client.patch("/v1/promoters/"+item["id"], headers=csrf, json={
+        "version": 1, "occupation": "Architect", "email": None,
+        "area_city": "",
+    })
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["occupation"] == "Architect"
+    assert updated.json()["email"] is None
+    assert updated.json()["area_city"] == ""
+    changed = client.patch("/v1/promoters/"+item["id"], headers=csrf, json={
+        "version": updated.json()["version"], "is_active": False,
+    })
+    assert changed.status_code == 200
+    assert client.get("/v1/promoters?active=false").json()["total"] == 1
+    assert client.get("/v1/promoters?active=true").json()["total"] == 0
+    assert add(client, csrf, full_name="Invalid Email", mobile_number="+919111199999",
+               email="not-an-email").status_code == 422
