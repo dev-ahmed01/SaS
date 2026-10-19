@@ -90,3 +90,27 @@ test("premium mosque illustrations remain scalable, unobstructed, and softly int
   assert.ok(shell.includes('aria-expanded={profileOpen}'));
   assert.ok(shell.includes('aria-label="Sign out"'));
 });
+
+test("Foundation branding and single active module header replace duplicate page titles", () => {
+  assert.match(shell, /<strong>Emlen Foundation<\/strong><small>Sponsor a Salah<\/small>/);
+  assert.match(shell, /aria-label="Emlen Foundation home"/);
+  assert.match(shell, /<h1 className="topbar-name">/);
+  assert.match(shell, /navigation\.find\(link=>pathname===link\.href/);
+  assert.doesNotMatch(shell, /top-avatar|topbar-spacer/);
+  assert.doesNotMatch(shell, /<span className="topbar-name">Sponsor a Salah<\/span>/);
+  assert.match(css, /\.page-content > \.module-tabs \{ margin-top:0; \}/);
+  assert.doesNotMatch(modules, /<PageHeading/);
+  assert.doesNotMatch(read("../components/prospects/prospects-workspace.tsx"), /<PageHeading/);
+  assert.doesNotMatch(read("../components/promoters/promoters-workspace.tsx"), /<PageHeading/);
+});
+
+test("password eye toggle remains keyboard accessible and never submits the form", () => {
+  const login=read("../app/login/page.tsx");
+  const icons=read("../components/ui/icon.tsx");
+  assert.match(login, /type="button" aria-label=\{showPassword\?"Hide password":"Show password"\}/);
+  assert.match(login, /<Icon name=\{showPassword\?"eye-off":"eye"\} size=\{19\}\/>/);
+  assert.match(login, /aria-pressed=\{showPassword\}/);
+  assert.match(icons, /eye: <>/);
+  assert.match(icons, /"eye-off": <>/);
+  assert.match(css, /\.login-password-toggle:focus-visible/);
+});
