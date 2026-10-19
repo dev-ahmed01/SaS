@@ -23,6 +23,9 @@ from app.models import (
     AdminUser,
     AuditEvent,
     CommunicationCampaign,
+    CommunicationConsentEvent,
+    CommunicationPreparation,
+    CommunicationRecipientSnapshot,
     CommunicationRule,
     CommunicationTemplate,
     Promoter,
@@ -30,6 +33,7 @@ from app.models import (
     Prospect,
     SponsorshipRate,
 )
+from app.communication_consent import evaluate_recipients
 from app.security import utc_now
 
 router = APIRouter(prefix="/v1/communication", tags=["Admin communication planning"])
@@ -211,10 +215,9 @@ def _template_read(t: CommunicationTemplate) -> TemplateRead:
     )
 
 
-def _audience_preview(
-    db: Session, admin: AdminUser, audience: Audience, segment: Segment,
-    channel: Channel, now: datetime,
-) -> AudiencePreview:
+def _audience_rows(
+    db: Session, admin: AdminUser, audience: Audience, segment: Segment, now: datetime,
+) -> list:
     org = admin.organization_id
     prospects = []
     promoters = []
@@ -226,7 +229,7 @@ def _audience_preview(
         promoters = list(db.scalars(select(Promoter).where(
             Promoter.organization_id == org,
         ).limit(MAX_AUDIENCE_ROWS + 1)).all())
-    if len(prospects) > MAX_AUDIENCE_ROWS or len(promoters) > MAX_AUDIENCE_ROWS:
+    if len(prospects) + len(promoters) > MAX_AUDIENCE_ROWS:
         raise HTTPException(status_code=422, detail="Audience too large to preview safely")
     month = month_start(ist_today(now))
     unpaid_ids = set()
@@ -281,33 +284,221 @@ def _audience_preview(
             continue
         candidates.append(person)
 
-    phones = set()
-    eligible = []
-    for person in candidates:
-        if channel == "email":
-            # No recorded email marketing/utility consent exists in the model.
-            # A nonblank address alone does NOT confer delivery consent.
-            continue
-        phone = person.whatsapp_number or person.mobile_number
-        if not person.whatsapp_opt_in or not phone or phone in phones:
-            continue
-        phones.add(phone)
-        eligible.append(person.full_name)
+    return candidates
+
+
+def _audience_preview(
+    db: Session, admin: AdminUser, audience: Audience, segment: Segment,
+    channel: Channel, now: datetime, category: Category = "reminder",
+) -> AudiencePreview:
+    candidates = _audience_rows(db, admin, audience, segment, now)
+    decisions = evaluate_recipients(
+        db, admin.organization_id, candidates, channel, category
+    )
+    eligible = [person.full_name for person, _, state, _ in decisions if state == "eligible"]
     return AudiencePreview(
         candidate_count=len(candidates),
         eligible_count=len(eligible),
-        suppressed_count=len(candidates)-len(eligible),
+        suppressed_count=len(candidates) - len(eligible),
         sample_names=eligible[:6],
         channel_ready=False,
         notice=(
-            "Email drafts are available. Sending requires an email provider and "
-            "recorded email consent, neither of which is configured."
+            "Email eligibility needs recorded explicit consent. No email "
+            "provider is connected; this is only a review."
             if channel == "email" else
-            "Eligible means consent recorded, not sent or delivered. WhatsApp "
-            "delivery requires approved templates, activated provider and fresh send-time checks."
+            "Consent-ready is not approval to send. WhatsApp requires provider "
+            "templates and renewed send-time permission checks."
         ),
         as_of_ist=now.astimezone(IST),
     )
+
+class ConsentDecisionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recipient_kind: Literal["prospect", "promoter"]
+    recipient_id: uuid.UUID
+    channel: Channel
+    decision: Literal["opted_in", "opted_out"]
+    source: str = Field(min_length=3, max_length=80)
+    evidence_reference: str | None = Field(default=None, max_length=160)
+
+    @model_validator(mode="after")
+    def evidence_required(self) -> "ConsentDecisionInput":
+        self.source = _clean(self.source)
+        self.evidence_reference = (
+            self.evidence_reference.strip() or None if self.evidence_reference else None
+        )
+        if len(self.source) < 3:
+            raise ValueError("Consent source required")
+        if self.decision == "opted_in" and not self.evidence_reference:
+            raise ValueError("A reference to documented permission is required")
+        return self
+
+
+class ConsentDecisionRead(BaseModel):
+    id: uuid.UUID
+    recipient_kind: str
+    recipient_id: uuid.UUID
+    channel: str
+    decision: str
+    source: str
+    recorded_at: datetime
+
+
+class PreparationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: uuid.UUID
+    simulation_only: Literal[True]
+
+
+class PreparationRead(BaseModel):
+    id: uuid.UUID
+    campaign_id: uuid.UUID
+    eligible_count: int
+    suppressed_count: int
+    evaluated_at: datetime
+    delivery_activated: Literal[False] = False
+
+
+def _preparation_read(row: CommunicationPreparation) -> PreparationRead:
+    return PreparationRead(
+        id=row.id, campaign_id=row.campaign_id,
+        eligible_count=row.eligible_count, suppressed_count=row.suppressed_count,
+        evaluated_at=row.evaluated_at, delivery_activated=False,
+    )
+
+
+@router.post("/consent-events", response_model=ConsentDecisionRead, status_code=201)
+def record_consent(
+    payload: ConsentDecisionInput,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> ConsentDecisionRead:
+    admin = context[0]
+    model = Prospect if payload.recipient_kind == "prospect" else Promoter
+    person = database.scalars(select(model).where(
+        model.organization_id == admin.organization_id,
+        model.id == payload.recipient_id,
+    )).one_or_none()
+    if person is None:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+    if payload.decision == "opted_in" and (
+        (payload.channel == "email" and not person.email) or
+        (payload.channel == "whatsapp" and not (
+            person.whatsapp_number or person.mobile_number
+        ))
+    ):
+        raise HTTPException(status_code=422, detail="Recipient has no channel address")
+    event = CommunicationConsentEvent(
+        organization_id=admin.organization_id,
+        recipient_kind=payload.recipient_kind, recipient_id=person.id,
+        channel=payload.channel, decision=payload.decision,
+        source=payload.source, evidence_reference=payload.evidence_reference,
+        actor_admin_id=admin.id, recorded_at=utc_now(),
+    )
+    database.add(event)
+    database.flush()
+    _audit(database, admin, "communication.consent_recorded", "comm_consent", event.id,
+           {"channel": event.channel, "decision": event.decision,
+            "recipient_kind": event.recipient_kind})
+    database.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return ConsentDecisionRead(
+        id=event.id, recipient_kind=event.recipient_kind, recipient_id=event.recipient_id,
+        channel=event.channel, decision=event.decision, source=event.source,
+        recorded_at=event.recorded_at,
+    )
+
+
+@router.post(
+    "/campaigns/{identifier}/preparations", response_model=PreparationRead, status_code=201,
+)
+def simulate_preparation(
+    identifier: uuid.UUID, payload: PreparationInput,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> PreparationRead:
+    """Immutable read-time recipient review. It has no outbound transport."""
+    admin = context[0]
+    campaign = database.scalars(select(CommunicationCampaign).where(
+        CommunicationCampaign.id == identifier,
+        CommunicationCampaign.organization_id == admin.organization_id,
+    ).with_for_update()).one_or_none()
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.status == "cancelled":
+        raise HTTPException(status_code=409, detail="Cancelled campaign cannot be prepared")
+    prior = database.scalars(select(CommunicationPreparation).where(
+        CommunicationPreparation.organization_id == admin.organization_id,
+        CommunicationPreparation.request_id == payload.request_id,
+    )).one_or_none()
+    if prior:
+        if prior.campaign_id != campaign.id:
+            raise HTTPException(status_code=409, detail="Request ID already used")
+        response.status_code = 200
+        response.headers["Cache-Control"] = "no-store"
+        return _preparation_read(prior)
+    count = database.scalar(select(func.count(CommunicationPreparation.id)).where(
+        CommunicationPreparation.organization_id == admin.organization_id,
+        CommunicationPreparation.campaign_id == campaign.id,
+    )) or 0
+    if count >= 20:
+        raise HTTPException(status_code=409, detail="Preparation history limit reached")
+    now = utc_now()
+    candidates = _audience_rows(
+        database, admin, campaign.audience, campaign.segment, now
+    )
+    decisions = evaluate_recipients(
+        database, admin.organization_id, candidates, campaign.channel, campaign.category
+    )
+    eligible = sum(state == "eligible" for _, _, state, _ in decisions)
+    prep = CommunicationPreparation(
+        organization_id=admin.organization_id, campaign_id=campaign.id,
+        request_id=payload.request_id, eligible_count=eligible,
+        suppressed_count=len(decisions) - eligible, evaluated_at=now,
+        created_by_admin_id=admin.id,
+    )
+    database.add(prep)
+    database.flush()
+    for person, kind, state, reason in decisions:
+        database.add(CommunicationRecipientSnapshot(
+            organization_id=admin.organization_id, preparation_id=prep.id,
+            recipient_kind=kind, recipient_id=person.id,
+            channel=campaign.channel, status=state, suppression_reason=reason,
+        ))
+    _audit(database, admin, "communication.preflight_completed", "comm_prep", prep.id,
+           {"campaign_id": str(campaign.id), "eligible": eligible,
+            "suppressed": prep.suppressed_count, "simulation_only": True})
+    try:
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(status_code=409, detail="Preparation already recorded") from exc
+    response.headers["Cache-Control"] = "no-store"
+    return _preparation_read(prep)
+
+
+@router.get("/campaigns/{identifier}/preparations", response_model=list[PreparationRead])
+def list_preparations(
+    identifier: uuid.UUID, response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+) -> list[PreparationRead]:
+    organization_id = context[0].organization_id
+    exists = database.scalar(select(CommunicationCampaign.id).where(
+        CommunicationCampaign.organization_id == organization_id,
+        CommunicationCampaign.id == identifier,
+    ))
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    response.headers["Cache-Control"] = "no-store"
+    return [_preparation_read(row) for row in database.scalars(
+        select(CommunicationPreparation).where(
+            CommunicationPreparation.organization_id == organization_id,
+            CommunicationPreparation.campaign_id == identifier,
+        ).order_by(CommunicationPreparation.evaluated_at.desc()).limit(20)
+    )]
 
 
 @router.get("/clock")
@@ -326,10 +517,12 @@ def preview_audience(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     database: Annotated[Session, Depends(db_session)],
     audience: Audience = "prospects", segment: Segment = "active",
-    channel: Channel = "whatsapp",
+    channel: Channel = "whatsapp", category: Category = "reminder",
 ) -> AudiencePreview:
     response.headers["Cache-Control"] = "no-store"
-    return _audience_preview(database, context[0], audience, segment, channel, utc_now())
+    return _audience_preview(
+        database, context[0], audience, segment, channel, utc_now(), category
+    )
 
 
 @router.get("/templates", response_model=list[TemplateRead])
@@ -480,7 +673,8 @@ def create_campaign(
         template = None
     now = utc_now()
     preview = _audience_preview(
-        database, admin, payload.audience, payload.segment, payload.channel, now
+        database, admin, payload.audience, payload.segment, payload.channel, now,
+        payload.category
     )
     if payload.planned_for and payload.planned_for <= now:
         raise HTTPException(status_code=422, detail="Schedule is in the past")
