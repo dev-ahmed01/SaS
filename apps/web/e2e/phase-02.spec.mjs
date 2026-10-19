@@ -4,7 +4,7 @@ const ADMIN_EMAIL = "admin@foundation.org";
 const ADMIN_PASSWORD = "integration-only-long-password-123";
 const modules = [
   ["prospects","Prospects"],["promoters","Promoters"],["collections","Collections"],
-  ["payouts","Payouts"],["reminders","Reminders"],["settings","Settings"],
+  ["payouts","Payouts"],["communication","Communication"],["settings","Settings"],
   ["dashboard","Dashboard"]
 ];
 
@@ -81,17 +81,25 @@ test("approved tabs remain functional and preview saves stay disabled",async ({p
   await expect(page.getByRole("heading",{name:"Received this month"})).toBeVisible();
 });
 
-test("reminder screens do not send messages before Phase 11",async ({page})=>{
-  await page.goto("/reminders");
-  await expect(page.getByRole("link",{name:/WhatsApp Reminders/})).toBeVisible();
-  await expect(page.getByRole("link",{name:/Email Reminders/})).toBeVisible();
-  await page.getByRole("link",{name:/WhatsApp Reminders/}).click();
-  await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
-  await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
-  await expect(page.getByText(/WhatsApp sending: off/).first()).toBeVisible();
+test("Communication replaces Reminders with a safe compose-first workspace",async ({page})=>{
+  await page.goto("/reminders/whatsapp");
+  await expect(page).toHaveURL(/\/communication$/);
+  await expect(page.getByRole("heading",{name:"Communication",level:1})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"New message"})).toBeVisible();
+  const tabs=page.getByRole("navigation",{name:"Communication views"});
+  await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
+    "Compose","Campaigns","Templates","Automations"
+  ]);
+  await expect(page.getByRole("button",{name:"Save draft"})).toBeVisible();
+  await expect(page.getByRole("button",{name:/^Send now/})).toHaveCount(0);
+  await expect(page.getByRole("region",{name:"Reminder preparation history"})).toHaveCount(0);
+  const clock=page.locator(".topbar-ist-clock");
+  await expect(clock).toContainText("IST");
+  await expect(clock).not.toContainText("Loading time");
+  await page.getByRole("button",{name:"Email"}).click();
+  await expect(page.getByRole("textbox",{name:"Email subject"})).toBeVisible();
   await page.goto("/dashboard");
   await expect(page.getByRole("region",{name:"Foundation dashboard"})).toBeVisible();
-  await expect(page.getByText("Recorded contributions",{exact:true}).first()).toBeVisible();
 });
 
 test("desktop branding and landscape artwork have the right proportions",async ({page,isMobile})=>{
@@ -919,47 +927,77 @@ test("Protected payout gateway rejects forged actions or unsupported routes",asy
 });
 
 
-test("Reminders WhatsApp preview uses real sponsor eligibility with no sending",async ({page})=>{
+test("Communication audience preview respects WhatsApp consent without dispatch",async ({page})=>{
   const suffix=String(Date.now()%1000000).padStart(6,"0");
-  const name="Reminder Candidate "+suffix;
+  const name="Communication Candidate "+suffix;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9857"+suffix);
   await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await page.goto("/reminders/whatsapp");
-  await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
-  const targets=page.getByRole("region",{name:"Eligible reminder recipients"});
-  await expect(targets.getByRole("row",{name:new RegExp(name)})).toBeVisible();
-  await expect(page.getByText(/WhatsApp sending: off/).first()).toBeVisible();
-  await expect(page.getByRole("button",{name:"Prepare batch (do not send)"})).toBeDisabled();
-  await page.getByRole("button",{name:"Promoters",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"Consolidated promoter follow-ups"})).toBeVisible();
-  await expect(targets.getByRole("row",{name:new RegExp(name)})).toHaveCount(0);
-  await expect(page.getByRole("region",{name:"Reminder preparation history"})).toBeVisible();
+  await page.goto("/communication");
+  const audience=page.getByRole("complementary",{name:"Message review"});
+  await expect(audience.getByText(name,{exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Save draft"})).toBeVisible();
+  await page.getByRole("button",{name:"Email"}).click();
+  await expect(audience.getByText(/requires an email provider and recorded email consent/)).toBeVisible();
+  await expect(page.getByRole("navigation",{name:"Communication views"})).toBeVisible();
 });
 
-test("Reminder proxy forbids unauthorized preparation and nonexistent operations",async ({page})=>{
-  await page.goto("/reminders/whatsapp");
-  const forged=await page.request.post("/api/admin/reminders/prepare",{
+test("Communication templates, campaign plans and rules persist across navigation",async ({page})=>{
+  const key=Date.now()%1000000;
+  const name="Foundation Message "+key;
+  await page.goto("/communication/templates");
+  await page.getByRole("textbox",{name:"Template name"}).fill(name);
+  await page.getByRole("textbox",{name:"Message"}).fill("Assalamu Alaikum {{name}}, we have an update.");
+  await page.getByRole("button",{name:"Save template"}).click();
+  await expect(page.getByText(name,{exact:true})).toBeVisible();
+  await page.goto("/communication");
+  await page.getByRole("textbox",{name:"Campaign name"}).fill("Update "+key);
+  await page.getByRole("combobox",{name:"Use template"}).selectOption({label:name});
+  await expect(page.getByRole("textbox",{name:"Message body"})).toContainText("Assalamu Alaikum");
+  await page.getByRole("button",{name:"Save draft"}).click();
+  await expect(page.getByText(/No message has been sent or queued/)).toBeVisible();
+  await page.goto("/communication/campaigns");
+  const row=page.getByRole("row",{name:new RegExp("Update "+key)});
+  await expect(row).toBeVisible();
+  await expect(row.getByText("Draft")).toBeVisible();
+  await row.getByRole("button",{name:"Cancel"}).click();
+  await expect(row.getByText("Cancelled")).toBeVisible();
+  await page.goto("/communication/automations");
+  await page.getByRole("textbox",{name:"Workflow name"}).fill("Monthly demo "+key);
+  await page.getByRole("combobox",{name:"Automation trigger"}).selectOption("monthly_sponsor");
+  await page.getByRole("combobox",{name:"Automation template"}).selectOption({label:name+" · WhatsApp"});
+  await page.getByRole("button",{name:"Save automation"}).click();
+  await expect(page.getByText("Monthly demo "+key,{exact:true})).toBeVisible();
+  await expect(page.getByText("Inactive · delivery not connected")).toBeVisible();
+});
+
+test("Communication proxy blocks forged-origin writes and has no unapproved send endpoint",async ({page})=>{
+  await page.goto("/communication");
+  const forged=await page.request.post("/api/admin/communication/templates",{
     headers:{"Origin":"https://untrusted.example","Content-Type":"application/json"},
-    data:{kind:"sponsor",request_id:"00000000-0000-4000-8000-000000000001"},
+    data:{name:"Evil",channel:"whatsapp",category:"update",body:"Message"},
   });
   expect(forged.status()).toBe(403);
   const missingCsrf=await page.evaluate(async()=>{
-    const res=await fetch("/api/admin/reminders/prepare",{
+    const res=await fetch("/api/admin/communication/templates",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({kind:"sponsor",request_id:crypto.randomUUID()}),
+      body:JSON.stringify({name:"Attempt",channel:"whatsapp",category:"update",body:"Hello"}),
     });
     return res.status;
   });
   expect(missingCsrf).toBe(403);
-  const wrongEndpoint=await page.request.post("/api/admin/reminders/send",{
+  const wrongEndpoint=await page.request.post("/api/admin/communication/send",{
     headers:{"Origin":"http://127.0.0.1:3000","Content-Type":"application/json"},
     data:{},
   });
   expect(wrongEndpoint.status()).toBe(404);
+  const prior=await page.request.post("/api/admin/reminders/send",{
+    headers:{"Origin":"http://127.0.0.1:3000","Content-Type":"application/json"},data:{},
+  });
+  expect(prior.status()).toBe(404);
 });
 
 test("mobile collection form stays clickable with populated recent history",async ({page,isMobile})=>{
