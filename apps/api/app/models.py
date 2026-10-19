@@ -762,6 +762,7 @@ class CommunicationCampaign(Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "id", name="uq_comm_campaign_org_id"),
         UniqueConstraint("organization_id", "request_id", name="uq_comm_campaign_request"),
+        Index("ix_comm_campaign_org_created", "organization_id", "created_at"),
         CheckConstraint("channel IN ('whatsapp','email')", name="ck_comm_campaign_channel"),
         CheckConstraint(
             "audience IN ('prospects','promoters','both')", name="ck_comm_campaign_audience"
