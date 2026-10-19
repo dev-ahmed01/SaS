@@ -23,7 +23,7 @@ async function logIn(page) {
   if(session.status()!==200) {
     throw new Error("Login cookie not accepted by session gateway: HTTP "+session.status());
   }
-  await expect(page).toHaveURL(/\/prospects$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 test.beforeEach(async ({page}) => {
@@ -45,6 +45,14 @@ test("login password can be revealed and hidden without submitting",async ({page
   await expect(page).toHaveURL(/\/login$/);
 });
 
+test("home and authenticated login open Dashboard",async ({page})=>{
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("region",{name:"Foundation dashboard"})).toBeVisible();
+  await page.goto("/login");
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
 test("all seven approved modules have a secure navigable destination",async ({page,isMobile})=>{
   for(const [slug,title] of modules){
     if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
@@ -55,6 +63,7 @@ test("all seven approved modules have a secure navigable destination",async ({pa
 });
 
 test("approved tabs remain functional and preview saves stay disabled",async ({page})=>{
+  await page.goto("/prospects");
   await expect(page.getByRole("button",{name:"Add Prospect"})).toBeEnabled();
   await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Inactive"}).click();
   await expect(page.getByRole("region",{name:"Inactive Prospects"})).toBeVisible();
