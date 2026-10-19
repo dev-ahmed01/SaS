@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
 import type { Promoter, PromoterPage } from "./promoter-types";
 import { csrfToken } from "./promoter-types";
@@ -15,7 +16,7 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   const [q,setQ]=useState("");
   const [offset,setOffset]=useState(0);
   const [revision,setRevision]=useState(0);
-  const [page,setPage]=useState<PromoterPage|null>(null);
+  const [page,setPage]=useState<PromoterPage|null>(()=>recentSnapshot<PromoterPage>("/api/admin/promoters?"+new URLSearchParams({q:"",limit:"20",offset:"0",...(view!=="all"?{active:String(view==="active")}:{})})));
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(true);
   const [pending,setPending]=useState(false);
@@ -37,9 +38,13 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   },[q,offset,view]);
   useEffect(()=>{
     const abort=new AbortController();
-    setLoading(true);setError("");
+    const query=new URLSearchParams({q,limit:"20",offset:String(offset)});
+    if(view!=="all")query.set("active",String(view==="active"));
+    const key="/api/admin/promoters?"+query;
+    const cached=recentSnapshot<PromoterPage>(key);
+    setPage(cached);setLoading(!cached);setError("");
     fetchPage(abort.signal)
-      .then(data=>{if(!abort.signal.aborted)setPage(data);})
+      .then(data=>{if(!abort.signal.aborted){rememberSnapshot(key,data);setPage(data);}})
       .catch(e=>{if(!abort.signal.aborted)setError(e.message);})
       .finally(()=>{if(!abort.signal.aborted)setLoading(false);});
     return ()=>abort.abort();
@@ -82,7 +87,7 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
         <thead><tr>{["Created","Full Name","Mobile","City","Sponsors","Status"].map(col=>
           <th scope="col" key={col}>{col}</th>)}</tr></thead>
         <tbody>
-          {loading?<tr><td colSpan={6}><p role="status" className="crm-list-empty">Loading promoters…</p></td></tr>
+          {loading&&!page?<tr><td colSpan={6}><p role="status" className="crm-list-empty">Loading promoters…</p></td></tr>
             :!page?.items.length?<tr><td colSpan={6}>
               <div className="crm-list-empty">
                 <Icon name="users" size={29}/><h2>No promoters found</h2>
