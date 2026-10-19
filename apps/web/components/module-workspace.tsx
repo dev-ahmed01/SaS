@@ -1,13 +1,11 @@
-import Link from "next/link";
 import { AppShell } from "./app-shell";
 import { EmptyTable, ModuleTabs, Panel, PhaseNotice, PreviewButton, SelectField, TextField } from "./ui/primitives";
-import { Icon } from "./ui/icon";
 import { AdminSettingsForm } from "./admin-settings-form";
 import { DashboardLive } from "./dashboard/dashboard-live";
 import { ManualCollections } from "./collections/manual-collections";
+import { CommunicationWorkspace } from "./communication/workspace";
 import { CollectionsAllWorkspace } from "./collections/collections-all-workspace";
 import { PayoutAdd, PayoutList } from "./payouts/payouts-workspace";
-import { WhatsAppEligibility } from "./reminders/whatsapp-eligibility";
 import { ProspectsWorkspace } from "./prospects/prospects-workspace";
 import { PromotersWorkspace } from "./promoters/promoters-workspace";
 
@@ -69,36 +67,6 @@ function BusinessModule({module,view}:{module:Module;view:string}) {
   </AppShell>;
 }
 
-function Reminders({view}:{view:string}) {
-  if(view==="whatsapp"){
-    return <AppShell>
-      <Link className="back-link" href="/reminders">
-        <Icon name="arrow-left" size={17}/> Back to reminders
-      </Link>
-      <h2 className="subpage-heading">WhatsApp reminder</h2>
-      <WhatsAppEligibility/>
-    </AppShell>;
-  }
-  if(view==="whatsapp"||view==="email") {
-    const wa=view==="whatsapp";
-    return <AppShell><Link className="back-link" href="/reminders"><Icon name="arrow-left" size={17}/> Back to reminders</Link>
-      <h2 className="subpage-heading">{wa?"WhatsApp reminder":"Email reminder"}</h2>
-  
-      <div className="composer-grid"><Panel title="Message details">
-        <div className="form-grid"><div className="form-cell full">{wa?<SelectField label="Message template" placeholder="Monthly Salah Sponsorship Reminder" required/>:<TextField label="Subject" placeholder="Monthly Salah Sponsorship Reminder" required/>}</div>
-        <div className="form-cell full"><label className="field"><span className="field-label">Message content</span><textarea rows={7} disabled defaultValue={"Assalamu Alaikum {name},\n\nThis is a friendly reminder about your monthly Salah sponsorship.\n\nJazakAllahu Khair for your continued support."}/></label></div>
-        <div className="form-cell full"><SelectField label="Send to" placeholder="Eligible active sponsors" required/></div></div>
-        <div className="form-actions"><PreviewButton>{wa?"Send WhatsApp Reminders":"Send Email Reminders"}</PreviewButton></div>
-      </Panel><Panel title="Recipient preview"><div className="recipient-preview"><Icon name={wa?"message":"mail"} size={32}/><h3>Delivery is not enabled</h3><p>Only eligible sponsors with appropriate consent will be included after Phase 11. No messages are being sent.</p></div></Panel></div>
-    </AppShell>;
-  }
-  if(view!=="add") return null;
-  return <AppShell>
-
-    <div className="reminder-cards"><Link href="/reminders/whatsapp" className="reminder-card"><span className="reminder-icon whatsapp"><Icon name="message" size={26}/></span><h2>WhatsApp Reminders</h2><span className="reminder-card-link">View reminder composer →</span></Link><Link href="/reminders/email" className="reminder-card"><span className="reminder-icon email"><Icon name="mail" size={26}/></span><h2>Email Reminders</h2><span className="reminder-card-link">View reminder composer →</span></Link></div>
-  </AppShell>;
-}
-
 function Dashboard() {
   return <AppShell>
     <DashboardLive/>
@@ -114,7 +82,7 @@ function Settings() {
 export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}) {
   if(module==="dashboard"&&view==="add") return <Dashboard/>;
   if(module==="settings"&&view==="add") return <Settings/>;
-  if(module==="reminders") return <Reminders view={view}/>;
+  if(module==="communication" && ["compose","campaigns","templates","automations"].includes(view)) return <CommunicationWorkspace view={view as "compose"|"campaigns"|"templates"|"automations"}/>;
   if(module==="prospects" && ["add","inactive","active","all","stages"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"active"|"all"|"stages"}/>;
   if(module==="promoters" && ["add","active","inactive","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"inactive"|"all"}/>;
   if(module==="collections" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
