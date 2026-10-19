@@ -1099,3 +1099,21 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .finance-form-grid {grid-template-columns:1fr;gap:17px;}
   .finance-form-panel,.finance-recent-panel,.finance-list-panel {padding:18px 14px;}
 }
+
+.finance-forecast {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:13px;margin:18px 0 21px;
+}
+.finance-forecast > div {
+  display:grid;gap:7px;border:1px solid var(--line);
+  border-radius:10px;padding:17px 18px;min-width:0;
+  background:#fbfdfb;
+}
+.finance-forecast span {font:400 11px var(--font-body);color:var(--muted);}
+.finance-forecast strong {
+  font:600 clamp(17px,2.2vw,24px) var(--font-body);
+  color:var(--forest-deep);overflow-wrap:anywhere;
+}
+@media(max-width:600px){
+  .finance-forecast{grid-template-columns:1fr;}
+}
