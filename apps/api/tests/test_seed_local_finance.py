@@ -9,11 +9,18 @@ from sqlalchemy.pool import StaticPool
 
 from app.bootstrap_admin import provision_admin
 from app.models import (
-    AdminUser, Base, ManualCollection, ManualCollectionReversal, MessageOutbox,
-    PayoutPayment, PayoutPlan, Prospect, VerifiedCredit,
+    AdminUser,
+    Base,
+    ManualCollection,
+    ManualCollectionReversal,
+    MessageOutbox,
+    PayoutPayment,
+    PayoutPlan,
+    Prospect,
+    VerifiedCredit,
 )
 from app.seed_local_crm import seed_synthetic_crm
-from app.seed_local_finance import seed_finance_examples, assert_disposable_demo
+from app.seed_local_finance import assert_disposable_demo, seed_finance_examples
 
 SECRET="synthetic-only-fixture-key-more-than-thirty-two-characters"
 
