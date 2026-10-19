@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "./app-shell";
-import { EmptyTable, ModuleTabs, PageHeading, Panel, PhaseNotice, PreviewButton, SelectField, TextField } from "./ui/primitives";
+import { EmptyTable, ModuleTabs, Panel, PhaseNotice, PreviewButton, SelectField, TextField } from "./ui/primitives";
 import { Icon } from "./ui/icon";
 import { AdminSettingsForm } from "./admin-settings-form";
 import { DashboardLive } from "./dashboard/dashboard-live";
@@ -62,7 +62,7 @@ function BusinessModule({module,view}:{module:Module;view:string}) {
   const valid=definition.tabs.some(tab=>tab.id===view);
   if(!valid) return null;
   const title = view==="inactive" ? "Inactive "+definition.name : view==="active" ? "Active "+definition.name : "All "+definition.name;
-  return <AppShell><PageHeading title={definition.name} description={definition.description}/>
+  return <AppShell>
     <ModuleTabs current={view} tabs={definition.tabs}/>
     <PhaseNotice phase={definition.phase} text="The layout is ready. Data entry and status actions are intentionally disabled until its secured backend is implemented."/>
     {view==="add"?<FormPreview definition={definition}/>:<EmptyTable title={title} description={"No "+definition.name.toLowerCase()+" to display in this design preview."} columns={definition.columns} search={definition.search}/>}
@@ -75,15 +75,14 @@ function Reminders({view}:{view:string}) {
       <Link className="back-link" href="/reminders">
         <Icon name="arrow-left" size={17}/> Back to reminders
       </Link>
-      <PageHeading title="WhatsApp Reminder"
-        description=""/>
+      <h2 className="subpage-heading">WhatsApp reminder</h2>
       <WhatsAppEligibility/>
     </AppShell>;
   }
   if(view==="whatsapp"||view==="email") {
     const wa=view==="whatsapp";
     return <AppShell><Link className="back-link" href="/reminders"><Icon name="arrow-left" size={17}/> Back to reminders</Link>
-      <PageHeading title={wa?"WhatsApp Reminder":"Email Reminder"} description={wa?"Preview the monthly sponsorship WhatsApp reminder.":"Email reminders are planned but not connected yet."}/>
+      <h2 className="subpage-heading">{wa?"WhatsApp reminder":"Email reminder"}</h2>
   
       <div className="composer-grid"><Panel title="Message details">
         <div className="form-grid"><div className="form-cell full">{wa?<SelectField label="Message template" placeholder="Monthly Salah Sponsorship Reminder" required/>:<TextField label="Subject" placeholder="Monthly Salah Sponsorship Reminder" required/>}</div>
@@ -94,21 +93,20 @@ function Reminders({view}:{view:string}) {
     </AppShell>;
   }
   if(view!=="add") return null;
-  return <AppShell><PageHeading title="Reminders" description=""/>
+  return <AppShell>
 
     <div className="reminder-cards"><Link href="/reminders/whatsapp" className="reminder-card"><span className="reminder-icon whatsapp"><Icon name="message" size={26}/></span><h2>WhatsApp Reminders</h2><span className="reminder-card-link">View reminder composer →</span></Link><Link href="/reminders/email" className="reminder-card"><span className="reminder-icon email"><Icon name="mail" size={26}/></span><h2>Email Reminders</h2><span className="reminder-card-link">View reminder composer →</span></Link></div>
   </AppShell>;
 }
 
 function Dashboard() {
-  return <AppShell><PageHeading title="Dashboard"
-    description=""/>
+  return <AppShell>
     <DashboardLive/>
   </AppShell>;
 }
 
 function Settings() {
-  return <AppShell><PageHeading title="Settings" description=""/>
+  return <AppShell>
     <AdminSettingsForm/>
   </AppShell>;
 }
@@ -119,10 +117,10 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="reminders") return <Reminders view={view}/>;
   if(module==="prospects" && ["add","inactive","all"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"all"}/>;
   if(module==="promoters" && ["add","active","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"all"}/>;
-  if(module==="collections" && view==="add") return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
-  if(module==="collections" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Collections" description=""/><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"}/></AppShell>;
-  if(module==="payouts" && view==="add") return <AppShell><PageHeading title="Payouts" description=""/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
-  if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><PageHeading title="Payouts" description=""/><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
+  if(module==="collections" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
+  if(module==="collections" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"}/></AppShell>;
+  if(module==="payouts" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
+  if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;
 }
