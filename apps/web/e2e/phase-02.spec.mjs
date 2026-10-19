@@ -283,15 +283,35 @@ test("Admin can archive and restore a prospect without deleting its record",asyn
   await page.getByRole("button",{name:/Delete prospect/}).click();
   await expect(page.getByRole("dialog",{name:"Confirm prospect archive"})).toBeVisible();
   await page.getByRole("button",{name:"Archive prospect",exact:true}).click();
+  const detailsUrl=page.url();
   await expect(page.getByText("Archived",{exact:true})).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
-  await page.getByRole("checkbox",{name:"Include archived"}).check();
-  await page.getByRole("row",{name:new RegExp(label)}).getByRole("link",{name:label}).click();
+  await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
+  await page.goto(detailsUrl);
   await page.getByRole("button",{name:/Restore prospect/}).click();
   await page.getByRole("dialog",{name:"Confirm prospect archive"}).getByRole("button",{name:"Restore prospect"}).click();
   await expect(page.getByText("Active",{exact:true}).first()).toBeVisible();
+});
+
+test("Prospect listing shows dedicated Stage, Status and sticky Action dropdown",async ({page})=>{
+  await page.goto("/prospects");
+  await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
+  await expect(page.locator(".crm-list-tools-right")).toHaveCount(0);
+  await expect(page.locator(".prospects-table th").allTextContents()).resolves.toEqual([
+    "Created","Full Name","Mobile","City","Sponsorship","Start","Promoter",
+    "Stage","Status","Action"
+  ]);
+  const style=await page.locator(".prospects-table th").last()
+    .evaluate(el=>getComputedStyle(el).position);
+  expect(style).toBe("sticky");
+  const weight=await page.locator(".topbar-name")
+    .evaluate(el=>getComputedStyle(el).fontWeight);
+  expect(weight).toBe("800");
+  const sidebar=page.locator(".brand-copy");
+  await expect(sidebar.getByText("Emlen Foundation",{exact:true})).toBeVisible();
+  await expect(sidebar.getByText("Sponsor a Salah",{exact:true})).toBeVisible();
 });
 
 test("Prospect CRM tabs, profile cards and reasoned inactivity work without changing payment status",async ({page})=>{
@@ -307,7 +327,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await tabs.getByRole("link",{name:"Add Prospect"}).click();
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9765432100");
-  await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).fill("2");
+  await page.getByRole("combobox",{name:"Sponsorship Tokens"}).selectOption("2");
   await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -326,7 +346,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
   const row=page.getByRole("row",{name:new RegExp(name)});
   await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
-  await row.getByRole("button",{name:/Reactivate/}).click();
+  await row.getByRole("combobox",{name:"Actions for "+name}).selectOption("status");
   await page.getByRole("dialog",{name:"Reactivate prospect"}).getByRole("button",{name:"Mark Active"}).click();
   await expect(row).toHaveCount(0);
   await page.goto("/prospects/active");
@@ -459,7 +479,7 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   const name="Ledger Candidate "+(Date.now()%1000000);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  const agreed=Number(await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).inputValue())*250;
+  const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9876543210");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -515,16 +535,23 @@ test("manual collection amount accepts only ₹250 denominations",async ({page})
   // No sponsor is selected: this is input validation only, never a real receipt.
 });
 
-test("Sponsorship tokens enforce whole ₹250 units",async ({page})=>{
+test("Sponsorship dropdown enforces ₹250 multiples and supports custom quantities",async ({page})=>{
   await page.goto("/prospects/add");
-  const tokens=page.getByRole("spinbutton",{name:"Sponsorship Tokens"});
+  const tokens=page.getByRole("combobox",{name:"Sponsorship Tokens"});
   await expect(tokens).toBeVisible();
-  await tokens.fill("3");
+  await expect(tokens).toHaveValue("1");
+  await tokens.selectOption("3");
   await expect(page.getByText("₹750 / month")).toBeVisible();
-  await tokens.fill("1.5");
-  expect(await tokens.evaluate(element=>element.checkValidity())).toBe(false);
-  await tokens.fill("60");
-  expect(await tokens.evaluate(element=>element.checkValidity())).toBe(true);
+  await tokens.selectOption("custom");
+  const custom=page.getByRole("spinbutton",{name:"Custom sponsorship tokens"});
+  await expect(custom).toBeVisible();
+  await custom.fill("1.5");
+  expect(await custom.evaluate(element=>element.checkValidity())).toBe(false);
+  await custom.fill("60");
+  expect(await custom.evaluate(element=>element.checkValidity())).toBe(true);
+  await expect(page.getByText("₹15,000 / month")).toBeVisible();
+  await expect(page.getByText(/Payment identifiers/)).toHaveCount(0);
+  await expect(page.locator(".prospect-field-row .field-label").filter({hasText:"(optional)"})).toHaveCount(0);
 });
 
 test("Admin records a manual contribution without claiming WhatsApp delivery",async ({page})=>{
@@ -532,7 +559,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   const name="Manual Pay Sponsor "+id;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  const agreed=Number(await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).inputValue())*250;
+  const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9826"+id);
   await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -609,7 +636,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   const name="Reversal Browser Sponsor "+id;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  const agreed=Number(await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).inputValue())*250;
+  const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9847"+id);
   await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
