@@ -5,7 +5,7 @@ type AccountRow={prospect_id:string;name:string;status:string;due_paise:number;v
 type Overview={period_month:string;as_of:string;total_sponsors:number;due_paise:number;verified_paise:number;outstanding_paise:number;fully_paid_sponsors:number;items:AccountRow[];offset:number;limit:number};
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 
-export function AccountingOverview(){
+export function AccountingOverview({outstandingOnly=false}:{outstandingOnly?:boolean}){
   const [month,setMonth]=useState("");
   const [offset,setOffset]=useState(0);
   const [revision,setRevision]=useState(0);
@@ -17,6 +17,7 @@ export function AccountingOverview(){
   useEffect(()=>{
     const controller=new AbortController();
     const query=new URLSearchParams({limit:"20",offset:String(offset)});
+    if(outstandingOnly)query.set("outstanding_only","true");
     if(month)query.set("month",month);
     setLoading(true);
     fetch("/api/admin/accounting/overview?"+query,{cache:"no-store",signal:controller.signal})
@@ -25,7 +26,7 @@ export function AccountingOverview(){
       .catch(()=>{if(!controller.signal.aborted)setError("Unable to load the monthly ledger.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
-  },[month,offset,revision]);
+  },[month,offset,revision,outstandingOnly]);
   async function refreshStatuses(){
     if(saving)return;
     setSaving(true);setError("");setMessage("");
@@ -45,7 +46,7 @@ export function AccountingOverview(){
   }
   return <section className="accounting-workspace" aria-label="Monthly sponsorship ledger">
     <div className="accounting-heading">
-      <div><h2>Monthly sponsorship ledger</h2>
+      <div><h2>{outstandingOnly?"Outstanding sponsorships":"Monthly sponsorship ledger"}</h2>
 </div>
       <label className="field account-month-picker"><span className="field-label">Accounting month (IST)</span>
         <input aria-label="Accounting month (IST)" type="month" max={data?.as_of.slice(0,7)}
@@ -66,14 +67,14 @@ export function AccountingOverview(){
     </div>
     <div className="accounting-details">
       <div className="accounting-list-heading"><div>
-        <h3>Sponsor commitments</h3>
+        <h3>{outstandingOnly?"Due from sponsors":"Sponsor commitments"}</h3>
       </div><button type="button" className="btn btn-secondary" disabled={saving||loading}
         onClick={refreshStatuses}>{saving?"Updating…":"Refresh sponsor statuses"}</button></div>
       <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Sponsor</th><th>Due</th><th>Verified</th>
-          <th>Outstanding</th><th>Status</th><th>Month paid</th></tr></thead>
+        <thead><tr><th>Sponsor</th><th>Due</th><th>Received</th>
+          <th>Outstanding</th><th>Lifecycle</th><th>Fully paid</th></tr></thead>
         <tbody>{loading?<tr><td colSpan={6}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
-        :!data?.items.length?<tr><td colSpan={6}><div className="empty-state"><h3>No sponsorships for this month</h3><p>Register sponsors to create commitments.</p></div></td></tr>
+        :!data?.items.length?<tr><td colSpan={6}><div className="empty-state"><h3>No sponsorships for this month</h3><p>No outstanding commitments for this month.</p></div></td></tr>
         :data.items.map(row=><tr key={row.prospect_id}>
           <td><strong className="table-name">{row.name}</strong></td>
           <td>{money(row.due_paise)}</td><td>{money(row.verified_paise)}</td>

@@ -88,6 +88,9 @@ class PlanPage(BaseModel):
     limit: int
     offset: int
     period_month: date
+    forecast_due_paise: int
+    forecast_paid_paise: int
+    forecast_outstanding_paise: int
 
 
 class StatusChange(BaseModel):
@@ -337,9 +340,20 @@ def list_plans(
         .limit(limit).offset(offset)
     ).all()
     rows = [_render_plan(db, plan, period) for plan in plans]
+    # Forecast across the full filtered plan set, not the current page.
+    # A plan is a commitment only; disbursement is tracked separately.
+    all_plans = db.scalars(select(PayoutPlan).where(*clauses)).all()
+    all_rows = [_render_plan(db, plan, period) for plan in all_plans]
+    due = sum(row.current_month_due_paise for row in all_rows)
+    paid = sum(row.current_month_paid_paise for row in all_rows)
     response.headers["Cache-Control"] = "no-store"
     return PlanPage(
         items=rows, total=total, limit=limit, offset=offset, period_month=period,
+        forecast_due_paise=due, forecast_paid_paise=paid,
+        forecast_outstanding_paise=sum(
+            max(0, row.current_month_due_paise-row.current_month_paid_paise)
+            for row in all_rows
+        ),
     )
 
 
@@ -477,12 +491,21 @@ def list_disbursements(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     db: Annotated[Session, Depends(db_session)],
     plan_id: uuid.UUID | None = None,
+    month: str | None = Query(default=None, max_length=7),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaymentPage:
     admin = context[0]
     _settings(db, admin)
     criteria = [PayoutPayment.organization_id == admin.organization_id]
+    if month is not None:
+        try:
+            if len(month) != 7 or month[4] != "-":
+                raise ValueError("Invalid month")
+            parsed_month = date.fromisoformat(month + "-01")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Use a valid YYYY-MM month") from exc
+        criteria.append(PayoutPayment.period_month == parsed_month)
     if plan_id:
         criteria.append(PayoutPayment.plan_id == plan_id)
     count = db.scalar(select(func.count(PayoutPayment.id)).where(*criteria)) or 0

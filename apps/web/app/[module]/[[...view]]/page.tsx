@@ -4,7 +4,7 @@ import { requireAdminSession } from "../../../lib/admin-guard";
 
 const valid: Record<string,string[]> = {
   dashboard:["add"],prospects:["add","all","active","inactive","stages"],promoters:["add","active","all","inactive"],
-  collections:["add","active","all"],payouts:["add","active","all"],
+  collections:["add","received","outstanding","active","all"],payouts:["add","planned","disbursed","active","all"],
   reminders:["add","whatsapp","email"],settings:["add"]
 };
 

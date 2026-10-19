@@ -30,7 +30,9 @@ test("navigation is consistent across exactly the approved seven destinations", 
 
 test("each module has the approved horizontal tab structure", () => {
   for (const label of ["Add Prospect","Inactive","All Prospects","Add Promoter","Active","All Promoters","Add Payout"]) assert.ok(modules.includes(label),label);
-  assert.match(modules,/collections\/active/);
+  assert.match(modules,/collections\/received/);
+  assert.match(modules,/collections\/outstanding/);
+  assert.match(modules,/payouts\/disbursed/);
   assert.match(modules,/payouts\/all/);
   assert.match(ui,/aria-label="Module views"/);
   assert.match(ui,/aria-current/);

@@ -1002,3 +1002,118 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .brand-copy strong {font-size:19px;}
   .brand-copy small {font-size:12px;}
 }
+
+/* Finance CRM: same width and navigation rhythm as Prospects/Promoters. */
+.site-sidebar .sidebar-head {min-height:74px;align-items:flex-start;}
+.site-sidebar .sidebar-nav {margin-top:17px;}
+.page-content > .module-tabs {
+  display:grid;
+  width:100%;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+  margin-top:0;
+  min-height:52px;
+  overflow:visible;
+}
+.page-content > .module-tabs .module-tab {
+  min-width:0;
+  width:100%;
+  min-height:50px;
+  padding:12px 6px;
+  text-align:center;
+  font:500 13px var(--font-body);
+}
+.manual-collections-workspace,
+.accounting-workspace,
+.collection-review,
+.payouts-form,
+.payouts-workspace,
+.finance-list-panel {
+  width:100%;
+  max-width:none;
+  min-width:0;
+}
+.finance-crm-workspace {margin-top:24px;gap:20px;}
+.finance-form-panel,.finance-recent-panel,.finance-list-panel,
+.finance-crm-workspace .content-panel {
+  max-width:none;
+  width:100%;
+  border-radius:13px;
+  padding:clamp(20px,3vw,37px);
+}
+.finance-form-panel h2 {font:700 23px var(--font-heading);color:var(--forest-deep);}
+.finance-form-caption {
+  margin:4px 0 26px;
+  font:400 12px/1.55 var(--font-body);
+  color:var(--muted);
+}
+.finance-form-grid {
+  width:100%;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:24px 20px;
+  align-items:start;
+}
+.finance-form-grid > * {min-width:0;}
+.finance-form-grid .field-label {font-size:12px;}
+.finance-form-grid .field input,
+.finance-form-grid .field select,
+.finance-form-grid .field textarea {
+  min-height:48px;
+  font-size:13px;
+  border-radius:8px;
+}
+.finance-form-grid .field textarea {min-height:94px;}
+.finance-form-grid .checkbox-field {
+  display:flex;align-items:flex-start;gap:10px;
+  font-size:12px;color:var(--forest-deep);
+}
+.finance-form-grid .checkbox-field input {margin-top:4px;flex:none;}
+.finance-confirm {border-top:1px solid var(--line);padding-top:19px;}
+.finance-plan-preview {
+  margin-top:23px;
+  display:flex;align-items:baseline;gap:10px 20px;flex-wrap:wrap;
+  border-top:1px solid var(--line);padding-top:20px;
+}
+.finance-plan-preview span {font:500 12px var(--font-body);color:var(--muted);}
+.finance-plan-preview strong {font:600 21px var(--font-body);color:var(--forest-deep);}
+.finance-plan-preview small {font:400 11px var(--font-body);color:var(--muted);}
+.finance-table-scroll {width:100%;max-width:100%;overflow-x:auto;}
+.finance-list-panel,.collection-review,.payouts-workspace,.accounting-workspace {
+  margin-top:24px;
+}
+.payout-history.finance-list-panel {
+  border:1px solid var(--line);border-radius:13px;background:#fff;
+  padding:clamp(20px,3vw,33px);
+}
+.payout-history.finance-list-panel .payout-list-title {
+  margin-bottom:20px;
+}
+.finance-crm-workspace .manual-selected {
+  color:var(--forest-deep);font:500 11px var(--font-body);
+}
+@media(max-width:780px){
+  .site-sidebar .sidebar-head {min-height:74px;}
+  .site-sidebar .sidebar-nav {margin-top:17px;}
+  .page-content > .module-tabs {gap:2px;}
+  .page-content > .module-tabs .module-tab {font-size:10px;padding-inline:3px;}
+  .finance-form-grid {grid-template-columns:1fr;gap:17px;}
+  .finance-form-panel,.finance-recent-panel,.finance-list-panel {padding:18px 14px;}
+}
+
+.finance-forecast {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:13px;margin:18px 0 21px;
+}
+.finance-forecast > div {
+  display:grid;gap:7px;border:1px solid var(--line);
+  border-radius:10px;padding:17px 18px;min-width:0;
+  background:#fbfdfb;
+}
+.finance-forecast span {font:400 11px var(--font-body);color:var(--muted);}
+.finance-forecast strong {
+  font:600 clamp(17px,2.2vw,24px) var(--font-body);
+  color:var(--forest-deep);overflow-wrap:anywhere;
+}
+@media(max-width:600px){
+  .finance-forecast{grid-template-columns:1fr;}
+}

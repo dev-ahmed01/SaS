@@ -118,12 +118,13 @@ export function ManualCollections(){
     }catch{setError("Connection interrupted. Check the recent list before retrying.");}
     finally{setSaving(false);}
   }
-  return <div className="manual-collections-workspace">
-    <section className="content-panel" aria-label="Record a manual collection">
+  return <div className="manual-collections-workspace finance-crm-workspace">
+    <section className="content-panel finance-form-panel" aria-label="Record a manual collection">
       <h2>Record Collection</h2>
+      <p className="finance-form-caption">Record a received payment against a sponsor and accounting month.</p>
       <form onSubmit={submit}>
-        <div className="form-grid">
-          <div className="form-cell full">
+        <div className="form-grid finance-form-grid">
+          <div className="form-cell">
             <label className="field"><span className="field-label">Sponsor <span className="required">*</span></span>
               <input aria-label="Search sponsor" autoComplete="off" required value={search}
                 placeholder="Search by name or mobile number"
@@ -138,6 +139,9 @@ export function ManualCollections(){
               </button>)}
             </div>}
           </div>
+          <label className="field"><span className="field-label">Sponsorship month *</span>
+            <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
+              value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
           <div className="field"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
             <select id="collection-amount" aria-label="Amount received (₹)" required value={customAmount?"other":rupees}
               onChange={e=>{setCustomAmount(e.target.value==="other");setRupees(e.target.value==="other"?"":e.target.value);update();}}>
@@ -154,21 +158,14 @@ export function ManualCollections(){
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
               <option value="cash">Cash</option>
             </select></label>
-          <details className="optional-details"><summary>Change payment date or month</summary>
-            <div className="optional-fields">
-              <label className="field"><span className="field-label">Received date (IST) *</span>
-                <input aria-label="Received date (IST)" required type="date" max={istDate()}
-                  value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/></label>
-              <label className="field"><span className="field-label">Sponsorship month *</span>
-                <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
-                  value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
-            </div>
-          </details>
-          <label className="field form-cell full"><span className="field-label">UPI transaction ID / bank reference / numbered receipt *</span>
+          <label className="field"><span className="field-label">Received date (IST) *</span>
+            <input aria-label="Received date (IST)" required type="date" max={istDate()}
+              value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/></label>
+          <label className="field"><span className="field-label">Transaction / receipt reference *</span>
             <input aria-label="Transaction reference" required minLength={6} maxLength={100}
               value={reference} placeholder="Enter a unique reference"
               onChange={e=>{setReference(e.target.value);update();}}/></label>
-          <label className="checkbox-field form-cell full"><input type="checkbox"
+          <label className="checkbox-field form-cell full finance-confirm"><input type="checkbox"
             checked={confirmed} onChange={e=>{setConfirmed(e.target.checked);update();}}/>
             <span>I have checked the Foundation's records and confirm these funds were received.</span></label>
         </div>
@@ -178,7 +175,7 @@ export function ManualCollections(){
           className="btn btn-primary">{saving?"Recording…":"Save Collection"}</button></div>
       </form>
     </section>
-    <section className="content-panel" aria-label="Recent manual collections">
+    <section className="content-panel finance-recent-panel" aria-label="Recent manual collections">
       <h2>Recently Recorded</h2>
       <div className="table-scroll"><table className="data-table">
         <thead><tr><th>Sponsor</th><th>Amount</th><th>Month</th><th>Reference</th><th>WhatsApp</th></tr></thead>

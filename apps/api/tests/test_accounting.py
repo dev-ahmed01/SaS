@@ -314,3 +314,35 @@ def test_archive_restore_preserves_paused_historical_months(
         assert period_balance(
             person, rates, [], date(2026, 11, 1), restored_time,
         )[0] == 50000
+
+
+def test_outstanding_view_filters_before_pagination_but_preserves_month_totals(accounting_system):
+    client, engine = accounting_system
+    csrf = login(client)
+    first = create_prospect(client, csrf)
+    assert first.status_code == 201, first.text
+    second = create_prospect(client, csrf,
+        full_name="Unpaid Synthetic Sponsor", mobile_number="+919911223344")
+    assert second.status_code == 201, second.text
+    month = ist_today().replace(day=1)
+    with Session(engine) as db:
+        db.add(VerifiedCredit(
+            organization_id=db.get(Prospect, uuid.UUID(first.json()["id"])).organization_id,
+            prospect_id=uuid.UUID(first.json()["id"]),
+            period_month=month, amount_paise=50000,
+            source_type="manual_attested", source_key="synthetic-current-month-paid",
+            verified_at=datetime.now(UTC),
+        ))
+        db.commit()
+    full = client.get("/v1/accounting/overview").json()
+    due = client.get("/v1/accounting/overview?outstanding_only=true&limit=1").json()
+    assert full["total_sponsors"] == 2
+    assert due["total_sponsors"] == 1
+    assert len(due["items"]) == 1
+    assert due["items"][0]["name"] == "Unpaid Synthetic Sponsor"
+    assert due["items"][0]["outstanding_paise"] == 50000
+    assert due["due_paise"] == full["due_paise"] == 100000
+    assert due["verified_paise"] == full["verified_paise"] == 50000
+    assert due["outstanding_paise"] == full["outstanding_paise"] == 50000
+    later = client.get("/v1/accounting/overview?outstanding_only=true&offset=1")
+    assert later.json()["items"] == []
