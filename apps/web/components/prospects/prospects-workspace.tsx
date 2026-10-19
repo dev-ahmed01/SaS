@@ -8,7 +8,7 @@ import { ProspectList } from "./prospect-list";
 
 const tabs=[
   {id:"all",label:"All Prospects",href:"/prospects"},
-  {id:"add",label:"Add Prospect",href:"/prospects/add"},
+  {id:"add",label:"Add Prospects",href:"/prospects/add"},
   {id:"active",label:"Active",href:"/prospects/active"},
   {id:"inactive",label:"Inactive",href:"/prospects/inactive"},
 ] as const;
