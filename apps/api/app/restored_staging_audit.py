@@ -30,8 +30,11 @@ REQUIRED_TABLES = (
     "communication_templates",
     "communication_campaigns",
     "communication_rules",
+    "communication_consent_events",
+    "communication_preparations",
+    "communication_recipient_snapshots",
 )
-EXPECTED_MIGRATION = "0016_communication"
+EXPECTED_MIGRATION = "0017_comm_preflight"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
@@ -141,6 +144,18 @@ def audit_database(engine) -> dict:
                     LEFT JOIN communication_templates t ON t.id=c.template_id
                       AND t.organization_id=c.organization_id
                     WHERE c.template_id IS NOT NULL AND t.id IS NULL
+                """,
+                "communication_preparation_tenants": """
+                    SELECT COUNT(*) FROM communication_preparations p
+                    LEFT JOIN communication_campaigns c ON c.id=p.campaign_id
+                      AND c.organization_id=p.organization_id
+                    WHERE c.id IS NULL
+                """,
+                "communication_recipient_preparation_tenants": """
+                    SELECT COUNT(*) FROM communication_recipient_snapshots s
+                    LEFT JOIN communication_preparations p ON p.id=s.preparation_id
+                      AND p.organization_id=s.organization_id
+                    WHERE p.id IS NULL
                 """,
                 "communication_rule_tenants": """
                     SELECT COUNT(*) FROM communication_rules r
