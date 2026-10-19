@@ -23,7 +23,14 @@ def upgrade() -> None:
     op.add_column("prospects", sa.Column("crm_inactive_reason", sa.String(64), nullable=True))
     op.add_column("prospects", sa.Column("crm_inactive_note", sa.String(500), nullable=True))
     op.create_index("ix_prospects_org_crm_stage", "prospects", ["organization_id", "crm_stage", "archived_at"])
-    op.create_check_constraint("ck_prospect_crm_stage", "prospects", "crm_stage IN ('active','inactive')")
+    if op.get_bind().dialect.name == "postgresql":
+        op.create_check_constraint("ck_prospect_crm_stage", "prospects", "crm_stage IN ('active','inactive')")
+    elif op.get_bind().dialect.name == "sqlite":
+        op.execute("""CREATE TRIGGER trg_prospect_crm_stage_guard
+            BEFORE UPDATE OF crm_stage ON prospects
+            WHEN NEW.crm_stage NOT IN ('active','inactive')
+            BEGIN SELECT RAISE(ABORT, 'Invalid prospect CRM stage'); END""")
+
     op.create_table(
         "prospect_stage_transitions",
         sa.Column("id", sa.Uuid(), primary_key=True),
