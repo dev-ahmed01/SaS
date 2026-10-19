@@ -10,12 +10,12 @@ import json
 import re
 import uuid
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,6 +31,9 @@ from app.models import (
     Prospect,
     ProspectArchiveInterval,
     ProspectUpiIdentifier,
+    ProspectStageTransition,
+    Promoter,
+    PromoterAssignment,
     SponsorshipRate,
 )
 from app.security import utc_now
@@ -59,6 +62,11 @@ class ProspectFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str = Field(min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+    occupation: str | None = Field(default=None, max_length=120)
+    start_month: date | None = None
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(default="", max_length=120)
@@ -78,6 +86,24 @@ class ProspectFields(BaseModel):
         if len(result) < 2:
             raise ValueError("Provide at least two characters")
         return result
+
+    @field_validator("first_name", "last_name", "occupation")
+    @classmethod
+    def clean_profile(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _clean_text(value) or None
+
+    @field_validator("start_month")
+    @classmethod
+    def valid_start_month(cls, value: date | None) -> date | None:
+        if value is None:
+            return None
+        today = _ist_month()
+        delta = (value.year - today.year) * 12 + value.month - today.month
+        if value.day != 1 or not 0 <= delta <= 18:
+            raise ValueError("Tentative start must be a first-of-month date within the next 18 months")
+        return value
 
     @field_validator("area_city")
     @classmethod
@@ -115,6 +141,10 @@ class ProspectUpdate(BaseModel):
 
     version: int = Field(ge=1)
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+    occupation: str | None = Field(default=None, max_length=120)
     mobile_number: str | None = Field(default=None, min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str | None = Field(default=None, min_length=2, max_length=120)
@@ -133,6 +163,9 @@ class ProspectUpdate(BaseModel):
         if self.model_fields_set == {"version"}:
             raise ValueError("Specify at least one field to update")
         # Normalize using the same rules as the creation request.
+        for name in ("first_name", "last_name", "occupation"):
+            if name in self.model_fields_set and getattr(self, name) is not None:
+                setattr(self, name, _clean_text(getattr(self, name)) or None)
         for name in ("full_name", "area_city"):
             if name in self.model_fields_set:
                 value = _clean_text(getattr(self, name))
@@ -146,6 +179,32 @@ class ProspectUpdate(BaseModel):
         if "notes" in self.model_fields_set and self.notes is not None:
             self.notes = self.notes.strip() or None
         return self
+
+
+class StageDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    stage: Literal["active", "inactive"]
+    reason: Literal["not_interested", "budget", "timing", "unreachable", "other"] | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_inactive_reason(self) -> "StageDecision":
+        if self.stage == "inactive" and not self.reason:
+            raise ValueError("An inactive reason is required")
+        if self.stage == "active" and self.reason:
+            raise ValueError("Reactivation does not take an inactive reason")
+        if self.note is not None:
+            self.note = _clean_text(self.note) or None
+        return self
+
+
+class StageHistoryRead(BaseModel):
+    from_stage: Literal["active", "inactive"]
+    to_stage: Literal["active", "inactive"]
+    reason: str | None
+    note: str | None
+    changed_at: datetime
 
 
 class UpiAdd(BaseModel):
