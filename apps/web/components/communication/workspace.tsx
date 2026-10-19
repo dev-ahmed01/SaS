@@ -30,8 +30,8 @@ export function CommunicationWorkspace({view}:{view:View}){
       {view==="compose"?<CommunicationCompose onSaved={()=>setRevision(x=>x+1)}/>:
         view==="campaigns"?<CommunicationCampaigns revision={revision}/>:
         <div className="comm-stacked-sections">
-          <CommunicationTemplates/>
-          <CommunicationAutomations/>
+          <CommunicationTemplates onChanged={()=>setRevision(x=>x+1)}/>
+          <CommunicationAutomations revision={revision}/>
         </div>}
     </div>
   </AppShell>;
