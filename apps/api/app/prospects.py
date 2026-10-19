@@ -147,7 +147,7 @@ class ProspectUpdate(BaseModel):
     occupation: str | None = Field(default=None, max_length=120)
     mobile_number: str | None = Field(default=None, min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
-    area_city: str | None = Field(default=None, min_length=2, max_length=120)
+    area_city: str | None = Field(default=None, max_length=120)
     monthly_contribution_paise: int | None = Field(default=None, ge=1, le=MAX_AMOUNT_PAISE)
     next_followup_on: date | None = None
     last_contact_on: date | None = None
@@ -169,7 +169,7 @@ class ProspectUpdate(BaseModel):
         for name in ("full_name", "area_city"):
             if name in self.model_fields_set:
                 value = _clean_text(getattr(self, name))
-                if len(value) < 2:
+                if len(value) < 2 and (name != "area_city" or value):
                     raise ValueError("Provide at least two characters")
                 setattr(self, name, value)
         for name in ("mobile_number", "whatsapp_number"):
