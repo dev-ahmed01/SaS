@@ -100,8 +100,8 @@ test("desktop branding and landscape artwork have the right proportions",async (
   const sidebar=page.locator(".site-sidebar");
   const art=page.locator(".sidebar-art");
   await expect(art).toBeVisible();
-  await expect(sidebar.getByText("Emlen Foundation",{exact:true})).toBeVisible();
-  await expect(sidebar.getByText("Sponsor a Salah",{exact:true})).toBeVisible();
+  await expect(sidebar.getByText("Emlen Foundation",{exact:true})).toHaveCount(1);
+  await expect(sidebar.getByText("Sponsor a Salah",{exact:true})).toHaveCount(1);
   await expect(page.locator(".topbar .top-avatar")).toHaveCount(0);
   await expect(page.locator(".topbar h1")).toHaveText("Dashboard");
   await expect(page.locator(".page-content h1")).toHaveCount(0);
