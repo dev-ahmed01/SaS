@@ -78,7 +78,7 @@ test("approved tabs remain functional and preview saves stay disabled",async ({p
   await page.goto("/collections");
   await expect(page.getByRole("button",{name:"Save Collection"})).toBeDisabled();
   await page.getByRole("link",{name:"Active",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"Active collections"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Received this month"})).toBeVisible();
 });
 
 test("reminder screens do not send messages before Phase 11",async ({page})=>{
