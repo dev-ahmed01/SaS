@@ -10,7 +10,7 @@ The command is idempotent: existing demo rows are not duplicated.
 
 import argparse
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -24,6 +24,8 @@ from app.models import (
     AuditEvent,
     Promoter,
     PromoterAssignment,
+    PayoutPlan,
+    PayoutPlanTerm,
     Prospect,
     ProspectStageDefinition,
     ProspectStageTransition,
@@ -62,7 +64,7 @@ def seed_synthetic_crm(
     month = month_start(now.astimezone(ZoneInfo("Asia/Kolkata")).date())
     created = {
         "prospects": 0, "promoters": 0, "stage_definitions": 0,
-        "assignments": 0, "stage_events": 0,
+        "assignments": 0, "stage_events": 0, "payout_plans": 0,
     }
     stage_defs = list(database.scalars(
         select(ProspectStageDefinition).where(
@@ -179,6 +181,38 @@ def seed_synthetic_crm(
             created["assignments"] += 1
         created["prospects"] += 1
 
+    # Forecast-only commitments. No outgoing disbursements are fabricated.
+    for index in range(1, 21):
+        request_id = _fixed_uuid(organization_id, "payout", index)
+        existing = database.scalar(select(PayoutPlan.id).where(
+            PayoutPlan.organization_id == organization_id,
+            PayoutPlan.create_request_id == request_id,
+        ))
+        if existing:
+            continue
+        kind = "recurring" if index <= 12 else "one_time"
+        day = date(month.year, month.month, min(25, 4 + index))
+        plan = PayoutPlan(
+            organization_id=organization_id, create_request_id=request_id,
+            create_hash="0" * 64,
+            payee_name=f"Demo Payee {index:02d}",
+            purpose=("Synthetic monthly facility support" if kind == "recurring"
+                     else "Synthetic one-time equipment support"),
+            notes="SYNTHETIC DEMO — proposed obligation, NOT money sent",
+            cadence=kind, start_month=month,
+            scheduled_on=day if kind == "one_time" else None,
+            amount_paise=(index % 8 + 1) * 50000,
+            created_by_admin_id=admin_id,
+        )
+        database.add(plan)
+        database.flush()
+        database.add(PayoutPlanTerm(
+            organization_id=organization_id, plan_id=plan.id,
+            effective_month=month, status="active",
+            recorded_by_admin_id=admin_id,
+        ))
+        created["payout_plans"] += 1
+
     if any(created.values()):
         database.add(AuditEvent(
             organization_id=organization_id, actor_admin_id=admin_id,
@@ -227,7 +261,7 @@ def main() -> None:
         )
         database.commit()
         print("Created synthetic demo records:", created)
-        print("No payment receipts, verified credits, or WhatsApp consent created.")
+        print("No collection receipts, verified credits, payout disbursements, or WhatsApp consent created.")
         print("Rerunning this command will not duplicate demo prospects.")
 
 
