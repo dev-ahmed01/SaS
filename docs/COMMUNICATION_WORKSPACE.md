@@ -6,7 +6,9 @@ The original **Reminders** screen displayed system preparation history, provider
 single-purpose sponsor/promoter day previews. The approved replacement is **Communication**,
 a reusable workspace for Admin to communicate with prospects, promoters or both.
 
-The four views are **Compose**, **Campaigns**, **Templates**, and **Automations**.
+The three navigation views are **Compose**, **Campaigns**, and **Templates & Automations**.
+The combined last view stacks the two independent protected workflows vertically,
+without a right-hand sidebar. The previous /communication/automations URL redirects.
 There is no preparation-history table in the new UI. Legacy `/reminders`,
 `/reminders/whatsapp`, and `/reminders/email` redirect to `/communication`.
 
@@ -34,6 +36,8 @@ WhatsApp provider template ID, but the ID alone never proves Meta approval.
    inactive, unpaid); channel (WhatsApp, Email); message category, body, optional
    saved template, schedule in IST; live sample of consent-eligible recipients.
    Save produces a durable **draft** or **planned** campaign and no transport work.
+   The right-hand audience and message previews were removed from the UI; actual
+   permission checks remain in the backend and simulation-only review service.
 2. **Templates:** versioned add/edit/soft-archive, with separation between
    template copy and provider template ID. Referenced automation templates
    cannot be archived without removing the rule.
@@ -88,6 +92,21 @@ definitions alongside the existing 100 fake prospects, 10 fake promoters and
 consent; no messages, receipts or provider dispatches are fabricated. It is
 safe to rerun without duplicating demo rows but **must only run in an isolated,
 disposable local-demo database**.
+
+## Consent and simulation-only preparation (migration 0017)
+
+- Admin can append channel-specific grant or revoke evidence with source and proof
+  reference, without implying that stored phone/email addresses are consent.
+- Campaign recipient preflight is an idempotent, tenant-scoped dry run storing
+  one status per matching contact but **never** a send job, phone number or
+  message body. It is protected by CSRF and cannot be enabled as delivery.
+- Communication checks email proof explicitly; WhatsApp reminders retain
+  their legacy consent checkbox, while general WhatsApp outreach also requires
+  documented permission. Opt-outs suppress every contact sharing that address.
+- Existing independently approved Pabbly transport also checks these opt-outs
+  immediately before any network request. Unconfigured message providers stay off.
+- Collection external reference numbers are optional; absent references are
+  represented by internal unique ledger keys only, not invented bank evidence.
 
 ## Next production milestone
 

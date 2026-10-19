@@ -12,6 +12,7 @@ function allowed(parts:string[],method:string):string|null{
   const [name,id,action]=parts;
   if(parts.length===1&&name==="clock"&&method==="GET")return "/clock";
   if(parts.length===1&&name==="audience"&&method==="GET")return "/audience";
+  if(parts.length===1&&name==="consent-events"&&method==="POST")return "/consent-events";
   if(parts.length===1&&["templates","campaigns","rules"].includes(name)&&
     ["GET","POST"].includes(method))return "/"+name;
   if(parts.length===2&&name==="templates"&&UUID.test(id)&&
@@ -20,6 +21,9 @@ function allowed(parts:string[],method:string):string|null{
     return "/rules/"+id;
   if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
     action==="cancel"&&method==="POST")return "/campaigns/"+id+"/cancel";
+  if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
+    action==="preparations"&&["GET","POST"].includes(method))
+    return "/campaigns/"+id+"/preparations";
   return null;
 }
 
@@ -48,7 +52,7 @@ async function handle(
   }
   const query=new URLSearchParams();
   const accepted=path==="/audience"
-    ?new Set(["audience","segment","channel"])
+    ?new Set(["audience","segment","channel","category"])
     :path.startsWith("/templates/")&&request.method==="DELETE"
       ?new Set(["version"]):new Set<string>();
   for(const [key,value] of request.nextUrl.searchParams){

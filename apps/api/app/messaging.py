@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.accounting import ist_today, month_start
 from app.auth import db_session, get_admin
+from app.communication_consent import address_opted_out
 from app.config import get_settings
 from app.models import (
     AdminSession,
@@ -160,7 +161,7 @@ def _eligible_and_payload(
         if not sponsor or sponsor.archived_at or not sponsor.whatsapp_opt_in:
             return None
         phone=sponsor.whatsapp_number or sponsor.mobile_number
-        if not phone:
+        if not phone or address_opted_out(db, org, "whatsapp", phone):
             return None
         return {
             "recipient_phone":phone,
@@ -193,6 +194,9 @@ def _eligible_and_payload(
         ).with_for_update()).one_or_none()
         if not sponsor or not sponsor.whatsapp_opt_in or sponsor.archived_at:
             return None
+        if address_opted_out(db, org, "whatsapp",
+                             sponsor.whatsapp_number or sponsor.mobile_number):
+            return None
         return {
             "recipient_phone":sponsor.whatsapp_number or sponsor.mobile_number,
             "template":cfg.whatsapp_template_sponsor,
@@ -208,6 +212,9 @@ def _eligible_and_payload(
         Promoter.organization_id==org,Promoter.id==recipient_id
     ).with_for_update()).one_or_none()
     if not promoter or not promoter.is_active or not promoter.whatsapp_opt_in:
+        return None
+    if address_opted_out(db, org, "whatsapp",
+                         promoter.whatsapp_number or promoter.mobile_number):
         return None
     # Privacy-safe cap: fail closed if a summary would be too large.
     details="; ".join(

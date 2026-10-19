@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiGet, apiWrite, categoryOptions } from "./types";
 import type { Category, Channel, Template } from "./types";
 
-export function CommunicationTemplates(){
+export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void}){
   const [items,setItems]=useState<Template[]>([]);
   const [revision,setRevision]=useState(0);
   const [loading,setLoading]=useState(true);
@@ -47,7 +47,7 @@ export function CommunicationTemplates(){
         provider_template_id:channel==="whatsapp"?providerId||null:null,
       });
       setNotice(edit?"Template updated.":"Template saved.");
-      reset();setRevision(x=>x+1);
+      reset();setRevision(x=>x+1);onChanged();
     }catch(e){setError(e instanceof Error?e.message:"Could not save template.");}
     finally{setSaving(false);}
   }
@@ -58,7 +58,7 @@ export function CommunicationTemplates(){
     try{
       await apiWrite("/templates/"+row.id+"?version="+row.version,"DELETE");
       if(edit?.id===row.id)reset();
-      setRevision(x=>x+1);
+      setRevision(x=>x+1);onChanged();
       setNotice("Template archived.");
     }catch(e){setError(e instanceof Error?e.message:"Could not archive template.");}
     finally{setSaving(false);}

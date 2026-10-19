@@ -40,15 +40,16 @@ test("each module has the approved horizontal tab structure", () => {
   assert.match(ui,/aria-current/);
 });
 
-test("Communication is compose-first and separates plans, templates and automation", () => {
-  for(const label of ["Compose","Campaigns","Templates","Automations"]){
+test("Communication is compose-first and combines templates with automation", () => {
+  for(const label of ["Compose","Campaigns","Templates & Automations"]){
     assert.ok(communication.includes(label),label);
   }
   assert.match(routes,/communication:\["compose","campaigns","templates","automations"\]/);
   assert.match(modules,/CommunicationWorkspace/);
-  assert.match(composer,/eligible_count/);
+  assert.doesNotMatch(composer,/Message review|Audience preview|Message preview/);
   assert.match(composer,/Saving does not send messages/);
   assert.doesNotMatch(communication,/Preparation history/);
+  assert.doesNotMatch(communication,/New campaigns require channel activation/);
   assert.match(shell,/IstClock/);
   assert.match(clock,/Asia\/Kolkata/);
   assert.match(clock,/setInterval/);

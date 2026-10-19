@@ -20,5 +20,6 @@ export default async function ModuleRoute({params}:{params:Promise<{module:strin
   if(!valid[module]?.includes(target) || (view && view.length!==1))notFound();
   await requireAdminSession();
   if(module==="reminders") redirect("/communication");
+  if(module==="communication"&&target==="automations") redirect("/communication/templates");
   return <ModuleWorkspace module={module} view={target}/>;
 }
