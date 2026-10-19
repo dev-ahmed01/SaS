@@ -22,8 +22,16 @@ def test_liveness_is_public_and_minimal() -> None:
 
 
 def test_ready_uses_database(monkeypatch: pytest.MonkeyPatch) -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:", poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     monkeypatch.setattr("app.main.get_engine", lambda: engine)
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "app.main.get_settings", lambda: SimpleNamespace(app_env="test")
+    )
     response = TestClient(app).get("/health/ready")
     assert response.status_code == 200
     assert response.json() == {"status": "ready"}
