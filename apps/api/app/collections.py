@@ -44,12 +44,14 @@ class CollectionInput(BaseModel):
     received_on: date
     amount_paise: int = Field(ge=1, le=1_000_000_000)
     payment_method: Literal["upi", "bank_transfer", "cash"]
-    receipt_reference: str = Field(min_length=6, max_length=100)
+    receipt_reference: str | None = Field(default=None, min_length=6, max_length=100)
     funds_confirmed: Literal[True]
 
     @field_validator("receipt_reference")
     @classmethod
-    def normalize_reference(cls, value: str) -> str:
+    def normalize_reference(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
         ref = value.strip().upper()
         if not REFERENCE.fullmatch(ref):
             raise ValueError("Use a unique transaction or receipt reference (6-100 characters)")
@@ -199,11 +201,15 @@ def add_collection(
     )).all()
     if not any(rate.effective_month <= payload.period_month for rate in rates):
         raise HTTPException(status_code=409, detail="Contribution agreement missing")
-    digest = _reference_hash(payload.receipt_reference)
-    if db.scalars(select(ManualCollection.id).where(
+    # No external transaction ID? Allocate a stable, clearly internal ledger key.
+    # This keeps request idempotency and unique-reference constraints without
+    # fabricating bank or payment-provider proof.
+    reference = payload.receipt_reference or ("INTERNAL-" + payload.request_id.hex.upper())
+    digest = _reference_hash(reference)
+    if payload.receipt_reference and db.scalars(select(ManualCollection.id).where(
         ManualCollection.organization_id == admin.organization_id,
         ManualCollection.reference_digest.in_(
-            (digest, _legacy_reference_hash(payload.receipt_reference))
+            (digest, _legacy_reference_hash(reference))
         ),
     )).first() is not None:
         raise HTTPException(status_code=409, detail="Receipt or transaction already recorded")
@@ -219,7 +225,8 @@ def add_collection(
         organization_id=admin.organization_id, prospect_id=sponsor.id,
         verified_credit_id=credit.id, request_id=payload.request_id,
         request_payload_hash=payload_hash, reference_digest=digest,
-        reference_mask="****"+payload.receipt_reference[-4:],
+        reference_mask=("****"+reference[-4:] if payload.receipt_reference
+                        else "Not provided"),
         received_on=payload.received_on, period_month=payload.period_month,
         payment_method=payload.payment_method, amount_paise=payload.amount_paise,
         recorded_by_admin_id=admin.id,
