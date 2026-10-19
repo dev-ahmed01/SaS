@@ -40,15 +40,15 @@ const rupees = (paise:number) => (paise/100).toLocaleString("en-IN",{
   style:"currency",currency:"INR",
 });
 
-export function CollectionsAllWorkspace({activeOnly=false}:{activeOnly?:boolean}) {
+export function CollectionsAllWorkspace({activeOnly=false,receivedOnly=false}:{activeOnly?:boolean;receivedOnly?:boolean}) {
   const [revision,setRevision] = useState(0);
   return <>
     {!activeOnly&&<AccountingOverview key={revision}/>}
-    <CollectionsReview activeOnly={activeOnly} onReversed={()=>setRevision(n=>n+1)}/>
+    <CollectionsReview activeOnly={activeOnly||receivedOnly} receivedOnly={receivedOnly} onReversed={()=>setRevision(n=>n+1)}/>
   </>;
 }
 
-export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>void;activeOnly?:boolean}) {
+export function CollectionsReview({onReversed,activeOnly=false,receivedOnly=false}:{onReversed:()=>void;activeOnly?:boolean;receivedOnly?:boolean}) {
   const [month,setMonth] = useState(()=>activeOnly?new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit"}).format(new Date()):"");
   const [offset,setOffset] = useState(0);
   const [refresh,setRefresh] = useState(0);
@@ -126,24 +126,24 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
   return <section className="collection-review" aria-label="Collection review">
     <div className="review-heading">
       <div>
-        <h2>{activeOnly?"Active collections":"Collection history"}</h2>
+        <h2>{receivedOnly?"Received collections":activeOnly?"Active collections":"Collection history"}</h2>
       </div>
       <label className="field review-month">
-        <span className="field-label">{activeOnly?"Collection month":"Filter by month"}</span>
+        <span className="field-label">{receivedOnly?"Received month":activeOnly?"Collection month":"Filter by month"}</span>
         <input type="month" aria-label="Filter collection history by month" value={month}
           onChange={e=>{setMonth(e.target.value);setOffset(0);}}/>
       </label>
     </div>
     {notice&&<p role="status" className="form-success">{notice}</p>}
     {error&&<p role="alert" className="form-error">{error}</p>}
-    <div className="table-scroll">
+    <div className="table-scroll finance-table-scroll">
       <table className="data-table">
         <thead><tr><th scope="col">Sponsor</th><th scope="col">Amount</th>
           <th scope="col">Month</th><th scope="col">Reference</th>
           <th scope="col">Entry</th><th scope="col">WhatsApp</th>
           <th scope="col">Action</th></tr></thead>
         <tbody>{loading?<tr><td colSpan={7}>Loading collection history…</td></tr>
-          :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No active collections for this period.":"No manually recorded collections."}</td></tr>
+          :!data?.items.length?<tr><td colSpan={7}>{receivedOnly?"No recorded receipts for this month.":activeOnly?"No active collections for this period.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong></td>
             <td>{rupees(row.amount_paise)}</td>
