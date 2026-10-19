@@ -82,7 +82,7 @@ function Settings() {
 export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}) {
   if(module==="dashboard"&&view==="add") return <Dashboard/>;
   if(module==="settings"&&view==="add") return <Settings/>;
-  if(module==="communication" && ["compose","campaigns","templates","automations"].includes(view)) return <CommunicationWorkspace view={view as "compose"|"campaigns"|"templates"|"automations"}/>;
+  if(module==="communication" && ["compose","campaigns","templates"].includes(view)) return <CommunicationWorkspace view={view as "compose"|"campaigns"|"templates"}/>;
   if(module==="prospects" && ["add","inactive","active","all","stages"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"active"|"all"|"stages"}/>;
   if(module==="promoters" && ["add","active","inactive","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"inactive"|"all"}/>;
   if(module==="collections" && view==="add") return <AppShell><div className="finance-tabs"><ModuleTabs current={view} tabs={definitions.collections.tabs}/></div><ManualCollections/></AppShell>;
