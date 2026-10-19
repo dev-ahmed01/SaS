@@ -359,3 +359,26 @@ def test_plan_paging_counts_current_active_plans_before_rendering(system):
     assert all_page.status_code == 200
     assert all_page.json()["total"] == 7
     assert len(all_page.json()["items"]) == 1
+
+
+def test_forecast_totals_include_all_plans_despite_pagination_and_disbursement_month_filter(system):
+    client, _ = system
+    csrf = login(client)
+    paid = create(client, csrf, "recurring", amount_paise=50000,
+                  payee_name="Synthetic Recurring A")
+    create(client, csrf, "one_time", amount_paise=75000,
+           payee_name="Synthetic One Time B")
+    payment = client.post("/v1/payouts/plans/"+paid["id"]+"/payments",
+                          headers=csrf, json=pay_input())
+    assert payment.status_code == 201, payment.text
+    plans = client.get("/v1/payouts/plans?view=all&limit=1").json()
+    assert plans["total"] == 2
+    assert len(plans["items"]) == 1
+    assert plans["forecast_due_paise"] == 125000
+    assert plans["forecast_paid_paise"] == 50000
+    assert plans["forecast_outstanding_paise"] == 75000
+    month = ist_today().strftime("%Y-%m")
+    this_month = client.get("/v1/payouts/payments?month="+month).json()
+    assert this_month["total"] == 1
+    assert client.get("/v1/payouts/payments?month=garbage").status_code == 422
+    assert client.get("/v1/payouts/payments?month=2025-01").json()["total"] == 0
