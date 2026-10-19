@@ -477,12 +477,21 @@ def list_disbursements(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     db: Annotated[Session, Depends(db_session)],
     plan_id: uuid.UUID | None = None,
+    month: str | None = Query(default=None, max_length=7),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaymentPage:
     admin = context[0]
     _settings(db, admin)
     criteria = [PayoutPayment.organization_id == admin.organization_id]
+    if month is not None:
+        try:
+            if len(month) != 7 or month[4] != "-":
+                raise ValueError("Invalid month")
+            parsed_month = date.fromisoformat(month + "-01")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Use a valid YYYY-MM month") from exc
+        criteria.append(PayoutPayment.period_month == parsed_month)
     if plan_id:
         criteria.append(PayoutPayment.plan_id == plan_id)
     count = db.scalar(select(func.count(PayoutPayment.id)).where(*criteria)) or 0
