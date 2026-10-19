@@ -207,7 +207,11 @@ def main() -> None:
     parser.add_argument("--confirm-synthetic-only", action="store_true")
     args = parser.parse_args()
     settings = get_settings()
-    if (\n        settings.app_env != "development"\n        or not settings.local_demo_login_enabled\n        or settings.messaging_delivery_enabled\n    ):
+    if (
+        settings.app_env != "development"
+        or not settings.local_demo_login_enabled
+        or settings.messaging_delivery_enabled
+    ):
         raise SystemExit("Refusing: must use local demo database with all messaging disabled")
     if not settings.auth_secret or len(settings.auth_secret)<32:
         raise SystemExit("Unique local AUTH_SECRET of 32+ characters required")
