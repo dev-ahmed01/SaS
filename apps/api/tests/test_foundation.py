@@ -113,7 +113,9 @@ def test_hosted_ready_fails_closed_on_missing_or_stale_migration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from types import SimpleNamespace
+
     from sqlalchemy import text
+
     from app.main import _expected_migration_heads
 
     engine = create_engine("sqlite+pysqlite:///:memory:", poolclass=StaticPool)
