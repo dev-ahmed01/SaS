@@ -30,6 +30,21 @@ test.beforeEach(async ({page}) => {
   await logIn(page);
 });
 
+test("login password can be revealed and hidden without submitting",async ({page})=>{
+  await page.context().clearCookies();
+  await page.goto("/login");
+  const input=page.getByLabel("Password",{exact:true});
+  await expect(input).toHaveAttribute("type","password");
+  await input.fill("sample-visible-password");
+  await page.getByRole("button",{name:"Show password"}).click();
+  await expect(input).toHaveAttribute("type","text");
+  await expect(input).toHaveValue("sample-visible-password");
+  await page.getByRole("button",{name:"Hide password"}).click();
+  await expect(input).toHaveAttribute("type","password");
+  await expect(input).toHaveValue("sample-visible-password");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("all seven approved modules have a secure navigable destination",async ({page,isMobile})=>{
   for(const [slug,title] of modules){
     if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
