@@ -744,10 +744,12 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.reload();
   const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
   const dueRow=ledger.getByRole("row",{name:new RegExp(name)});
-  await expect(dueRow.getByRole("cell").nth(2)).toContainText("0.00");
-  await expect(dueRow.getByRole("cell").nth(2)).toContainText(
+  await expect(dueRow.getByRole("cell").nth(1)).toContainText(
     agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})
   );
+  await expect(dueRow.getByRole("cell").nth(2)).toContainText("0.00");
+  await expect(dueRow.getByRole("cell").nth(2)).not.toContainText("outstanding");
+  await expect(dueRow.getByText("No",{exact:true})).toBeVisible();
   await expect(dueRow.getByText("New",{exact:true})).toBeVisible();
 });
 
