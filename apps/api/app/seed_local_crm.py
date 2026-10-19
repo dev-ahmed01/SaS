@@ -22,10 +22,10 @@ from app.db import get_engine
 from app.models import (
     AdminUser,
     AuditEvent,
-    Promoter,
-    PromoterAssignment,
     PayoutPlan,
     PayoutPlanTerm,
+    Promoter,
+    PromoterAssignment,
     Prospect,
     ProspectStageDefinition,
     ProspectStageTransition,
@@ -261,7 +261,10 @@ def main() -> None:
         )
         database.commit()
         print("Created synthetic demo records:", created)
-        print("No collection receipts, verified credits, payout disbursements, or WhatsApp consent created.")
+        print(
+            "No collection receipts, verified credits, payout disbursements, "
+            "or WhatsApp consent created."
+        )
         print("Rerunning this command will not duplicate demo prospects.")
 
 
