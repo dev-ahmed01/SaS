@@ -1050,7 +1050,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .communication-workspace {width:100%;max-width:none;}
 .comm-main-navigation {display:flex;flex-direction:column;gap:11px;margin-bottom:22px;}
 .comm-tabs {
-  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
   border-bottom:1px solid var(--line);gap:6px;min-height:58px;
 }
 .comm-tab {
@@ -1087,7 +1087,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   white-space:nowrap;
 }
 .communication-compose-layout {
-  display:grid;grid-template-columns:minmax(0,1.65fr) minmax(270px,1fr);
+  display:grid;grid-template-columns:minmax(0,1fr);
   gap:19px;align-items:start;
 }
 .comm-preview-column {display:grid;gap:18px;position:sticky;top:14px;}
@@ -1153,7 +1153,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 }
 .comm-message-preview .comm-placeholder {color:var(--muted);}
 .comm-two-column {
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  display:grid;grid-template-columns:minmax(0,1fr);
   gap:19px;align-items:start;
 }
 .comm-template-form {display:grid;gap:17px;}
@@ -1200,3 +1200,14 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .comm-list-card {flex-direction:column;}
   .comm-card-actions {width:100%;justify-content:flex-end;}
 }
+
+/* Equal-width financial navigation, compact combined ledger fields. */
+.finance-tabs {width:100%;}
+.finance-tabs .module-tabs {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%;margin:0;overflow:visible;}
+.finance-tabs .module-tab {display:flex;min-width:0;width:100%;justify-content:center;padding:13px 6px;text-align:center;white-space:normal;}
+.finance-paired-values {display:flex;flex-direction:column;gap:3px;white-space:nowrap;}
+.finance-paired-values span:last-child {font-size:11px;color:var(--muted);}
+.comm-stacked-sections {display:grid;gap:24px;width:100%;}
+.comm-stacked-sections .comm-two-column {grid-template-columns:minmax(0,1fr);}
+.comm-stacked-sections .comm-panel {width:100%;max-width:none;}
+@media(max-width:650px){.finance-tabs .module-tab{font-size:10px;padding:10px 3px;}}
