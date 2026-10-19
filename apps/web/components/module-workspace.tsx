@@ -85,9 +85,9 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="communication" && ["compose","campaigns","templates","automations"].includes(view)) return <CommunicationWorkspace view={view as "compose"|"campaigns"|"templates"|"automations"}/>;
   if(module==="prospects" && ["add","inactive","active","all","stages"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"active"|"all"|"stages"}/>;
   if(module==="promoters" && ["add","active","inactive","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"inactive"|"all"}/>;
-  if(module==="collections" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
+  if(module==="collections" && view==="add") return <AppShell><div className="finance-tabs"><ModuleTabs current={view} tabs={definitions.collections.tabs}/></div><ManualCollections/></AppShell>;
   if(module==="collections" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"}/></AppShell>;
-  if(module==="payouts" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
+  if(module==="payouts" && view==="add") return <AppShell><div className="finance-tabs"><ModuleTabs current={view} tabs={definitions.payouts.tabs}/></div><PayoutAdd/></AppShell>;
   if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;
