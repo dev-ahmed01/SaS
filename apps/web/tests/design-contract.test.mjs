@@ -55,6 +55,24 @@ test("Communication is compose-first and combines templates with automation", ()
   assert.match(clock,/setInterval/);
 });
 
+test("Consent and Campaign review keep the no-send CRM boundary", () => {
+  const consent=read("../components/communication/contact-consent.tsx");
+  const campaigns=read("../components/communication/campaigns.tsx");
+  const proxy=read("../app/api/admin/communication/[[...segments]]/route.ts");
+  const prospect=read("../components/prospects/prospect-details.tsx");
+  const promoter=read("../components/promoters/promoter-details.tsx");
+  assert.match(consent,/Communication consent/);
+  assert.match(consent,/Record opt-out/);
+  assert.match(consent,/checked the recipient/);
+  assert.match(campaigns,/simulation_only:true/);
+  assert.match(campaigns,/Simulation only/);
+  assert.match(campaigns,/Check recipients/);
+  assert.match(proxy,/name==="consent-events"/);
+  assert.match(prospect,/ContactConsent/);
+  assert.match(promoter,/ContactConsent/);
+  assert.doesNotMatch(campaigns,/\/send|\/dispatch/);
+});
+
 test("phase 2 never claims functional authentication, payment or reminder delivery", () => {
   assert.match(modules,/disabled/);
   assert.match(ui,/disabled/);
