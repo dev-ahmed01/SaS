@@ -319,7 +319,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await expect(dialog.getByRole("button",{name:"Confirm Inactive"})).toBeDisabled();
   await dialog.getByRole("combobox",{name:/Reason for leaving/}).selectOption("budget");
   await dialog.getByRole("button",{name:"Confirm Inactive"}).click();
-  await expect(page.getByText("Budget or affordability")).toBeVisible();
+  await expect(page.getByText("Budget or affordability",{exact:true})).toBeVisible();
   await expect(page.getByText("0",{exact:true}).first()).toBeVisible();
   await expect(page.getByText("Never paid")).toBeVisible();
   await page.goto("/prospects/inactive");
