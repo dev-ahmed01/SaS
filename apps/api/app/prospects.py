@@ -28,12 +28,12 @@ from app.models import (
     AdminUser,
     AuditEvent,
     OrganizationSettings,
+    Promoter,
+    PromoterAssignment,
     Prospect,
     ProspectArchiveInterval,
     ProspectStageTransition,
     ProspectUpiIdentifier,
-    Promoter,
-    PromoterAssignment,
     SponsorshipRate,
 )
 from app.security import utc_now
