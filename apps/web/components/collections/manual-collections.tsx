@@ -121,6 +121,7 @@ export function ManualCollections(){
   return <div className="manual-collections-workspace">
     <section className="content-panel" aria-label="Record a manual collection">
       <h2>Record Collection</h2>
+      <p className="crm-form-summary">Record confirmed funds against the correct sponsor and sponsorship month.</p>
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="form-cell full">
@@ -154,7 +155,7 @@ export function ManualCollections(){
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
               <option value="cash">Cash</option>
             </select></label>
-          <details className="optional-details"><summary>Change payment date or month</summary>
+          <div className="collection-date-row">
             <div className="optional-fields">
               <label className="field"><span className="field-label">Received date (IST) *</span>
                 <input aria-label="Received date (IST)" required type="date" max={istDate()}
@@ -163,7 +164,7 @@ export function ManualCollections(){
                 <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
                   value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
             </div>
-          </details>
+          </div>
           <label className="field form-cell full"><span className="field-label">UPI transaction ID / bank reference / numbered receipt *</span>
             <input aria-label="Transaction reference" required minLength={6} maxLength={100}
               value={reference} placeholder="Enter a unique reference"
