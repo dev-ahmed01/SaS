@@ -6,7 +6,7 @@ import {
 } from "./types";
 import type { Audience, Rule, Segment, Template } from "./types";
 
-export function CommunicationAutomations(){
+export function CommunicationAutomations({revision=0}:{revision?:number}){
   const [templates,setTemplates]=useState<Template[]>([]);
   const [rules,setRules]=useState<Rule[]>([]);
   const [name,setName]=useState("");
@@ -23,7 +23,7 @@ export function CommunicationAutomations(){
     Promise.all([apiGet<Template[]>("/templates"),apiGet<Rule[]>("/rules")])
       .then(([ts,rs])=>{setTemplates(ts);setRules(rs);})
       .catch(()=>setError("Could not load automation configuration."));
-  },[refresh]);
+  },[refresh,revision]);
   function selectTrigger(value:string){
     setTrigger(value);setError("");
     if(value==="monthly_sponsor"){setAudience("prospects");setSegment("unpaid");}
