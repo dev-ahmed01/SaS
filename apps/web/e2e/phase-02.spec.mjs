@@ -974,10 +974,10 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   const sponsor="Consent Campaign "+suffix;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
-  await page.getByRole("textbox",{name:/WhatsApp \\/ Mobile/}).fill("9851"+suffix);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9851"+suffix);
   await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\\/prospects\\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   const contactUrl=page.url();
   const permission=page.getByRole("region",{name:"Communication consent"});
   await expect(permission.getByText("Reminder checkbox only")).toBeVisible();
@@ -1018,13 +1018,13 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await expect.poll(async()=>Number(
     (await rereview.locator(".comm-review-counts strong").first().textContent())||"0"
   )).toBeLessThan(Number(numbers[0]));
-  const data=await page.evaluate(async()=>{
+  const data=await page.evaluate(async(title)=>{
     const response=await fetch("/api/admin/communication/campaigns",{cache:"no-store"});
     const campaigns=await response.json();
-    const target=campaigns.find(row=>row.title.startsWith("Consent update "));
+    const target=campaigns.find(row=>row.title===title);
     const latest=await fetch("/api/admin/communication/campaigns/"+target.id+"/preparations",{cache:"no-store"});
     return await latest.json();
-  });
+  },"Consent update "+suffix);
   expect(data[0].delivery_activated).toBe(false);
 });
 
