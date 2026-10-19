@@ -22,7 +22,7 @@ export function ProspectsWorkspace({view}:{view:"add"|"all"|"active"|"inactive"|
     <div className="prospects-workspace">
       {view==="add"
         ?<ProspectEditor onSaved={saved=>router.push("/prospects/"+saved.id)}/>
-        :view==="stages"?<PipelineManager/>:<ProspectList view={view}/>
+        :view==="stages"?<PipelineManager/> :<ProspectList view={view}/>}
     </div>
   </AppShell>;
 }
