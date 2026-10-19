@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./ui/icon";
+import { IstClock } from "./communication/ist-clock";
 
 const navigation: { name: string; href: string; icon: IconName }[] = [
   {name:"Dashboard",href:"/dashboard",icon:"grid"},
@@ -11,7 +12,7 @@ const navigation: { name: string; href: string; icon: IconName }[] = [
   {name:"Promoters",href:"/promoters",icon:"user-plus"},
   {name:"Collections",href:"/collections",icon:"receipt"},
   {name:"Payouts",href:"/payouts",icon:"wallet"},
-  {name:"Reminders",href:"/reminders",icon:"bell"},
+  {name:"Communication",href:"/communication",icon:"message"},
   {name:"Settings",href:"/settings",icon:"settings"},
 ];
 
@@ -101,6 +102,7 @@ export function AppShell({children}:{children:React.ReactNode}) {
       <header className="topbar">
         <button className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
         <h1 className="topbar-name">{navigation.find(link=>pathname===link.href || pathname.startsWith(link.href+"/"))?.name ?? "Dashboard"}</h1>
+        <IstClock/>
       </header>
       <main id="main-content" className="page-content">{children}</main>
     </div>
