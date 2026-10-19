@@ -10,7 +10,8 @@ type Plan = {
   next_status:"active"|"paused"|"closed"|null;
   current_month_due_paise:number;current_month_paid_paise:number;payment_count:number;
 };
-type PlanPage = {items:Plan[];total:number;limit:number;offset:number;period_month:string};
+type PlanPage = {items:Plan[];total:number;limit:number;offset:number;period_month:string;
+  forecast_due_paise:number;forecast_paid_paise:number;forecast_outstanding_paise:number};
 type Payment = {
   id:string;plan_id:string;payee_name:string;amount_paise:number;
   period_month:string;paid_on:string;payment_method:string;reference_mask:string;
@@ -209,9 +210,14 @@ export function PayoutList({view}:{view:"all"|"active"|"planned"}){
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
       <input aria-label="Payout accounting month" type="month" value={period}
         onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
+    <div className="finance-forecast" aria-label="Monthly payout forecast">
+      <div><span>Planned</span><strong>{plans?money(plans.forecast_due_paise):"—"}</strong></div>
+      <div><span>Disbursed</span><strong>{plans?money(plans.forecast_paid_paise):"—"}</strong></div>
+      <div><span>Still to pay</span><strong>{plans?money(plans.forecast_outstanding_paise):"—"}</strong></div>
+    </div>
     {notice&&<p className="form-success" role="status">{notice}</p>}
     {error&&<p className="form-error" role="alert">{error}</p>}
-    <div className="table-scroll"><table className="data-table">
+    <div className="table-scroll finance-table-scroll"><table className="data-table">
       <thead><tr><th scope="col">Payee</th><th scope="col">Purpose</th>
         <th scope="col">Frequency</th><th scope="col">Commitment</th>
         <th scope="col">Paid in month</th><th scope="col">To pay</th><th scope="col">Status</th>
