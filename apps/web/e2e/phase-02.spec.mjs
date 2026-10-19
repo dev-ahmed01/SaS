@@ -300,7 +300,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   const tabs=page.getByRole("navigation",{name:"Module views"});
   await expect(tabs.getByRole("link")).toHaveCount(4);
   await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
-    "All Prospects","Add Prospect","Active","Inactive"
+    "All Prospects","Add Prospects","Active","Inactive"
   ]);
   const columns=await tabs.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(" ").length);
   expect(columns).toBe(4);
