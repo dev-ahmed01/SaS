@@ -2,11 +2,13 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Prospect } from "./prospects-types";
+import { pipelineStages } from "./pipeline-types";
+import type { PipelineStage } from "./pipeline-types";
 
 type Values = {
   first_name:string;last_name:string;country_code:string;phone:string;
   email:string;city:string;occupation:string;tokens:string;start_month:string;
-  promoter_id:string;upi_id:string;whatsapp_opt_in:boolean;
+  promoter_id:string;pipeline_stage_id:string;upi_id:string;whatsapp_opt_in:boolean;
 };
 type PromoterOption = {id:string;full_name:string;is_active:boolean};
 
@@ -44,7 +46,8 @@ function initialValues(initial?:Prospect):Values {
     city:initial?.area_city??"",occupation:initial?.occupation??"",
     tokens:String((initial?.monthly_contribution_paise??25000)/25000),
     start_month:initial?.start_month?.slice(0,7)??monthNow(),
-    promoter_id:initial?.assigned_promoter_id??"",upi_id:"",
+    promoter_id:initial?.assigned_promoter_id??"",
+    pipeline_stage_id:initial?.pipeline_stage_id??"",upi_id:"",
     whatsapp_opt_in:initial?.whatsapp_opt_in??false,
   };
 }
@@ -63,6 +66,8 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   const [error,setError]=useState("");
   const [promoters,setPromoters]=useState<PromoterOption[]>([]);
   const [promotersError,setPromotersError]=useState("");
+  const [stages,setStages]=useState<PipelineStage[]>([]);
+  const [stagesError,setStagesError]=useState("");
   const [current,setCurrent]=useState<Prospect|undefined>(initial);
   const [upiBusy,setUpiBusy]=useState(false);
   const [upiError,setUpiError]=useState("");
@@ -76,6 +81,12 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
       .then(data=>{if(active)setPromoters(data.items??[]);})
       .catch(()=>{if(active)setPromotersError("Promoters are unavailable. You can save without one.");});
     return ()=>{active=false;};
+  },[]);
+  useEffect(()=>{
+    let mounted=true;
+    pipelineStages().then(rows=>{if(mounted)setStages(rows);})
+      .catch(()=>{if(mounted)setStagesError("Stages unavailable. Try reloading.");});
+    return ()=>{mounted=false;};
   },[]);
   useEffect(()=>{
     if(initial)return;
@@ -113,6 +124,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         mobile_number:mobile,whatsapp_number:mobile,
         email:values.email.trim()||null,area_city:values.city.trim(),
         occupation:values.occupation.trim()||null,
+        pipeline_stage_id:values.pipeline_stage_id||null,
         whatsapp_opt_in:values.whatsapp_opt_in,
         monthly_contribution_paise:tokens*25000,
       };
@@ -223,7 +235,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             </select>
             {isEdit&&<span className="field-helper">Start month is locked once registered to protect accounting history.</span>}</label>
         </div>
-        <div className="prospect-field-row one">
+        <div className="prospect-field-row two">
           <label className="field"><span className="field-label">Select Promoter (optional)</span>
             <select aria-label="Select Promoter" value={values.promoter_id} onChange={e=>set("promoter_id",e.target.value)}>
               <option value="">Unassigned</option>
@@ -231,8 +243,21 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
                 <option value={initial.assigned_promoter_id}>{initial.assigned_promoter_name??"Existing promoter"}</option>}
               {promoters.map(p=><option value={p.id} key={p.id}>{p.full_name}</option>)}
             </select></label>
+          <label className="field"><span className="field-label">Prospect Stage (optional)</span>
+            <select aria-label="Prospect Stage" value={values.pipeline_stage_id}
+              onChange={e=>set("pipeline_stage_id",e.target.value)}>
+              <option value="">No stage selected</option>
+              {initial?.pipeline_stage_id&&!stages.some(x=>x.id===initial.pipeline_stage_id)&&
+                <option value={initial.pipeline_stage_id}>
+                  {initial.pipeline_stage_name??"Existing stage"}</option>}
+              {stages.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            {stages.length===0&&<span className="field-helper">
+              Create a stage in Prospects → Stages to use this field.</span>}
+          </label>
         </div>
         {promotersError&&<p className="form-error" role="status">{promotersError}</p>}
+        {stagesError&&<p className="form-error" role="status">{stagesError}</p>}
         <label className="prospect-consent">
           <input type="checkbox" checked={values.whatsapp_opt_in}
             onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>
