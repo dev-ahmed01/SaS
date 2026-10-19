@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PersistentAppShell } from "../components/persistent-app-shell";
 
 export const metadata: Metadata = {
   title: "Sponsor a Salah | Emlen Foundation",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><PersistentAppShell>{children}</PersistentAppShell></body>
     </html>
   );
 }
