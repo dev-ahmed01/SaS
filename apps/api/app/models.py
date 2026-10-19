@@ -146,6 +146,8 @@ class Prospect(Base):
             name="ck_prospect_lifecycle_status",
         ),
         Index("ix_prospects_org_status", "organization_id", "lifecycle_status", "archived_at"),
+        Index("ix_prospects_org_crm_stage", "organization_id", "crm_stage", "archived_at"),
+        CheckConstraint("crm_stage IN ('active','inactive')", name="ck_prospect_crm_stage"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -153,6 +155,14 @@ class Prospect(Base):
         Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    first_name: Mapped[str | None] = mapped_column(String(80))
+    last_name: Mapped[str | None] = mapped_column(String(80))
+    email: Mapped[str | None] = mapped_column(String(320))
+    occupation: Mapped[str | None] = mapped_column(String(120))
+    crm_stage: Mapped[str] = mapped_column(String(12), nullable=False, default="active", server_default="active")
+    crm_stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    crm_inactive_reason: Mapped[str | None] = mapped_column(String(64))
+    crm_inactive_note: Mapped[str | None] = mapped_column(String(500))
     mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
     whatsapp_number: Mapped[str | None] = mapped_column(String(16))
     area_city: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -181,10 +191,40 @@ class Prospect(Base):
     upi_ids: Mapped[list["ProspectUpiIdentifier"]] = relationship(
         back_populates="prospect", cascade="save-update, merge", lazy="selectin"
     )
+    stage_transitions: Mapped[list["ProspectStageTransition"]] = relationship(
+        back_populates="prospect", lazy="selectin", order_by="ProspectStageTransition.changed_at",
+    )
     archive_intervals: Mapped[list["ProspectArchiveInterval"]] = relationship(
         back_populates="prospect", cascade="save-update, merge", lazy="selectin",
         order_by="ProspectArchiveInterval.archived_at",
     )
+
+
+
+class ProspectStageTransition(Base):
+    """Auditable CRM decisions, separate from payment-derived lifecycle status."""
+    __tablename__ = "prospect_stage_transitions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"], ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_prospect_stage_same_org",
+        ),
+        CheckConstraint("from_stage IN ('active','inactive')", name="ck_stage_from"),
+        CheckConstraint("to_stage IN ('active','inactive')", name="ck_stage_to"),
+        Index("ix_prospect_stage_history", "organization_id", "prospect_id", "changed_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    from_stage: Mapped[str] = mapped_column(String(12), nullable=False)
+    to_stage: Mapped[str] = mapped_column(String(12), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(64))
+    note: Mapped[str | None] = mapped_column(String(500))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    actor_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
+    )
+    prospect: Mapped[Prospect] = relationship(back_populates="stage_transitions")
 
 
 class ProspectArchiveInterval(Base):
