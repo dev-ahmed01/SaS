@@ -2,8 +2,8 @@
 import { useEffect,useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
-type AccountRow={prospect_id:string;name:string;status:string;due_paise:number;verified_paise:number;outstanding_paise:number;fully_paid:boolean};
-type Overview={period_month:string;as_of:string;total_sponsors:number;due_paise:number;verified_paise:number;outstanding_paise:number;fully_paid_sponsors:number;items:AccountRow[];offset:number;limit:number};
+type AccountRow={prospect_id:string;name:string;status:string;due_paise:number;verified_paise:number;fully_paid:boolean};
+type Overview={period_month:string;as_of:string;total_sponsors:number;due_paise:number;verified_paise:number;fully_paid_sponsors:number;items:AccountRow[];offset:number;limit:number};
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 
 export function AccountingOverview(){
@@ -48,8 +48,7 @@ export function AccountingOverview(){
   }
   return <section className="accounting-workspace" aria-label="Monthly sponsorship ledger">
     <div className="accounting-heading">
-      <div><h2>Monthly sponsorship ledger</h2>
-</div>
+      <h2>Monthly sponsorship ledger</h2>
       <label className="field account-month-picker"><span className="field-label">Accounting month (IST)</span>
         <input aria-label="Accounting month (IST)" type="month" max={data?.as_of.slice(0,7)}
           value={month||data?.period_month.slice(0,7)||""}
@@ -60,30 +59,25 @@ export function AccountingOverview(){
     <div className="accounting-metrics">
       {[
         ["Monthly commitment",data?money(data.due_paise):"—"],
-        ["Received / Outstanding",data
-          ?money(data.verified_paise)+" / "+money(data.outstanding_paise):"—"],
+        ["Received",data?money(data.verified_paise):"—"],
         ["Fully paid sponsors",data?String(data.fully_paid_sponsors):"—"],
       ].map(([label,value])=><div key={label} className="accounting-metric">
         <span>{label}</span><strong>{value}</strong>
       </div>)}
     </div>
     <div className="accounting-details">
-      <div className="accounting-list-heading"><div>
-        <h3>Sponsor commitments</h3>
-      </div><button type="button" className="btn btn-secondary" disabled={saving||loading}
+      <div className="accounting-list-heading"><h3>Sponsor commitments</h3>
+      <button type="button" className="btn btn-secondary" disabled={saving||loading}
         onClick={refreshStatuses}>{saving?"Updating…":"Refresh sponsor statuses"}</button></div>
       <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Sponsor</th><th>Due</th><th>Received / Outstanding</th>
-          <th>Status</th><th>Month paid</th></tr></thead>
+        <thead><tr><th scope="col">Sponsor</th><th scope="col">Due</th><th scope="col">Received</th>
+          <th scope="col">Status</th><th scope="col">Month paid</th></tr></thead>
         <tbody>{loading&&!data?<tr><td colSpan={5}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
         :!data?.items.length?<tr><td colSpan={5}><div className="empty-state"><h3>No sponsorships for this month</h3><p>Register sponsors to create commitments.</p></div></td></tr>
         :data.items.map(row=><tr key={row.prospect_id}>
           <td><strong className="table-name">{row.name}</strong></td>
           <td>{money(row.due_paise)}</td>
-          <td><span className="finance-paired-values">
-            <span>{money(row.verified_paise)} received</span>
-            <span>{money(row.outstanding_paise)} outstanding</span>
-          </span></td>
+          <td className="accounting-received">{money(row.verified_paise)}</td>
           <td><span className={"status-pill "+row.status}>{row.status==="new"?"New":row.status==="active"?"Active":row.status==="archived"?"Archived":"Inactive"}</span></td>
           <td>{row.fully_paid?"Yes":"No"}</td>
         </tr>)}</tbody>
