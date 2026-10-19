@@ -4,15 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   apiGet, apiWrite, audienceOptions, categoryOptions, istLocalInput, segmentOptions,
 } from "./types";
-import type { Audience, Campaign, Category, Channel, Preview, Segment, Template } from "./types";
-
-function renderPreview(body:string,name:string){
-  return body.replaceAll("{{name}}",name||"Sponsor name")
-    .replaceAll("{{month}}",new Intl.DateTimeFormat("en-IN",{
-      month:"long",year:"numeric",timeZone:"Asia/Kolkata",
-    }).format(new Date()))
-    .replaceAll("{{amount}}","₹250");
-}
+import type { Audience, Campaign, Category, Channel, Segment, Template } from "./types";
 
 export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const [title,setTitle]=useState("");
@@ -27,9 +19,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const [providerTemplate,setProviderTemplate]=useState("");
   const [timing,setTiming]=useState<"draft"|"planned">("draft");
   const [plannedFor,setPlannedFor]=useState(()=>istLocalInput(new Date(Date.now()+3600000)));
-  const [preview,setPreview]=useState<Preview|null>(null);
-  const [refresh,setRefresh]=useState(0);
-  const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [saving,setSaving]=useState(false);
@@ -40,21 +29,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
       setError("Saved templates could not be loaded.");
     });
   },[]);
-  useEffect(()=>{
-    const controller=new AbortController();
-    setLoading(true);setPreview(null);
-    const query=new URLSearchParams({audience,segment,channel,category});
-    fetch("/api/admin/communication/audience?"+query.toString(),{
-      cache:"no-store",signal:controller.signal,
-    }).then(async res=>{
-      if(!res.ok)throw Error("Preview unavailable");
-      return await res.json() as Preview;
-    }).then(data=>{if(!controller.signal.aborted)setPreview(data);})
-      .catch(()=>{if(!controller.signal.aborted)setPreview(null);})
-      .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
-    return ()=>controller.abort();
-  },[audience,segment,channel,category,refresh]);
-
   function invalidate(){requestId.current=null;setError("");setNotice("");}
   function chooseTemplate(id:string){
     setSelectedTemplate(id);invalidate();
@@ -89,16 +63,14 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
       requestId.current=null;
       setNotice((campaign.status==="scheduled"?"Scheduled plan":"Draft")+" saved. "
         +"No message has been sent or queued for delivery.");
-      setRefresh(x=>x+1);
       onSaved();
     }catch(e){setError(e instanceof Error?e.message:"Unable to save message.");}
     finally{setSaving(false);}
   }
-  const selectedName=preview?.sample_names[0]||"Recipient";
   return <div className="communication-compose-layout">
     <section className="comm-panel" aria-label="Compose message">
       <div className="comm-panel-header">
-        <div><h2>New message</h2><p>Choose who, what, and when.</p></div>
+        <h2>New message</h2>
         <span className="comm-channel-tag">Draft workspace</span>
       </div>
       <form onSubmit={submit}>
@@ -158,7 +130,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
               <textarea aria-label="Message body" required rows={7} maxLength={1200}
                 value={body} onChange={e=>{setBody(e.target.value);invalidate();}}
                 placeholder={"Assalamu Alaikum {{name}},\n\nWe have an update to share with you."}/>
-              <span className="comm-muted">Use {"{{name}}"} or {"{{month}}"} for a preview.</span>
+              <span className="comm-muted">Use {"{{name}}"} or {"{{month}}"} for personalization.</span>
             </label>
             {channel==="whatsapp"&&<label className="field comm-full">
               <span className="field-label">Approved WhatsApp template ID</span>
@@ -195,33 +167,5 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
       </form>
     </section>
 
-    <aside className="comm-preview-column" aria-label="Message review">
-      <section className="comm-panel comm-preview-audience">
-        <div className="comm-panel-header"><h2>Audience preview</h2>
-          <button type="button" className="comm-text-button"
-            onClick={()=>setRefresh(x=>x+1)}>Refresh</button></div>
-        <div className="comm-audience-metrics">
-          <div><span>Matching</span><strong>{loading?"—":preview?.candidate_count??"—"}</strong></div>
-          <div><span>Consent-ready</span><strong>{loading?"—":preview?.eligible_count??"—"}</strong></div>
-          <div><span>Excluded</span><strong>{loading?"—":preview?.suppressed_count??"—"}</strong></div>
-        </div>
-        <p className="comm-muted">{preview?.notice??"Loading current audience…"}</p>
-        {!!preview?.sample_names.length&&<div className="comm-sample">
-          <span>Sample recipients</span>
-          {preview.sample_names.map(name=><p key={name}>{name}</p>)}
-        </div>}
-      </section>
-      <section className="comm-panel">
-        <div className="comm-panel-header"><h2>Message preview</h2>
-          <span className="comm-channel-tag">{channel==="whatsapp"?"WhatsApp":"Email"}</span>
-        </div>
-        {channel==="email"&&subject&&<strong className="comm-subject-preview">{subject}</strong>}
-        <div className="comm-message-preview">
-          {body?<p>{renderPreview(body,selectedName)}</p>
-            :<p className="comm-placeholder">Your message preview will appear here.</p>}
-        </div>
-        <p className="comm-muted">Preview only · Delivery not activated.</p>
-      </section>
-    </aside>
   </div>;
 }
