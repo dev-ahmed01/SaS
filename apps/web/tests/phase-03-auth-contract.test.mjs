@@ -32,15 +32,15 @@ test("login is no longer a disabled preview",()=>{
 test("Dashboard is the default entrypoint after login",()=>{
   const login=read("../app/login/page.tsx");
   const home=read("../app/page.tsx");
-  assert.equal((login.match(/router\\.replace\\("\\/dashboard"\\)/g)||[]).length,2);
-  assert.doesNotMatch(login,/router\\.replace\\("\\/prospects"\\)/);
-  assert.match(home,/redirect\\("\\/dashboard"\\)/);
+  assert.equal((login.match(/router\.replace\("\/dashboard"\)/g)||[]).length,2);
+  assert.doesNotMatch(login,/router\.replace\("\/prospects"\)/);
+  assert.match(home,/redirect\("\/dashboard"\)/);
 });
 
 test("password visibility is reversible without submitting login",()=>{
   const login=read("../app/login/page.tsx");
   assert.match(login,/showPassword/);
-  assert.match(login,/type=\\{showPassword\\?"text":"password"\\}/);
-  assert.match(login,/aria-label=\\{showPassword\\?"Hide password":"Show password"\\}/);
+  assert.match(login,/type=\{showPassword\?"text":"password"\}/);
+  assert.match(login,/aria-label=\{showPassword\?"Hide password":"Show password"\}/);
   assert.match(login,/className="login-password-toggle" type="button"/);
 });
