@@ -963,6 +963,7 @@ test("Communication templates, campaign plans and rules persist across navigatio
   const row=page.getByRole("row",{name:new RegExp("Update "+key)});
   await expect(row).toBeVisible();
   await expect(row.getByText("Draft")).toBeVisible();
+  page.once("dialog",dialog=>dialog.accept());
   await row.getByRole("button",{name:"Cancel"}).click();
   await expect(row.getByText("Cancelled")).toBeVisible();
   await page.goto("/communication/automations");
