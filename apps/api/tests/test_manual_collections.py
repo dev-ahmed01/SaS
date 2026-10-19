@@ -343,3 +343,35 @@ def test_active_only_excludes_reversed_contributions(system):
     assert reversed_payment.status_code == 201, reversed_payment.text
     assert client.get("/v1/collections?active_only=true").json()["total"] == 0
     assert client.get("/v1/collections").json()["total"] == 1
+
+
+def test_missing_external_reference_uses_internal_unique_ledger_key(system):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=False)
+    payload = sample(person["id"])
+    payload.pop("receipt_reference")
+    first = client.post("/v1/collections", headers=csrf, json=payload)
+    assert first.status_code == 201, first.text
+    assert first.json()["reference_mask"] == "Not provided"
+    assert first.json()["evidence"] == "admin_attested"
+    replay = client.post("/v1/collections", headers=csrf, json=payload)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["id"] == first.json()["id"]
+    second = client.post("/v1/collections", headers=csrf, json={
+        **payload, "request_id": str(uuid.uuid4()),
+    })
+    assert second.status_code == 201, second.text
+    assert second.json()["id"] != first.json()["id"]
+    with Session(engine) as db:
+        receipts = db.scalars(select(ManualCollection)).all()
+        assert len(receipts) == 2
+        assert receipts[0].reference_digest != receipts[1].reference_digest
+        assert db.scalar(select(func.count()).select_from(VerifiedCredit)) == 2
+        assert db.scalar(select(func.count()).select_from(MessageOutbox)) == 2
+    # Supplied external IDs retain strict syntax and uniqueness rules.
+    invalid = client.post("/v1/collections", headers=csrf, json={
+        **payload, "request_id": str(uuid.uuid4()),
+        "receipt_reference": "BAD VALUE",
+    })
+    assert invalid.status_code == 422
