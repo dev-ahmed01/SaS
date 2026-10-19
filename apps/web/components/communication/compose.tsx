@@ -43,7 +43,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   useEffect(()=>{
     const controller=new AbortController();
     setLoading(true);setPreview(null);
-    const query=new URLSearchParams({audience,segment,channel});
+    const query=new URLSearchParams({audience,segment,channel,category});
     fetch("/api/admin/communication/audience?"+query.toString(),{
       cache:"no-store",signal:controller.signal,
     }).then(async res=>{
@@ -53,7 +53,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
       .catch(()=>{if(!controller.signal.aborted)setPreview(null);})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
-  },[audience,segment,channel,refresh]);
+  },[audience,segment,channel,category,refresh]);
 
   function invalidate(){requestId.current=null;setError("");setNotice("");}
   function chooseTemplate(id:string){
