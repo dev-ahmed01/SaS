@@ -725,6 +725,110 @@ class PayoutPayment(Base):
     )
 
 
+class CommunicationTemplate(Base):
+    """Reusable message copy; provider approval is independent of a saved draft."""
+
+    __tablename__ = "communication_templates"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_comm_template_org_id"),
+        UniqueConstraint("organization_id", "name_key", name="uq_comm_template_name"),
+        CheckConstraint("channel IN ('whatsapp','email')", name="ck_comm_template_channel"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    channel: Mapped[str] = mapped_column(String(12), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(String(1200), nullable=False)
+    provider_template_id: Mapped[str | None] = mapped_column(String(160))
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CommunicationCampaign(Base):
+    """Immutable copy snapshot when saved; a schedule is not dispatch authority."""
+
+    __tablename__ = "communication_campaigns"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_comm_campaign_org_id"),
+        UniqueConstraint("organization_id", "request_id", name="uq_comm_campaign_request"),
+        CheckConstraint("channel IN ('whatsapp','email')", name="ck_comm_campaign_channel"),
+        CheckConstraint(
+            "audience IN ('prospects','promoters','both')", name="ck_comm_campaign_audience"
+        ),
+        CheckConstraint(
+            "segment IN ('all','active','inactive','unpaid')", name="ck_comm_campaign_segment"
+        ),
+        CheckConstraint(
+            "status IN ('draft','scheduled','cancelled')", name="ck_comm_campaign_status"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    template_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("communication_templates.id", ondelete="RESTRICT")
+    )
+    channel: Mapped[str] = mapped_column(String(12), nullable=False)
+    audience: Mapped[str] = mapped_column(String(16), nullable=False)
+    segment: Mapped[str] = mapped_column(String(16), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(String(1200), nullable=False)
+    provider_template_id: Mapped[str | None] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    planned_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eligible_snapshot: Mapped[int] = mapped_column(nullable=False, default=0)
+    candidate_snapshot: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CommunicationRule(Base):
+    """Trigger configuration only. No auto-sender is wired to these definitions."""
+
+    __tablename__ = "communication_rules"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_comm_rule_org_id"),
+        UniqueConstraint("organization_id", "name_key", name="uq_comm_rule_name"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    trigger_kind: Mapped[str] = mapped_column(String(36), nullable=False)
+    channel: Mapped[str] = mapped_column(String(12), nullable=False)
+    audience: Mapped[str] = mapped_column(String(16), nullable=False)
+    segment: Mapped[str] = mapped_column(String(16), nullable=False)
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("communication_templates.id", ondelete="RESTRICT"),
+        nullable=False
+    )
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class ReminderBatch(Base):
     """An Admin-prepared monthly candidate batch; never delivery authorization."""
 
