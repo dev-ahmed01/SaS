@@ -436,6 +436,7 @@ def list_prospects(
     database: Annotated[Session, Depends(db_session)],
     response: Response,
     status: Literal["new", "active", "inactive"] | None = None,
+    crm_stage: Literal["active", "inactive"] | None = None,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -445,6 +446,8 @@ def list_prospects(
     conditions = [Prospect.organization_id == admin.organization_id]
     if not include_archived:
         conditions.append(Prospect.archived_at.is_(None))
+    if crm_stage is not None:
+        conditions.append(Prospect.crm_stage == crm_stage)
     if q.strip():
         escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         term = f"%{escaped}%"
@@ -452,6 +455,8 @@ def list_prospects(
             Prospect.full_name.ilike(term, escape="\\"),
             Prospect.mobile_number.ilike(term, escape="\\"),
             Prospect.area_city.ilike(term, escape="\\"),
+            Prospect.email.ilike(term, escape="\\"),
+            Prospect.occupation.ilike(term, escape="\\"),
         ))
     results = database.scalars(
         select(Prospect).where(*conditions)
@@ -534,7 +539,7 @@ def create_prospect(
         for identifier in ids:
             _upi_digest(identifier)
     fields = payload.model_dump(exclude={
-        "upi_ids", "monthly_contribution_paise", "request_id",
+        "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
     })
     prospect = Prospect(
         organization_id=admin.organization_id,
@@ -544,7 +549,7 @@ def create_prospect(
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
-        start_month=_ist_month(),
+        start_month=payload.start_month or _ist_month(),
     )
     try:
         database.add(prospect)
