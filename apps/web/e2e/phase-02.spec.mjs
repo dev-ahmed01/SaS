@@ -36,8 +36,12 @@ test("login password can be revealed and hidden without submitting",async ({page
   const input=page.getByLabel("Password",{exact:true});
   await expect(input).toHaveAttribute("type","password");
   await input.fill("sample-visible-password");
-  await page.getByRole("button",{name:"Show password"}).click();
+  const reveal=page.getByRole("button",{name:"Show password"});
+  await expect(reveal.locator("svg")).toBeVisible();
+  await expect(reveal).toHaveAttribute("aria-pressed","false");
+  await reveal.click();
   await expect(input).toHaveAttribute("type","text");
+  await expect(page.getByRole("button",{name:"Hide password"})).toHaveAttribute("aria-pressed","true");
   await expect(input).toHaveValue("sample-visible-password");
   await page.getByRole("button",{name:"Hide password"}).click();
   await expect(input).toHaveAttribute("type","password");
@@ -59,6 +63,8 @@ test("all seven approved modules have a secure navigable destination",async ({pa
     await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:title,exact:true}).click();
     await expect(page).toHaveURL(new RegExp("/"+slug+"$"));
     await expect(page.getByRole("heading",{name:title,exact:true,level:1})).toBeVisible();
+    await expect(page.locator(".topbar h1")).toHaveCount(1);
+    await expect(page.locator(".page-content h1")).toHaveCount(0);
   }
 });
 
@@ -94,6 +100,11 @@ test("desktop branding and landscape artwork have the right proportions",async (
   const sidebar=page.locator(".site-sidebar");
   const art=page.locator(".sidebar-art");
   await expect(art).toBeVisible();
+  await expect(sidebar.getByText("Emlen Foundation",{exact:true})).toBeVisible();
+  await expect(sidebar.getByText("Sponsor a Salah",{exact:true})).toBeVisible();
+  await expect(page.locator(".topbar .top-avatar")).toHaveCount(0);
+  await expect(page.locator(".topbar h1")).toHaveText("Dashboard");
+  await expect(page.locator(".page-content h1")).toHaveCount(0);
   await expect.poll(async()=>art.evaluate(el=>getComputedStyle(el).backgroundImage.includes("sponsor-salah-panorama.avif"))).toBe(true);
   // The image must reach both edges of the padded sidebar on desktop and mobile.
   await expect.poll(async()=>art.evaluate(el=>{
@@ -110,16 +121,19 @@ test("desktop branding and landscape artwork have the right proportions",async (
   if(!isMobile){
     await expect.poll(async()=>sidebar.evaluate(el=>Math.round(el.getBoundingClientRect().width))).toBe(248);
     const metrics=await page.evaluate(()=>{
-      const title=document.querySelector(".topbar-name");
-      const heading=document.querySelector(".page-heading h1");
+      const moduleHeading=document.querySelector(".topbar-name");
+      const foundationName=document.querySelector(".brand-copy strong");
+      const brandCopy=document.querySelector(".brand-copy");
       const panel=document.querySelector(".site-sidebar");
       return {
-        brand:parseFloat(getComputedStyle(title).fontSize),
-        heading:parseFloat(getComputedStyle(heading).fontSize),
+        moduleSize:parseFloat(getComputedStyle(moduleHeading).fontSize),
+        foundationSize:parseFloat(getComputedStyle(foundationName).fontSize),
+        brandFits:brandCopy.scrollWidth<=brandCopy.clientWidth+1,
         scroll:panel.scrollHeight<=panel.clientHeight+1
       };
     });
-    expect(metrics.brand).toBeGreaterThan(metrics.heading);
+    expect(metrics.moduleSize).toBeGreaterThan(metrics.foundationSize);
+    expect(metrics.brandFits).toBe(true);
     expect(metrics.scroll).toBe(true);
   }
 });
@@ -166,7 +180,7 @@ test("responsive layout has no horizontal overflow and drawer controls work",asy
     await page.getByRole("button",{name:"Close menu"}).click();
   }else{
     await expect(page.getByRole("button",{name:"Collapse sidebar"})).toHaveCount(0);
-    await expect(page.getByRole("link",{name:"Sponsor a Salah home"})).toBeVisible();
+    await expect(page.getByRole("link",{name:"Emlen Foundation home"})).toBeVisible();
   }
 });
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "moon" | "grid" | "users" | "user-plus" | "wallet" | "receipt" | "bell" | "settings" | "menu" | "close" | "chevron-down" | "arrow-left" | "search" | "calendar" | "mail" | "message" | "shield" | "logout" | "check" | "info" | "file" | "clock" | "dots" | "upload";
+export type IconName = "moon" | "grid" | "users" | "user-plus" | "wallet" | "receipt" | "bell" | "settings" | "menu" | "close" | "chevron-down" | "arrow-left" | "search" | "calendar" | "mail" | "message" | "shield" | "logout" | "check" | "info" | "file" | "clock" | "dots" | "upload" | "eye" | "eye-off";
 
 const paths: Record<IconName, ReactNode> = {
   moon: <path d="M20.5 14.1A8.4 8.4 0 0 1 9.9 3.5 8.6 8.6 0 1 0 20.5 14.1Z"/>,
@@ -27,6 +27,8 @@ const paths: Record<IconName, ReactNode> = {
   clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></>,
   dots: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
   upload: <><path d="M12 16V3m-5 5 5-5 5 5"/><path d="M4 16v4h16v-4"/></>,
+  eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></>,
+  "eye-off": <><path d="M3 3l18 18M10.6 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a16.4 16.4 0 0 1-3 3.7M6.3 6.3C3.6 8.2 2 12 2 12s3.5 7 10 7c1.6 0 3.1-.4 4.4-1.1"/><path d="M10 10a3 3 0 0 0 4 4"/></>,
 };
 
 export function Icon({ name, size = 19, className = "" }: { name: IconName; size?: number; className?: string }) {

@@ -65,9 +65,9 @@ export function AppShell({children}:{children:React.ReactNode}) {
     {mobileOpen && <button className="drawer-scrim" aria-label="Close navigation" onClick={closeDrawer}/>}
     <aside className={"site-sidebar"+(mobileOpen?" mobile-open":"")} aria-label="Main navigation">
       <div className="sidebar-head">
-        <Link className="brand-link" href="/prospects" onClick={closeDrawer} aria-label="Sponsor a Salah home">
+        <Link className="brand-link" href="/dashboard" onClick={closeDrawer} aria-label="Emlen Foundation home">
           <span className="brand-mark"><Icon name="moon" size={33}/></span>
-          <span className="brand-copy"><strong>Sponsor a Salah</strong><small>Masjid Charity Management</small></span>
+          <span className="brand-copy"><strong>Emlen Foundation</strong><small>Sponsor a Salah</small></span>
         </Link>
         <button className="icon-button mobile-close" onClick={closeDrawer} aria-label="Close menu"><Icon name="close"/></button>
       </div>
@@ -100,9 +100,7 @@ export function AppShell({children}:{children:React.ReactNode}) {
     <div className="app-content">
       <header className="topbar">
         <button className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
-        <span className="topbar-name">Sponsor a Salah</span>
-        <span className="topbar-spacer"/>
-        <span className="avatar top-avatar">A</span>
+        <h1 className="topbar-name">{navigation.find(link=>pathname===link.href || pathname.startsWith(link.href+"/"))?.name ?? "Dashboard"}</h1>
       </header>
       <main id="main-content" className="page-content">{children}</main>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "../app-shell";
-import { ModuleTabs, PageHeading } from "../ui/primitives";
+import { ModuleTabs } from "../ui/primitives";
 import { ProspectEditor } from "./prospect-editor";
 import { ProspectList } from "./prospect-list";
 
@@ -13,7 +13,6 @@ const tabs=[
 
 export function ProspectsWorkspace({view}:{view:"add"|"inactive"|"all"}) {
   return <AppShell>
-    <PageHeading title="Prospects"/>
     <ModuleTabs current={view} tabs={tabs}/>
     <div className="prospects-workspace">
       {view==="add"
