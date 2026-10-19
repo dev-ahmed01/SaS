@@ -15,7 +15,7 @@ export default function LoginPage() {
   useEffect(()=>{
     let active=true;
     fetch("/api/admin/session",{cache:"no-store"}).then(r=>{
-      if(active && r.ok){router.replace("/prospects");}
+      if(active && r.ok){router.replace("/dashboard");}
     }).catch(()=>{});
     return ()=>{active=false;};
   },[router]);
@@ -32,7 +32,7 @@ export default function LoginPage() {
         setError(result.status===429?"Too many attempts. Please try again later.":result.status===503?"Sign-in is temporarily unavailable.":result.status===403?"Sign-in request was blocked by origin verification. Check the public URL configuration.":result.status===422?"Enter a valid email address, or enable local demo login to use Admin.":"Unable to sign in. Check your details and try again.");
         return;
       }
-      router.replace("/prospects");
+      router.replace("/dashboard");
       
     } catch {
       setError("Connection problem. Please try again.");
