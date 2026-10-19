@@ -1211,3 +1211,34 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .comm-stacked-sections .comm-two-column {grid-template-columns:minmax(0,1fr);}
 .comm-stacked-sections .comm-panel {width:100%;max-width:none;}
 @media(max-width:650px){.finance-tabs .module-tab{font-size:10px;padding:10px 3px;}}
+
+/* Consent attestation lives on each CRM contact; never a new sidebar module. */
+.comm-consent-card {min-width:0;}
+.comm-consent-list {display:grid;gap:9px;}
+.comm-consent-row {
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:11px 0;border-bottom:1px solid var(--line);
+}
+.comm-consent-row:last-child {border-bottom:0;}
+.comm-consent-row > div {display:grid;gap:4px;min-width:0;}
+.comm-consent-row strong {font:500 12px var(--font-body);color:var(--forest-deep);}
+.comm-consent-row span {font:400 11px var(--font-body);color:var(--muted);}
+.comm-consent-row small {font:400 10px var(--font-body);color:var(--muted);}
+.comm-consent-row .btn {flex:none;min-height:31px;}
+.comm-consent-form {display:grid;gap:13px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);}
+.comm-consent-form h3 {margin:0;font:600 16px var(--font-heading);color:var(--forest-deep);}
+.comm-consent-actions {display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;}
+.comm-consent-card .form-success,.comm-consent-card .form-error {margin-top:13px;}
+/* Recipient review only opens on demand inside Campaigns, not a fixed preview. */
+.comm-review-actions {display:flex;flex-wrap:wrap;gap:12px;}
+.comm-recipient-review {margin-top:17px;border:1px solid var(--line);border-radius:11px;padding:18px;}
+.comm-review-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.comm-review-heading h3 {margin:0;font:600 18px var(--font-heading);color:var(--forest-deep);}
+.comm-review-counts {display:flex;flex-wrap:wrap;align-items:center;gap:22px;margin-top:14px;}
+.comm-review-counts span {font:400 11px var(--font-body);color:var(--muted);}
+.comm-review-counts strong {font:600 19px var(--font-heading);color:var(--forest-deep);padding-right:5px;}
+.comm-review-footer {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;}
+@media(max-width:650px){
+  .comm-review-footer{align-items:flex-start;flex-direction:column;}
+  .comm-review-footer .btn{align-self:flex-end;}
+}
