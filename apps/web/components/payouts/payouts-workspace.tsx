@@ -11,11 +11,6 @@ type Plan = {
   current_month_due_paise:number;current_month_paid_paise:number;payment_count:number;
 };
 type PlanPage = {items:Plan[];total:number;limit:number;offset:number;period_month:string};
-type Payment = {
-  id:string;plan_id:string;payee_name:string;amount_paise:number;
-  period_month:string;paid_on:string;payment_method:string;reference_mask:string;
-};
-type PaymentPage={items:Payment[];total:number;limit:number;offset:number};
 type Kind="recurring"|"one_time";
 type PaymentMethod="upi"|"bank_transfer"|"cash"|"cheque";
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
@@ -128,10 +123,8 @@ export function PayoutAdd(){
 export function PayoutList({view}:{view:"all"|"active"}){
   const [period,setPeriod]=useState(()=>dateIST().slice(0,7));
   const [offset,setOffset]=useState(0);
-  const [paymentOffset,setPaymentOffset]=useState(0);
   const [refresh,setRefresh]=useState(0);
   const [plans,setPlans]=useState<PlanPage|null>(null);
-  const [payments,setPayments]=useState<PaymentPage|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -155,15 +148,8 @@ export function PayoutList({view}:{view:"all"|"active"}){
       .then(value=>{if(!controller.signal.aborted){setPlans(value);setError("");}})
       .catch(()=>{if(!controller.signal.aborted)setError("Payout plans could not be loaded.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
-    if(view==="all"){
-      fetch("/api/admin/payouts/payments?limit=30&offset="+paymentOffset,{
-        cache:"no-store",signal:controller.signal,
-      }).then(async r=>r.ok?await r.json() as PaymentPage:null)
-        .then(value=>{if(!controller.signal.aborted)setPayments(value);})
-        .catch(()=>{});
-    }
     return ()=>controller.abort();
-  },[view,period,offset,paymentOffset,refresh]);
+  },[view,period,offset,refresh]);
   function open(plan:Plan,action:typeof mode){
     setChosen(plan);setMode(action);setPaymentDate(dateIST());setMethod("upi");
     setReference("");setConfirmed(false);setError("");setNotice("");request.current=null;
@@ -255,28 +241,6 @@ export function PayoutList({view}:{view:"all"|"active"}){
           onClick={()=>setOffset(n=>n+20)}>Next</button>
       </div>
     </div>
-    {view==="all"&&<section className="payout-history" aria-label="Recorded payout history">
-      <h3>Recorded outgoing payments</h3>
-      <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Payee</th><th>Amount</th><th>Paid on</th>
-          <th>Month</th><th>Method</th><th>Reference</th></tr></thead>
-        <tbody>{!payments?.items.length?<tr><td colSpan={6}>No outgoing payments have been attested.</td></tr>
-          :payments.items.map(payment=><tr key={payment.id}>
-            <td>{payment.payee_name}</td><td>{money(payment.amount_paise)}</td>
-            <td>{payment.paid_on}</td><td>{payment.period_month.slice(0,7)}</td>
-            <td>{payment.payment_method.replace("_"," ")}</td><td>{payment.reference_mask}</td>
-          </tr>)}</tbody></table></div>
-      <div className="table-footer paging-footer">
-         <span>{payments?Math.min(paymentOffset+30,payments.total)+" of "+payments.total+" outgoing records":"Loading history"}</span>
-         <div className="paging-actions">
-           <button className="btn btn-secondary" type="button" disabled={paymentOffset===0}
-             onClick={()=>setPaymentOffset(n=>Math.max(0,n-30))}>Previous payments</button>
-           <button className="btn btn-secondary" type="button"
-             disabled={!payments||paymentOffset+30>=payments.total}
-             onClick={()=>setPaymentOffset(n=>n+30)}>Next payments</button>
-         </div>
-       </div>
-    </section>}
     {chosen&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
     }}><section className="edit-modal payout-dialog" role="dialog" aria-modal="true"
