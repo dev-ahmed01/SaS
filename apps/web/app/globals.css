@@ -1002,3 +1002,39 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .brand-copy strong {font-size:19px;}
   .brand-copy small {font-size:12px;}
 }
+
+/* Shared administrative workspace rhythm: brand, breathing room, then modules. */
+.site-sidebar .sidebar-nav {margin-top:clamp(44px,7vh,68px);}
+@media(min-width:781px) and (max-height:730px) {
+  .site-sidebar .sidebar-nav {margin-top:22px;}
+}
+.manual-collections-workspace,
+.payouts-form,.payouts-workspace {width:100%;max-width:none;}
+.manual-collections-workspace .content-panel,
+.payouts-form {width:100%;max-width:none;}
+.manual-collections-workspace .form-grid,
+.payouts-form .form-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 22px;}
+.manual-collections-workspace .form-grid > .full,
+.payouts-form .form-grid > .full {grid-column:1/-1;}
+.collection-date-row,.payout-schedule-fields {grid-column:1/-1;border-top:1px solid var(--line);padding-top:22px;}
+.collection-date-row .optional-fields,
+.payout-schedule-fields .optional-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;}
+.crm-form-summary {font:400 12px var(--font-body);color:var(--muted);margin:0 0 26px;}
+.manual-collections-workspace .content-panel,
+.payouts-form {padding:32px clamp(23px,3.5vw,40px);border-radius:13px;}
+.manual-collections-workspace .content-panel h2,
+.payouts-form h2 {font:600 23px var(--font-heading);color:var(--forest-deep);margin-bottom:12px;}
+.manual-collections-workspace .field-label,.payouts-form .field-label {font:500 12px var(--font-body);}
+.manual-collections-workspace .form-actions,.payouts-form .form-actions {
+  border-top:1px solid var(--line);padding-top:21px;margin-top:24px;
+}
+.payouts-form .optional-fields .full {grid-column:1/-1;}
+.payouts-workspace {margin-top:20px;}
+@media(max-width:780px) {
+  .site-sidebar .sidebar-nav {margin-top:32px;}
+  .manual-collections-workspace .form-grid,
+  .payouts-form .form-grid,
+  .collection-date-row .optional-fields,
+  .payout-schedule-fields .optional-fields {grid-template-columns:minmax(0,1fr);}
+  .manual-collections-workspace .content-panel,.payouts-form {padding:22px 17px;}
+}
