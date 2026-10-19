@@ -695,3 +695,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media (prefers-reduced-motion:reduce) {
   .profile-chevron { transition:none; }
 }
+
+/* Login password visibility: the control never submits the authentication form. */
+.login-password-wrap { position:relative; }
+.login-password-wrap input { padding-right:80px; }
+.login-password-toggle { position:absolute; right:8px; top:50%; transform:translateY(-50%); min-width:56px; min-height:34px; padding:5px 10px; border:0; border-radius:6px; background:transparent; color:var(--forest-deep); font:600 12px var(--font-body); cursor:pointer; }
+.login-password-toggle:hover { background:var(--mint-light); }
+.login-password-toggle:focus-visible { outline:3px solid #32866d; outline-offset:2px; }
