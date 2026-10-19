@@ -68,6 +68,37 @@ test("all seven approved modules have a secure navigable destination",async ({pa
   }
 });
 
+test("module changes preserve one sidebar and IST clock without repeated loading",async ({page,isMobile})=>{
+  await page.goto("/dashboard");
+  const clock=page.locator(".topbar-ist-clock");
+  await expect(clock).not.toContainText("Loading time");
+  await page.evaluate(()=>{
+    window.__originalAppShell=document.querySelector(".app-frame");
+    window.__originalClock=document.querySelector(".topbar-ist-clock");
+  });
+  for(const name of ["Prospects","Promoters","Collections","Payouts","Communication","Dashboard"]){
+    if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+    await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name,exact:true}).click();
+    await expect(page.locator(".app-frame")).toHaveCount(1);
+    await expect(page.locator(".topbar-ist-clock")).not.toContainText("Loading time");
+    const result=await page.evaluate(()=>({
+      frame:window.__originalAppShell===document.querySelector(".app-frame"),
+      clock:window.__originalClock===document.querySelector(".topbar-ist-clock"),
+    }));
+    expect(result).toEqual({frame:true,clock:true});
+  }
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Promoters",exact:true}).click();
+  await expect(page.getByRole("region",{name:"All Promoters"})).toBeVisible();
+  await expect(page.getByText("Loading promoters…")).toHaveCount(0);
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Prospects",exact:true}).click();
+  if(isMobile)await page.getByRole("button",{name:"Open navigation"}).click();
+  await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name:"Promoters",exact:true}).click();
+  await expect(page.getByRole("region",{name:"All Promoters"})).toBeVisible();
+  await expect(page.getByText("Loading promoters…")).toHaveCount(0);
+});
+
 test("approved tabs remain functional and preview saves stay disabled",async ({page})=>{
   await page.goto("/prospects/add");
   await expect(page.getByRole("button",{name:"Add Prospect"})).toBeEnabled();
