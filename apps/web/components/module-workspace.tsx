@@ -1,3 +1,4 @@
+import { AccountingOverview } from "./accounting/accounting-overview";
 import Link from "next/link";
 import { AppShell } from "./app-shell";
 import { EmptyTable, ModuleTabs, Panel, PhaseNotice, PreviewButton, SelectField, TextField } from "./ui/primitives";
@@ -6,7 +7,7 @@ import { AdminSettingsForm } from "./admin-settings-form";
 import { DashboardLive } from "./dashboard/dashboard-live";
 import { ManualCollections } from "./collections/manual-collections";
 import { CollectionsAllWorkspace } from "./collections/collections-all-workspace";
-import { PayoutAdd, PayoutList } from "./payouts/payouts-workspace";
+import { PayoutAdd, PayoutList, PayoutDisbursements } from "./payouts/payouts-workspace";
 import { WhatsAppEligibility } from "./reminders/whatsapp-eligibility";
 import { ProspectsWorkspace } from "./prospects/prospects-workspace";
 import { PromotersWorkspace } from "./promoters/promoters-workspace";
@@ -28,13 +29,13 @@ const definitions: Record<Module,{name:string;singular:string;phase:string;descr
   },
   collections:{
     name:"Collections",singular:"Collection",phase:"08",description:"Track recurring monthly contributions and recorded UPI collections.",
-    tabs:[{id:"add",label:"Add",href:"/collections"},{id:"active",label:"Active",href:"/collections/active"},{id:"all",label:"All",href:"/collections/all"}],
+    tabs:[{id:"add",label:"Add Collection",href:"/collections"},{id:"received",label:"Received",href:"/collections/received"},{id:"outstanding",label:"Outstanding",href:"/collections/outstanding"},{id:"all",label:"All",href:"/collections/all"}],
     fields:[{label:"Sponsor name",placeholder:"Select sponsor",required:true,kind:"select"},{label:"Amount (₹)",placeholder:"Enter amount",required:true,kind:"number"},{label:"Collection date",placeholder:"Select date",required:true,kind:"date"},{label:"Payment method",placeholder:"Select method",required:true,kind:"select"},{label:"Reference / Notes",placeholder:"Transaction reference or notes",kind:"textarea"}],
     columns:["Sponsor name","Amount (₹)","Collection date","Payment method","Status","Actions"],search:"Search sponsor name or transaction reference"
   },
   payouts:{
     name:"Payouts",singular:"Payout",phase:"09",description:"Record recurring and one-time outgoing payments.",
-    tabs:[{id:"add",label:"Add Payout",href:"/payouts"},{id:"active",label:"Active",href:"/payouts/active"},{id:"all",label:"All",href:"/payouts/all"}],
+    tabs:[{id:"add",label:"Add Payout",href:"/payouts"},{id:"planned",label:"Planned",href:"/payouts/planned"},{id:"disbursed",label:"Disbursed",href:"/payouts/disbursed"},{id:"all",label:"All",href:"/payouts/all"}],
     fields:[{label:"Payee name",placeholder:"Enter payee name",required:true},{label:"Amount (₹)",placeholder:"Enter amount",required:true,kind:"number"},{label:"Date",placeholder:"Select date",required:true,kind:"date"},{label:"Purpose",placeholder:"Select purpose",required:true,kind:"select"},{label:"Notes",placeholder:"Enter any notes",kind:"textarea"}],
     columns:["Payee name","Amount (₹)","Date","Purpose","Frequency","Actions"],search:"Search payee or payment purpose"
   }
@@ -118,9 +119,10 @@ export function ModuleWorkspace({module,view="add"}:{module:string;view?:string}
   if(module==="prospects" && ["add","inactive","active","all","stages"].includes(view)) return <ProspectsWorkspace view={view as "add"|"inactive"|"active"|"all"|"stages"}/>;
   if(module==="promoters" && ["add","active","inactive","all"].includes(view)) return <PromotersWorkspace view={view as "add"|"active"|"inactive"|"all"}/>;
   if(module==="collections" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><ManualCollections/></AppShell>;
-  if(module==="collections" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"}/></AppShell>;
+  if(module==="collections" && view==="outstanding") return <AppShell><ModuleTabs current={view} tabs={definitions.collections.tabs}/><AccountingOverview outstandingOnly/></AppShell>;
+  if(module==="collections" && ["received","active","all"].includes(view)) return <AppShell><ModuleTabs current={view==="active"?"received":view} tabs={definitions.collections.tabs}/><CollectionsAllWorkspace activeOnly={view==="active"} receivedOnly={view==="received"}/></AppShell>;
   if(module==="payouts" && view==="add") return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutAdd/></AppShell>;
-  if(module==="payouts" && ["active","all"].includes(view)) return <AppShell><ModuleTabs current={view} tabs={definitions.payouts.tabs}/><PayoutList view={view as "active"|"all"}/></AppShell>;
+  if(module==="payouts" && ["active","planned","disbursed","all"].includes(view)) return <AppShell><ModuleTabs current={view==="active"?"planned":view} tabs={definitions.payouts.tabs}/>{view==="disbursed"?<PayoutDisbursements/>:<PayoutList view={view as "active"|"planned"|"all"}/>}</AppShell>;
   if(["prospects","promoters","collections","payouts"].includes(module))return <BusinessModule module={module as Module} view={view}/>;
   return null;
 }
