@@ -294,6 +294,46 @@ test("Admin can archive and restore a prospect without deleting its record",asyn
   await expect(page.getByText("Active",{exact:true}).first()).toBeVisible();
 });
 
+test("Prospect CRM tabs, profile cards and reasoned inactivity work without changing payment status",async ({page})=>{
+  const name="Stage Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects");
+  const tabs=page.getByRole("navigation",{name:"Module views"});
+  await expect(tabs.getByRole("link")).toHaveCount(4);
+  await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
+    "All Prospects","Add Prospect","Active","Inactive"
+  ]);
+  const columns=await tabs.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(" ").length);
+  expect(columns).toBe(4);
+  await tabs.getByRole("link",{name:"Add Prospect"}).click();
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9765432100");
+  await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).fill("2");
+  await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading",{name:"Sponsorship"})).toBeVisible();
+  await expect(page.getByText("Never paid")).toBeVisible();
+  await page.getByRole("button",{name:/Mark inactive/}).click();
+  const dialog=page.getByRole("dialog",{name:"Mark prospect inactive"});
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button",{name:"Confirm Inactive"})).toBeDisabled();
+  await dialog.getByRole("combobox",{name:/Reason for leaving/}).selectOption("budget");
+  await dialog.getByRole("button",{name:"Confirm Inactive"}).click();
+  await expect(page.getByText("Budget or affordability")).toBeVisible();
+  await expect(page.getByText("0",{exact:true}).first()).toBeVisible();
+  await expect(page.getByText("Never paid")).toBeVisible();
+  await page.goto("/prospects/inactive");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
+  const row=page.getByRole("row",{name:new RegExp(name)});
+  await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
+  await row.getByRole("button",{name:/Reactivate/}).click();
+  await page.getByRole("dialog",{name:"Reactivate prospect"}).getByRole("button",{name:"Mark Active"}).click();
+  await expect(row).toHaveCount(0);
+  await page.goto("/prospects/active");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
+  await expect(page.getByRole("row",{name:new RegExp(name)})).toBeVisible();
+});
+
 test("Admin creates and searches promoters in the approved Active and All views",async ({page})=>{
   const label="Phase5 Promoter "+(Date.now()%1000000);
   const number="9876"+String(Date.now()%1000000).padStart(6,"0");
