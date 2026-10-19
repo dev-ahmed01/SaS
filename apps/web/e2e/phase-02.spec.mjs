@@ -972,7 +972,8 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await page.getByRole("combobox",{name:"Automation template"}).selectOption({label:name+" · WhatsApp"});
   await page.getByRole("button",{name:"Save automation"}).click();
   await expect(page.getByText("Monthly demo "+key,{exact:true})).toBeVisible();
-  await expect(page.getByText("Inactive · delivery not connected")).toBeVisible();
+  const savedRule=page.locator(".comm-list-card").filter({hasText:"Monthly demo "+key});
+  await expect(savedRule.getByText("Inactive · delivery not connected")).toBeVisible();
 });
 
 test("Communication proxy blocks forged-origin writes and has no unapproved send endpoint",async ({page})=>{
