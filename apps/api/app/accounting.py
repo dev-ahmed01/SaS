@@ -254,6 +254,7 @@ def overview(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     database: Annotated[Session, Depends(db_session)],
     month: Annotated[str | None, Query(max_length=7)] = None,
+    outstanding_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AccountingOverview:
@@ -292,16 +293,20 @@ def overview(
             status=status, due_paise=due, verified_paise=verified,
             outstanding_paise=outstanding, fully_paid=paid,
         ))
+    # Filter the complete period projection before pagination. Summary totals
+    # still describe the whole month, not just the displayed subset.
+    visible_rows = ([row for row in rows if row.outstanding_paise > 0]
+                    if outstanding_only else rows)
     response.headers["Cache-Control"] = "no-store"
     return AccountingOverview(
         period_month=period, as_of=today, timezone=settings.timezone,
-        currency=settings.currency_code, total_sponsors=len(rows),
+        currency=settings.currency_code, total_sponsors=len(visible_rows),
         due_paise=totals["due"], verified_paise=totals["verified"],
         outstanding_paise=totals["outstanding"], fully_paid_sponsors=totals["paid"],
         new_sponsors=totals["new"], active_sponsors=totals["active"],
         inactive_sponsors=totals["inactive"],
         archived_sponsors=totals["archived"],
-        items=rows[offset:offset + limit], limit=limit, offset=offset,
+        items=visible_rows[offset:offset + limit], limit=limit, offset=offset,
     )
 
 
