@@ -149,7 +149,7 @@ export function PipelineManager(){
           <span className="pipeline-stage-count">{item.prospect_count} prospects</span>
           <span className="pipeline-stage-order">#{item.sort_order}</span>
           <button type="button" className="icon-button" aria-label={"Edit stage "+item.name}
-            onClick={()=>edit(item)}><Icon name="file" size={17}/></button>
+            onClick={()=>edit(item)}><Icon name="pencil" size={17}/></button>
           <button type="button" className="icon-button pipeline-delete"
             aria-label={"Delete stage "+item.name}
             onClick={()=>setDeleting(item)}><Icon name="trash" size={17}/></button>
