@@ -97,7 +97,7 @@ export function ProspectDetails({id}:{id:string}){
         <div className="crm-detail-cards">
           <Card title="Personal information">
             <Info label="First name" value={record.first_name??record.full_name.split(" ")[0]}/>
-            <Info label="Last name" value={record.last_name??record.full_name.split(" ").slice(1).join(" ")||"—"}/>
+            <Info label="Last name" value={record.last_name??(record.full_name.split(" ").slice(1).join(" ")||"—")}/>
             <Info label="City" value={record.area_city||"—"}/>
             <Info label="Occupation" value={record.occupation||"—"}/>
           </Card>
