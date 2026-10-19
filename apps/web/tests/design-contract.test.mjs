@@ -46,7 +46,7 @@ test("Communication is compose-first and separates plans, templates and automati
   }
   assert.match(routes,/communication:\["compose","campaigns","templates","automations"\]/);
   assert.match(modules,/CommunicationWorkspace/);
-  assert.match(composer,/channel_ready/);
+  assert.match(composer,/eligible_count/);
   assert.match(composer,/Saving does not send messages/);
   assert.doesNotMatch(communication,/Preparation history/);
   assert.match(shell,/IstClock/);
