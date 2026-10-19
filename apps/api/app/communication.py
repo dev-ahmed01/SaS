@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.accounting import effective_credits, ist_today, month_start, period_balance
 from app.auth import db_session, get_admin, require_csrf
+from app.communication_consent import evaluate_recipients
 from app.models import (
     AdminSession,
     AdminUser,
@@ -33,7 +34,6 @@ from app.models import (
     Prospect,
     SponsorshipRate,
 )
-from app.communication_consent import evaluate_recipients
 from app.security import utc_now
 
 router = APIRouter(prefix="/v1/communication", tags=["Admin communication planning"])
