@@ -30,8 +30,8 @@ from app.models import (
     OrganizationSettings,
     Prospect,
     ProspectArchiveInterval,
-    ProspectUpiIdentifier,
     ProspectStageTransition,
+    ProspectUpiIdentifier,
     Promoter,
     PromoterAssignment,
     SponsorshipRate,
@@ -102,7 +102,9 @@ class ProspectFields(BaseModel):
         today = _ist_month()
         delta = (value.year - today.year) * 12 + value.month - today.month
         if value.day != 1 or not 0 <= delta <= 18:
-            raise ValueError("Tentative start must be a first-of-month date within the next 18 months")
+            raise ValueError(
+                "Tentative start must be a first-of-month date within the next 18 months"
+            )
         return value
 
     @field_validator("area_city")
