@@ -44,7 +44,7 @@ export function CollectionsAllWorkspace({activeOnly=false}:{activeOnly?:boolean}
   const [revision,setRevision] = useState(0);
   return <>
     {!activeOnly&&<AccountingOverview key={revision}/>}
-    <CollectionsReview activeOnly={activeOnly} onReversed={()=>setRevision(n=>n+1)}/>
+    {activeOnly&&<CollectionsReview activeOnly onReversed={()=>setRevision(n=>n+1)}/>}
   </>;
 }
 
