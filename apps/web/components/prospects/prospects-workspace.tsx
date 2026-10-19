@@ -1,23 +1,26 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { AppShell } from "../app-shell";
 import { ModuleTabs } from "../ui/primitives";
 import { ProspectEditor } from "./prospect-editor";
 import { ProspectList } from "./prospect-list";
 
 const tabs=[
-  {id:"add",label:"Add Prospect",href:"/prospects"},
+  {id:"all",label:"All Prospects",href:"/prospects"},
+  {id:"add",label:"Add Prospects",href:"/prospects/add"},
+  {id:"active",label:"Active",href:"/prospects/active"},
   {id:"inactive",label:"Inactive",href:"/prospects/inactive"},
-  {id:"all",label:"All Prospects",href:"/prospects/all"},
 ] as const;
 
-export function ProspectsWorkspace({view}:{view:"add"|"inactive"|"all"}) {
+export function ProspectsWorkspace({view}:{view:"add"|"all"|"active"|"inactive"}){
+  const router=useRouter();
   return <AppShell>
-    <ModuleTabs current={view} tabs={tabs}/>
+    <div className="prospect-tabs"><ModuleTabs current={view} tabs={tabs}/></div>
     <div className="prospects-workspace">
       {view==="add"
-        ? <ProspectEditor onSaved={()=>window.location.assign("/prospects/all")}/>
-        : <ProspectList view={view}/>}
+        ?<ProspectEditor onSaved={saved=>router.push("/prospects/"+saved.id)}/>
+        :<ProspectList view={view}/>}
     </div>
   </AppShell>;
 }

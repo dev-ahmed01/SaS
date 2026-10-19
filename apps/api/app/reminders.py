@@ -126,6 +126,7 @@ def _eligible_unpaid(
     sponsors = list(database.scalars(select(Prospect).where(
         Prospect.organization_id == admin.organization_id,
         Prospect.archived_at.is_(None),
+        Prospect.crm_stage == "active",
     ).order_by(Prospect.id).limit(MAX_SPONSORS + 1)).all())
     if len(sponsors) > MAX_SPONSORS:
         raise HTTPException(

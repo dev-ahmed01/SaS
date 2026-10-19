@@ -6,7 +6,7 @@ import { backendOrigin } from "../../../../../lib/admin-backend";
  * No user-controlled upstream host or unrestricted API forwarding.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const allowedQuery = new Set(["status", "q", "limit", "offset", "include_archived"]);
+const allowedQuery = new Set(["status", "crm_stage", "q", "limit", "offset", "include_archived"]);
 const responseHeaders = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
@@ -17,6 +17,10 @@ function resolveRoute(segments: string[], method: string): string | null {
   if (segments.length === 0 && ["GET", "POST"].includes(method)) return "";
   if (segments.length === 1 && UUID.test(segments[0]) &&
       ["GET", "PATCH", "DELETE"].includes(method)) return "/" + segments[0];
+  if (segments.length === 2 && UUID.test(segments[0]) &&
+      segments[1] === "stage" && method === "POST") {
+    return "/" + segments[0] + "/stage";
+  }
   if (segments.length === 2 && UUID.test(segments[0]) &&
       segments[1] === "restore" && method === "POST") {
     return "/" + segments[0] + "/restore";

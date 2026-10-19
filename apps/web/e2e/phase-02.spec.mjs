@@ -69,7 +69,7 @@ test("all seven approved modules have a secure navigable destination",async ({pa
 });
 
 test("approved tabs remain functional and preview saves stay disabled",async ({page})=>{
-  await page.goto("/prospects");
+  await page.goto("/prospects/add");
   await expect(page.getByRole("button",{name:"Add Prospect"})).toBeEnabled();
   await page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Inactive"}).click();
   await expect(page.getByRole("region",{name:"Inactive Prospects"})).toBeVisible();
@@ -253,50 +253,85 @@ test("wrong password never yields an authenticated session",async ({page,context
 
 test("Admin registers and searches a new prospect without fake payment status",async ({page})=>{
   const label="Phase4 Browser Candidate "+(Date.now()%1000000);
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(label);
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(label);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9876543210");
+  await page.getByRole("textbox",{name:/City/}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
-  const search=page.getByRole("textbox",{name:"Search prospects"});
-  await search.fill(label);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await expect(page.getByText("Never paid")).toBeVisible();
+  await page.getByRole("button",{name:/Edit details/}).click();
+  await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
+  await page.getByRole("button",{name:"Save Changes"}).click();
+  await expect(page.getByText("Teacher")).toBeVisible();
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   const row=page.getByRole("row",{name:new RegExp(label)});
   await expect(row).toBeVisible();
-  await expect(row.getByText("New",{exact:true})).toBeVisible();
-  await expect(row.getByText("+919876543210")).toBeVisible();
-  await row.getByRole("button",{name:"Edit"}).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("dialog").getByText("More details (optional)").click();
-  await page.getByRole("dialog").getByRole("textbox",{name:"WhatsApp number"}).fill("9876543211");
-  await page.getByRole("dialog").getByRole("button",{name:"Save Changes"}).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await search.fill(label);
-  await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
-  await page.getByRole("row",{name:new RegExp(label)}).getByRole("button",{name:"Edit"}).click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("row",{name:new RegExp(label)}).getByRole("button",{name:"Edit"})).toBeFocused();
+  await expect(row.getByText("Active",{exact:true})).toBeVisible();
+  await row.getByRole("link",{name:label}).click();
+  await expect(page.getByText("Teacher")).toBeVisible();
 });
 
 test("Admin can archive and restore a prospect without deleting its record",async ({page})=>{
   const label="Archive Browser Candidate "+(Date.now()%1000000);
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(label);
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543201");
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(label);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9876543201");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
-  const search=page.getByRole("textbox",{name:"Search prospects"});
-  await search.fill(label);
-  let row=page.getByRole("row",{name:new RegExp(label)});
-  await expect(row).toBeVisible();
-  page.once("dialog",dialog=>dialog.accept());
-  await row.getByRole("button",{name:"Archive"}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await page.getByRole("button",{name:/Delete prospect/}).click();
+  await expect(page.getByRole("dialog",{name:"Confirm prospect archive"})).toBeVisible();
+  await page.getByRole("button",{name:"Archive prospect",exact:true}).click();
+  await expect(page.getByText("Archived",{exact:true})).toBeVisible();
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
+  await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
+  await page.getByRole("checkbox",{name:"Include archived"}).check();
+  await page.getByRole("row",{name:new RegExp(label)}).getByRole("link",{name:label}).click();
+  await page.getByRole("button",{name:/Restore prospect/}).click();
+  await page.getByRole("dialog",{name:"Confirm prospect archive"}).getByRole("button",{name:"Restore prospect"}).click();
+  await expect(page.getByText("Active",{exact:true}).first()).toBeVisible();
+});
+
+test("Prospect CRM tabs, profile cards and reasoned inactivity work without changing payment status",async ({page})=>{
+  const name="Stage Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects");
+  const tabs=page.getByRole("navigation",{name:"Module views"});
+  await expect(tabs.getByRole("link")).toHaveCount(4);
+  await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
+    "All Prospects","Add Prospects","Active","Inactive"
+  ]);
+  const columns=await tabs.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(" ").length);
+  expect(columns).toBe(4);
+  await tabs.getByRole("link",{name:"Add Prospect"}).click();
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9765432100");
+  await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).fill("2");
+  await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading",{name:"Sponsorship"})).toBeVisible();
+  await expect(page.getByText("Never paid")).toBeVisible();
+  await page.getByRole("button",{name:/Mark inactive/}).click();
+  const dialog=page.getByRole("dialog",{name:"Mark prospect inactive"});
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button",{name:"Confirm Inactive"})).toBeDisabled();
+  await dialog.getByRole("combobox",{name:/Reason for leaving/}).selectOption("budget");
+  await dialog.getByRole("button",{name:"Confirm Inactive"}).click();
+  await expect(page.getByText("Budget or affordability",{exact:true})).toBeVisible();
+  await expect(page.getByText("0",{exact:true}).first()).toBeVisible();
+  await expect(page.getByText("Never paid")).toBeVisible();
+  await page.goto("/prospects/inactive");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
+  const row=page.getByRole("row",{name:new RegExp(name)});
+  await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
+  await row.getByRole("button",{name:/Reactivate/}).click();
+  await page.getByRole("dialog",{name:"Reactivate prospect"}).getByRole("button",{name:"Mark Active"}).click();
   await expect(row).toHaveCount(0);
-  await page.getByRole("checkbox",{name:"Show archived"}).check();
-  row=page.getByRole("row",{name:new RegExp(label)});
-  await expect(row).toBeVisible();
-  await row.getByRole("button",{name:"Restore"}).click();
-  await expect(row.getByRole("button",{name:"Archive"})).toBeVisible();
+  await page.goto("/prospects/active");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
+  await expect(page.getByRole("row",{name:new RegExp(name)})).toBeVisible();
 });
 
 test("Admin creates and searches promoters in the approved Active and All views",async ({page})=>{
@@ -347,11 +382,11 @@ test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",a
   const key=Date.now()%1000000;
   const sponsor="Phase5 Sponsor "+key;
   const promoter="Phase5 Liaison "+key;
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(sponsor);
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9676"+String(key).padStart(6,"0"));
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9676"+String(key).padStart(6,"0"));
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/promoters");
   await page.getByRole("textbox",{name:"Full name"}).fill(promoter);
   await page.getByRole("textbox",{name:"Phone number"}).fill("9566"+String(key).padStart(6,"0"));
@@ -373,12 +408,12 @@ test("Admin assigns a sponsor to a promoter without sending WhatsApp messages",a
 
 test("Collections All shows real monthly commitments, not imaginary deposits",async ({page})=>{
   const name="Ledger Candidate "+(Date.now()%1000000);
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9876543210");
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  const agreed=Number(await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).inputValue())*250;
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9876543210");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
   await expect(page.getByText("Verified collections")).toBeVisible();
@@ -431,33 +466,28 @@ test("manual collection amount accepts only ₹250 denominations",async ({page})
   // No sponsor is selected: this is input validation only, never a real receipt.
 });
 
-test("Approved sponsor denomination selector supports multiples of 250 without a floating list",async ({page})=>{
-  await page.goto("/prospects");
-  const tiers=page.getByRole("combobox",{name:"Monthly contribution (₹)"});
-  await expect(tiers).toBeVisible();
-  await tiers.selectOption("750");
-  await expect(tiers).toHaveValue("750");
-  await expect(page.getByRole("spinbutton",{name:/Custom monthly contribution/})).toHaveCount(0);
-  await tiers.selectOption("other");
-  const custom=page.getByRole("spinbutton",{name:/Custom monthly contribution/});
-  await expect(custom).toBeVisible();
-  await custom.fill("375");
-  expect(await custom.evaluate(element=>element.checkValidity())).toBe(false);
-  await custom.fill("15000");
-  expect(await custom.evaluate(element=>element.checkValidity())).toBe(true);
+test("Sponsorship tokens enforce whole ₹250 units",async ({page})=>{
+  await page.goto("/prospects/add");
+  const tokens=page.getByRole("spinbutton",{name:"Sponsorship Tokens"});
+  await expect(tokens).toBeVisible();
+  await tokens.fill("3");
+  await expect(page.getByText("₹750 / month")).toBeVisible();
+  await tokens.fill("1.5");
+  expect(await tokens.evaluate(element=>element.checkValidity())).toBe(false);
+  await tokens.fill("60");
+  expect(await tokens.evaluate(element=>element.checkValidity())).toBe(true);
 });
 
 test("Admin records a manual contribution without claiming WhatsApp delivery",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
   const name="Manual Pay Sponsor "+id;
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9826"+id);
-  await page.getByText("More details (optional)").click();
-  await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  const agreed=Number(await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).inputValue())*250;
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9826"+id);
+  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections");
   await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
@@ -488,11 +518,11 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
 test("Duplicate manual reference cannot create a second contribution",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
   const name="Receipt Retry Sponsor "+id;
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9836"+id);
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9836"+id);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections");
   await expect(page.getByRole("heading",{name:"Record Collection"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
@@ -528,14 +558,13 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
 test("Admin reverses a mistaken collection and the net ledger returns to unpaid",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
   const name="Reversal Browser Sponsor "+id;
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  const agreed=Number(await page.getByRole("combobox",{name:"Monthly contribution (₹)"}).inputValue());
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9847"+id);
-  await page.getByText("More details (optional)").click();
-  await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  const agreed=Number(await page.getByRole("spinbutton",{name:"Sponsorship Tokens"}).inputValue())*250;
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9847"+id);
+  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
 
   await page.goto("/collections");
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
@@ -817,13 +846,12 @@ test("Protected payout gateway rejects forged actions or unsupported routes",asy
 test("Reminders WhatsApp preview uses real sponsor eligibility with no sending",async ({page})=>{
   const suffix=String(Date.now()%1000000).padStart(6,"0");
   const name="Reminder Candidate "+suffix;
-  await page.goto("/prospects");
-  await page.getByRole("textbox",{name:"Full name"}).fill(name);
-  await page.getByRole("textbox",{name:"Mobile number"}).fill("9857"+suffix);
-  await page.getByText("More details (optional)").click();
-  await page.getByRole("checkbox",{name:/WhatsApp communication consent/}).check();
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(name);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9857"+suffix);
+  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/all$/);
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/reminders/whatsapp");
   await expect(page.getByRole("heading",{name:"WhatsApp eligibility"})).toBeVisible();
   const targets=page.getByRole("region",{name:"Eligible reminder recipients"});

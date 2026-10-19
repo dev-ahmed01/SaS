@@ -10,12 +10,12 @@ import json
 import re
 import uuid
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -28,8 +28,11 @@ from app.models import (
     AdminUser,
     AuditEvent,
     OrganizationSettings,
+    Promoter,
+    PromoterAssignment,
     Prospect,
     ProspectArchiveInterval,
+    ProspectStageTransition,
     ProspectUpiIdentifier,
     SponsorshipRate,
 )
@@ -59,6 +62,11 @@ class ProspectFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str = Field(min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+    occupation: str | None = Field(default=None, max_length=120)
+    start_month: date | None = None
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(default="", max_length=120)
@@ -78,6 +86,26 @@ class ProspectFields(BaseModel):
         if len(result) < 2:
             raise ValueError("Provide at least two characters")
         return result
+
+    @field_validator("first_name", "last_name", "occupation")
+    @classmethod
+    def clean_profile(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _clean_text(value) or None
+
+    @field_validator("start_month")
+    @classmethod
+    def valid_start_month(cls, value: date | None) -> date | None:
+        if value is None:
+            return None
+        today = _ist_month()
+        delta = (value.year - today.year) * 12 + value.month - today.month
+        if value.day != 1 or not 0 <= delta <= 18:
+            raise ValueError(
+                "Tentative start must be a first-of-month date within the next 18 months"
+            )
+        return value
 
     @field_validator("area_city")
     @classmethod
@@ -115,9 +143,13 @@ class ProspectUpdate(BaseModel):
 
     version: int = Field(ge=1)
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+    occupation: str | None = Field(default=None, max_length=120)
     mobile_number: str | None = Field(default=None, min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
-    area_city: str | None = Field(default=None, min_length=2, max_length=120)
+    area_city: str | None = Field(default=None, max_length=120)
     monthly_contribution_paise: int | None = Field(default=None, ge=1, le=MAX_AMOUNT_PAISE)
     next_followup_on: date | None = None
     last_contact_on: date | None = None
@@ -133,10 +165,13 @@ class ProspectUpdate(BaseModel):
         if self.model_fields_set == {"version"}:
             raise ValueError("Specify at least one field to update")
         # Normalize using the same rules as the creation request.
+        for name in ("first_name", "last_name", "occupation"):
+            if name in self.model_fields_set and getattr(self, name) is not None:
+                setattr(self, name, _clean_text(getattr(self, name)) or None)
         for name in ("full_name", "area_city"):
             if name in self.model_fields_set:
                 value = _clean_text(getattr(self, name))
-                if len(value) < 2:
+                if len(value) < 2 and (name != "area_city" or value):
                     raise ValueError("Provide at least two characters")
                 setattr(self, name, value)
         for name in ("mobile_number", "whatsapp_number"):
@@ -146,6 +181,32 @@ class ProspectUpdate(BaseModel):
         if "notes" in self.model_fields_set and self.notes is not None:
             self.notes = self.notes.strip() or None
         return self
+
+
+class StageDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    stage: Literal["active", "inactive"]
+    reason: Literal["not_interested", "budget", "timing", "unreachable", "other"] | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_inactive_reason(self) -> "StageDecision":
+        if self.stage == "inactive" and not self.reason:
+            raise ValueError("An inactive reason is required")
+        if self.stage == "active" and self.reason:
+            raise ValueError("Reactivation does not take an inactive reason")
+        if self.note is not None:
+            self.note = _clean_text(self.note) or None
+        return self
+
+
+class StageHistoryRead(BaseModel):
+    from_stage: Literal["active", "inactive"]
+    to_stage: Literal["active", "inactive"]
+    reason: str | None
+    note: str | None
+    changed_at: datetime
 
 
 class UpiAdd(BaseModel):
@@ -163,6 +224,18 @@ class UpiRead(BaseModel):
 class ProspectRead(BaseModel):
     id: uuid.UUID
     full_name: str
+    first_name: str | None
+    last_name: str | None
+    email: str | None
+    occupation: str | None
+    crm_stage: Literal["active", "inactive"]
+    crm_inactive_reason: str | None
+    crm_inactive_note: str | None
+    crm_stage_changed_at: datetime | None
+    days_inactive: int | None
+    assigned_promoter_id: uuid.UUID | None
+    assigned_promoter_name: str | None
+    stage_history: list[StageHistoryRead]
     mobile_number: str
     whatsapp_number: str | None
     area_city: str
@@ -217,10 +290,41 @@ def _upi_list(prospect: Prospect) -> list[UpiRead]:
     ]
 
 
-def _read(prospect: Prospect, status_override: str | None = None) -> ProspectRead:
+def _read(prospect: Prospect, status_override: str | None = None,
+          *, db: Session | None = None) -> ProspectRead:
+    promoter = None
+    if db is not None:
+        promoter = db.execute(select(PromoterAssignment.promoter_id, Promoter.full_name).join(
+            Promoter, Promoter.id == PromoterAssignment.promoter_id,
+        ).where(
+            PromoterAssignment.organization_id == prospect.organization_id,
+            PromoterAssignment.prospect_id == prospect.id,
+            PromoterAssignment.ended_at.is_(None),
+            Promoter.organization_id == prospect.organization_id,
+        )).first()
+    changed_at = prospect.crm_stage_changed_at
+    if changed_at is not None and changed_at.tzinfo is None:
+        changed_at = changed_at.replace(tzinfo=UTC)
+    days_inactive = (max(0, (utc_now() - changed_at).days)
+                     if prospect.crm_stage == "inactive" and changed_at else None)
     return ProspectRead(
         id=prospect.id,
         full_name=prospect.full_name,
+        first_name=prospect.first_name,
+        last_name=prospect.last_name,
+        email=prospect.email,
+        occupation=prospect.occupation,
+        crm_stage=prospect.crm_stage,
+        crm_inactive_reason=prospect.crm_inactive_reason,
+        crm_inactive_note=prospect.crm_inactive_note,
+        crm_stage_changed_at=prospect.crm_stage_changed_at,
+        days_inactive=days_inactive,
+        assigned_promoter_id=promoter.promoter_id if promoter else None,
+        assigned_promoter_name=promoter.full_name if promoter else None,
+        stage_history=[StageHistoryRead(
+            from_stage=row.from_stage, to_stage=row.to_stage,
+            reason=row.reason, note=row.note, changed_at=row.changed_at,
+        ) for row in prospect.stage_transitions],
         mobile_number=prospect.mobile_number,
         whatsapp_number=prospect.whatsapp_number,
         area_city=prospect.area_city,
@@ -334,6 +438,7 @@ def list_prospects(
     database: Annotated[Session, Depends(db_session)],
     response: Response,
     status: Literal["new", "active", "inactive"] | None = None,
+    crm_stage: Literal["active", "inactive"] | None = None,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -343,6 +448,8 @@ def list_prospects(
     conditions = [Prospect.organization_id == admin.organization_id]
     if not include_archived:
         conditions.append(Prospect.archived_at.is_(None))
+    if crm_stage is not None:
+        conditions.append(Prospect.crm_stage == crm_stage)
     if q.strip():
         escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         term = f"%{escaped}%"
@@ -350,6 +457,8 @@ def list_prospects(
             Prospect.full_name.ilike(term, escape="\\"),
             Prospect.mobile_number.ilike(term, escape="\\"),
             Prospect.area_city.ilike(term, escape="\\"),
+            Prospect.email.ilike(term, escape="\\"),
+            Prospect.occupation.ilike(term, escape="\\"),
         ))
     results = database.scalars(
         select(Prospect).where(*conditions)
@@ -357,7 +466,7 @@ def list_prospects(
     ).all()
     fresh = _project_statuses(database, admin, results)
     matching = [
-        _read(p, fresh.get(p.id))
+        _read(p, fresh.get(p.id), db=database)
         for p in results
         if status is None or fresh.get(p.id, p.lifecycle_status) == status
     ]
@@ -412,7 +521,7 @@ def create_prospect(
                 raise HTTPException(status_code=409, detail="Request ID reused with different data")
             response.status_code = 200
             response.headers["Cache-Control"] = "no-store"
-            return _read(existing)
+            return _read(existing, db=database)
 
     settings = database.get(OrganizationSettings, admin.organization_id)
     if settings is None:
@@ -432,7 +541,7 @@ def create_prospect(
         for identifier in ids:
             _upi_digest(identifier)
     fields = payload.model_dump(exclude={
-        "upi_ids", "monthly_contribution_paise", "request_id",
+        "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
     })
     prospect = Prospect(
         organization_id=admin.organization_id,
@@ -442,7 +551,7 @@ def create_prospect(
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
-        start_month=_ist_month(),
+        start_month=payload.start_month or _ist_month(),
     )
     try:
         database.add(prospect)
@@ -473,10 +582,10 @@ def create_prospect(
             if same is not None and same.registration_payload_hash == payload_hash:
                 response.status_code = 200
                 response.headers["Cache-Control"] = "no-store"
-                return _read(same)
+                return _read(same, db=database)
         raise HTTPException(status_code=409, detail="Prospect registration conflict") from exc
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 @router.get("/{prospect_id}", response_model=ProspectRead)
 def get_prospect(
@@ -488,7 +597,7 @@ def get_prospect(
     prospect = _get(database, context[0], prospect_id, allow_archived=True)
     current = _project_statuses(database, context[0], [prospect])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect, current.get(prospect.id))
+    return _read(prospect, current.get(prospect.id), db=database)
 
 
 @router.patch("/{prospect_id}", response_model=ProspectRead)
@@ -542,7 +651,7 @@ def update_prospect(
                after={"version": prospect.version, "changed_fields": sorted(changed)})
         database.commit()
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 
 @router.delete("/{prospect_id}", status_code=204)
@@ -605,7 +714,7 @@ def restore_prospect(
            before={"version": previous}, after={"version": prospect.version})
     database.commit()
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 
 @router.post("/{prospect_id}/upi-ids", status_code=201, response_model=ProspectRead)
@@ -629,7 +738,7 @@ def add_upi(
     database.commit()
     database.refresh(prospect, attribute_names=["upi_ids"])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 
 @router.delete("/{prospect_id}/upi-ids/{upi_id}", response_model=ProspectRead)
@@ -661,4 +770,44 @@ def revoke_upi(
     database.commit()
     database.refresh(prospect, attribute_names=["upi_ids"])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
+
+
+@router.post("/{prospect_id}/stage", response_model=ProspectRead)
+def change_crm_stage(
+    prospect_id: uuid.UUID,
+    payload: StageDecision,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+    response: Response,
+) -> ProspectRead:
+    """Manually track donor outreach and attrition without rewriting payment status."""
+    admin = context[0]
+    prospect = _get(database, admin, prospect_id, lock=True)
+    _check_version(prospect, payload.version)
+    if prospect.crm_stage == payload.stage:
+        raise HTTPException(status_code=409, detail="Prospect is already in that CRM stage")
+    previous = prospect.crm_stage
+    now = utc_now()
+    database.add(ProspectStageTransition(
+        organization_id=admin.organization_id,
+        prospect_id=prospect.id,
+        from_stage=previous, to_stage=payload.stage,
+        reason=payload.reason if payload.stage == "inactive" else None,
+        note=payload.note if payload.stage == "inactive" else None,
+        changed_at=now, actor_admin_id=admin.id,
+    ))
+    prospect.crm_stage = payload.stage
+    prospect.crm_stage_changed_at = now
+    prospect.crm_inactive_reason = payload.reason if payload.stage == "inactive" else None
+    prospect.crm_inactive_note = payload.note if payload.stage == "inactive" else None
+    prospect.version += 1
+    prospect.updated_at = now
+    _audit(database, admin, prospect, "prospect.crm_stage_changed",
+           before={"stage": previous, "version": payload.version},
+           after={"stage": payload.stage, "reason_code": payload.reason,
+                  "version": prospect.version})
+    database.commit()
+    database.expire(prospect, ["stage_transitions"])
+    response.headers["Cache-Control"] = "no-store"
+    return _read(prospect, db=database)
