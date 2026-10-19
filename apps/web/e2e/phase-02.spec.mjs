@@ -77,8 +77,8 @@ test("approved tabs remain functional and preview saves stay disabled",async ({p
   await expect(page.getByRole("region",{name:"All Prospects"})).toBeVisible();
   await page.goto("/collections");
   await expect(page.getByRole("button",{name:"Save Collection"})).toBeDisabled();
-  await page.getByRole("link",{name:"Active",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"Active collections"})).toBeVisible();
+  await page.getByRole("link",{name:"Received",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Received collections"})).toBeVisible();
 });
 
 test("reminder screens do not send messages before Phase 11",async ({page})=>{
@@ -513,6 +513,44 @@ test("Accounting rejects forged requests and never exposes payment write actions
     headers:{"Origin":"http://127.0.0.1:3000"},
   });
   expect(unsupported.status()).toBe(404);
+});
+
+test("Finance modules use four full-width tabs, visible evidence dates and month forecasts",async ({page})=>{
+  await page.goto("/collections");
+  let tabs=page.getByRole("navigation",{name:"Module views"});
+  await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
+    "Add Collection","Received","Outstanding","All"
+  ]);
+  await expect(page.locator(".finance-form-panel")).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Search sponsor"})).toBeVisible();
+  await expect(page.getByRole("combobox",{name:"Amount received (₹)"})).toBeVisible();
+  await expect(page.getByRole("combobox",{name:"Payment method"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Transaction reference"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Sponsorship month"})).toHaveCount(0);
+  await expect(page.locator('input[aria-label="Sponsorship month"]')).toBeVisible();
+  await expect(page.locator('input[aria-label="Received date (IST)"]')).toBeVisible();
+  await expect(page.locator("details.optional-details")).toHaveCount(0);
+  await tabs.getByRole("link",{name:"Outstanding"}).click();
+  await expect(page.getByRole("heading",{name:"Outstanding sponsorships"})).toBeVisible();
+  await expect(page.getByRole("navigation",{name:"Module views"}).getByRole("link",{name:"Outstanding"})).toHaveAttribute("aria-current","page");
+  await page.goto("/payouts");
+  tabs=page.getByRole("navigation",{name:"Module views"});
+  await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
+    "Add Payout","Planned","Disbursed","All"
+  ]);
+  await expect(page.getByRole("textbox",{name:"Payee name"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Payout purpose"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Payout amount (₹)"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Add payout"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Payout notes"})).toBeVisible();
+  await expect(page.locator("details.optional-details")).toHaveCount(0);
+  await tabs.getByRole("link",{name:"Planned"}).click();
+  await expect(page.getByRole("region",{name:"Planned payout commitments"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Monthly payout forecast"})).toBeVisible();
+  await tabs.getByRole("link",{name:"Disbursed"}).click();
+  await expect(page.getByRole("region",{name:"Disbursed payouts"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Disbursement month"})).toHaveCount(0);
+  await expect(page.locator('input[aria-label="Disbursement month"]')).toBeVisible();
 });
 
 test("manual collection amount accepts only ₹250 denominations",async ({page})=>{
