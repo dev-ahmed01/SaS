@@ -11,7 +11,7 @@ const modules = [
 async function logIn(page) {
   await page.goto("/login");
   await page.getByRole("textbox",{name:"Email address"}).fill(ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(ADMIN_PASSWORD);
+  await page.getByLabel("Password",{exact:true}).fill(ADMIN_PASSWORD);
   const loginResponse = page.waitForResponse(r => r.url().endsWith("/api/admin/login"),{timeout:5000});
   await page.getByRole("button",{name:"Sign In"}).click();
   const response=await loginResponse;
@@ -28,6 +28,21 @@ async function logIn(page) {
 
 test.beforeEach(async ({page}) => {
   await logIn(page);
+});
+
+test("login password can be revealed and hidden without submitting",async ({page})=>{
+  await page.context().clearCookies();
+  await page.goto("/login");
+  const input=page.getByLabel("Password",{exact:true});
+  await expect(input).toHaveAttribute("type","password");
+  await input.fill("sample-visible-password");
+  await page.getByRole("button",{name:"Show password"}).click();
+  await expect(input).toHaveAttribute("type","text");
+  await expect(input).toHaveValue("sample-visible-password");
+  await page.getByRole("button",{name:"Hide password"}).click();
+  await expect(input).toHaveAttribute("type","password");
+  await expect(input).toHaveValue("sample-visible-password");
+  await expect(page).toHaveURL(/\/login$/);
 });
 
 test("all seven approved modules have a secure navigable destination",async ({page,isMobile})=>{
@@ -206,7 +221,7 @@ test("wrong password never yields an authenticated session",async ({page,context
   await context.clearCookies();
   await page.goto("/login");
   await page.getByRole("textbox",{name:"Email address"}).fill(ADMIN_EMAIL);
-  await page.getByLabel("Password").fill("incorrect-password");
+  await page.getByLabel("Password",{exact:true}).fill("incorrect-password");
   await page.getByRole("button",{name:"Sign In"}).click();
   await expect(page.locator(".form-error")).toContainText("Unable to sign in");
   await page.goto("/dashboard");
