@@ -745,9 +745,8 @@ test("Recurring payouts are planned before separate attested outgoing payment",a
   await expect(section.getByRole("status")).toContainText(/Recorded the actual outgoing payment/);
   await expect(plan.getByRole("cell").nth(4)).toContainText("742.35");
   await expect(plan.getByRole("button",{name:"Record paid"})).toHaveCount(0);
-  const history=page.getByRole("region",{name:"Recorded payout history"});
-  await expect(history.getByRole("row",{name:new RegExp(name)})).toBeVisible();
-  await expect(history.getByText("****"+stamp.slice(-4))).toBeVisible();
+  await expect(page.getByRole("region",{name:"Recorded payout history"})).toHaveCount(0);
+  await expect(plan.getByRole("cell").nth(4)).toContainText("742.35");
 });
 
 test("One-time payouts stay in All after payment; recurring Active excludes them",async ({page})=>{
@@ -851,9 +850,9 @@ test("Admin plans and confirms a recurring payout with separate payment evidence
   await page.goto("/payouts/all");
   const all=page.getByRole("region",{name:"All payout plans"});
   await expect(all.getByRole("table").first().getByRole("row",{name:new RegExp(payee)})).toBeVisible();
-  const payment=page.getByRole("region",{name:"Recorded payout history"});
-  await expect(payment.getByRole("row",{name:new RegExp(payee)})).toBeVisible();
-  await expect(payment.getByRole("row",{name:new RegExp(payee)})).toContainText("735.00");
+  await expect(page.getByRole("region",{name:"Recorded payout history"})).toHaveCount(0);
+  await expect(all.getByRole("table").first().getByRole("row",{name:new RegExp(payee)})
+    .getByRole("cell").nth(4)).toContainText("735.00");
 });
 
 test("One-time payouts remain in All and are not recurring Active obligations",async ({page})=>{
