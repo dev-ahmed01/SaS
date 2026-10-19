@@ -344,4 +344,4 @@ def test_outstanding_view_filters_before_pagination_but_preserves_month_totals(a
     assert due["due_paise"] == full["due_paise"] == 100000
     assert due["verified_paise"] == full["verified_paise"] == 50000
     assert due["outstanding_paise"] == full["outstanding_paise"] == 50000
-    assert client.get("/v1/accounting/overview?outstanding_only=true&offset=1").json()["items"] == []
+    later = client.get("/v1/accounting/overview?outstanding_only=true&offset=1")\n    assert later.json()["items"] == []
