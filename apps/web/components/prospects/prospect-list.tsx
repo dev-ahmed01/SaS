@@ -88,6 +88,10 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
             <td>{p.assigned_promoter_name||"Unassigned"}</td>
             <td>
               <div className="crm-stage-cell">
+                <span className="crm-pipeline-label">
+                  <span className="pipeline-stage-dot" style={{backgroundColor:p.pipeline_stage_color??"#94a3b8"}}/>
+                  {p.pipeline_stage_name??"Unassigned"}
+                </span>
                 <span className={"status-pill "+p.crm_stage}>{p.crm_stage==="active"?"Active":"Inactive"}</span>
                 {p.crm_stage==="inactive"&&<span className="crm-stage-muted" title={reasonLabel(p.crm_inactive_reason)}>
                   {p.days_inactive??0} days inactive</span>}
