@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
 type RecipientCheck={
   id:string;campaign_id:string;eligible_count:number;suppressed_count:number;
@@ -10,8 +11,8 @@ type RecipientCheck={
 };
 
 export function CommunicationCampaigns({revision}:{revision:number}){
-  const [items,setItems]=useState<Campaign[]>([]);
-  const [loading,setLoading]=useState(true);
+  const [items,setItems]=useState<Campaign[]>(()=>recentSnapshot<Campaign[]>("/api/admin/communication/campaigns")??[]);
+  const [loading,setLoading]=useState(()=>!recentSnapshot<Campaign[]>("/api/admin/communication/campaigns"));
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState("");
@@ -21,8 +22,12 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [checking,setChecking]=useState(false);
   const [reviewError,setReviewError]=useState("");
   useEffect(()=>{
-    setLoading(true);
-    apiGet<Campaign[]>("/campaigns").then(setItems)
+    const cached=recentSnapshot<Campaign[]>("/api/admin/communication/campaigns");
+    if(cached)setItems(cached);
+    setLoading(!cached);
+    apiGet<Campaign[]>("/campaigns").then(rows=>{
+      rememberSnapshot("/api/admin/communication/campaigns",rows);setItems(rows);
+    })
       .catch(()=>setError("Could not load saved campaigns."))
       .finally(()=>setLoading(false));
   },[revision,reload]);
@@ -74,7 +79,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     <div className="comm-campaign-table-scroll"><table className="data-table comm-campaign-table">
       <thead><tr>{["Campaign","Channel","Audience","At draft","Planned IST","Status","Action"].map(h=>
         <th key={h} scope="col">{h}</th>)}</tr></thead>
-      <tbody>{loading?<tr><td colSpan={7}>Loading campaigns…</td></tr>:!items.length?
+      <tbody>{loading&&items.length===0?<tr><td colSpan={7}>Loading campaigns…</td></tr>:!items.length?
         <tr><td colSpan={7} className="comm-empty">No saved campaigns yet. Start in Compose.</td></tr>:
         items.map(item=><tr key={item.id}>
           <td><div className="comm-campaign-title"><strong>{item.title}</strong>
