@@ -106,7 +106,7 @@ export function PayoutAdd(){
         {kind==="one_time"&&<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
           <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
             onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
-        <details className="optional-details"><summary>Schedule and notes (optional)</summary>
+        <div className="payout-schedule-fields">
           <div className="optional-fields">
             {kind==="recurring"&&<label className="field"><span className="field-label">First payment month (IST) *</span>
               <input required type="month" aria-label="First payment month (IST)" value={start}
@@ -115,7 +115,7 @@ export function PayoutAdd(){
               <textarea rows={2} aria-label="Payout notes" maxLength={800} value={notes}
                 onChange={e=>{setNotes(e.target.value);change();}}/></label>
           </div>
-        </details>
+        </div>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
