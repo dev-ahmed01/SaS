@@ -6,7 +6,7 @@ The original **Reminders** screen displayed system preparation history, provider
 single-purpose sponsor/promoter day previews. The approved replacement is **Communication**,
 a reusable workspace for Admin to communicate with prospects, promoters or both.
 
-The four views are **Compose**, **Campaigns**, **Templates**, and **Automations**.
+The three navigation views are **Compose**, **Campaigns**, and **Templates & Automations**.\nThe combined last view stacks the two independent protected workflows vertically,\nwithout a right-hand sidebar. The previous /communication/automations URL redirects.
 There is no preparation-history table in the new UI. Legacy `/reminders`,
 `/reminders/whatsapp`, and `/reminders/email` redirect to `/communication`.
 
@@ -33,7 +33,7 @@ WhatsApp provider template ID, but the ID alone never proves Meta approval.
 1. **Compose:** audience (prospects, promoters, both); segment (all, active,
    inactive, unpaid); channel (WhatsApp, Email); message category, body, optional
    saved template, schedule in IST; live sample of consent-eligible recipients.
-   Save produces a durable **draft** or **planned** campaign and no transport work.
+   Save produces a durable **draft** or **planned** campaign and no transport work.\n   The right-hand audience and message previews were removed from the UI; actual\n   permission checks remain in the backend and simulation-only review service.
 2. **Templates:** versioned add/edit/soft-archive, with separation between
    template copy and provider template ID. Referenced automation templates
    cannot be archived without removing the rule.
@@ -89,7 +89,7 @@ consent; no messages, receipts or provider dispatches are fabricated. It is
 safe to rerun without duplicating demo rows but **must only run in an isolated,
 disposable local-demo database**.
 
-## Next production milestone
+## Consent and simulation-only preparation (migration 0017)\n\n- Admin can append channel-specific grant or revoke evidence with source and proof\n  reference, without implying that stored phone/email addresses are consent.\n- Campaign recipient preflight is an idempotent, tenant-scoped dry run storing\n  one status per matching contact but **never** a send job, phone number or\n  message body. It is protected by CSRF and cannot be enabled as delivery.\n- Communication checks email proof explicitly; WhatsApp reminders retain\n  their legacy consent checkbox, while general WhatsApp outreach also requires\n  documented permission. Opt-outs suppress every contact sharing that address.\n- Existing independently approved Pabbly transport also checks these opt-outs\n  immediately before any network request. Unconfigured message providers stay off.\n- Collection external reference numbers are optional; absent references are\n  represented by internal unique ledger keys only, not invented bank evidence.\n\n## Next production milestone
 
 With explicit approval of provider(s) and consent policy, implement an outbound
 transport adapter (WhatsApp template messages; email via a verified sending
