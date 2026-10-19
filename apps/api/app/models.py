@@ -159,7 +159,9 @@ class Prospect(Base):
     last_name: Mapped[str | None] = mapped_column(String(80))
     email: Mapped[str | None] = mapped_column(String(320))
     occupation: Mapped[str | None] = mapped_column(String(120))
-    crm_stage: Mapped[str] = mapped_column(String(12), nullable=False, default="active", server_default="active")
+    crm_stage: Mapped[str] = mapped_column(
+        String(12), nullable=False, default="active", server_default="active"
+    )
     crm_stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     crm_inactive_reason: Mapped[str | None] = mapped_column(String(64))
     crm_inactive_note: Mapped[str | None] = mapped_column(String(500))
