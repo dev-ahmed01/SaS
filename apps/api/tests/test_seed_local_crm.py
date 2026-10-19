@@ -9,10 +9,10 @@ from app.bootstrap_admin import provision_admin
 from app.models import (
     AdminUser,
     Base,
+    PayoutPayment,
+    PayoutPlan,
     Promoter,
     PromoterAssignment,
-    PayoutPlan,
-    PayoutPayment,
     Prospect,
     ProspectStageDefinition,
     ProspectStageTransition,
