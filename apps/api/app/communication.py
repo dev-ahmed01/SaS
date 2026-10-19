@@ -30,7 +30,7 @@ from app.models import (
     Prospect,
     SponsorshipRate,
 )
-from app.security import as_utc, utc_now
+from app.security import utc_now
 
 router = APIRouter(prefix="/v1/communication", tags=["Admin communication planning"])
 Channel = Literal["whatsapp", "email"]
@@ -260,7 +260,7 @@ def _audience_preview(
     if segment == "unpaid" and promoters:
         for row in db.scalars(select(PromoterAssignment).where(
             PromoterAssignment.organization_id == org,
-            PromoterAssignment.unassigned_at.is_(None),
+            PromoterAssignment.ended_at.is_(None),
         )):
             if row.prospect_id in unpaid_ids:
                 assignments[row.promoter_id].add(row.prospect_id)
