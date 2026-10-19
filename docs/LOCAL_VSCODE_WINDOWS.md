@@ -91,7 +91,7 @@ From `C:\Users\Admin\Desktop\SaS\apps\api`:
 .\.venv\Scripts\python.exe -m app.seed_local_crm --apply --confirm-synthetic-only
 ```
 
-It creates **100 clearly named Demo prospects, 10 Demo promoters and 20 planned Demo payouts**, with sample cities, ₹250-tier sponsorship commitments, 75 Active and 25 Inactive CRM statuses, inactivity reasons, optional promoter assignments, and example pipeline stages if none have been configured. Existing stage definitions are retained. This does **not** create received collections, outgoing payout disbursements, verified credits, WhatsApp consent or outbox messages; it changes local dashboard commitment metrics. Rerunning the same command does not duplicate the synthetic people.
+It creates **100 clearly named Demo prospects, 10 Demo promoters, 20 planned Demo payouts, 4 Communication templates, 3 message drafts/plans and 2 inactive automation definitions**, with sample cities, ₹250-tier sponsorship commitments, 75 Active and 25 Inactive CRM statuses, inactivity reasons, optional promoter assignments, and example pipeline stages if none have been configured. Existing stage definitions are retained. This does **not** create received collections, outgoing payout disbursements, verified credits, WhatsApp consent or outbox messages; it changes local dashboard commitment metrics. Rerunning the same command does not duplicate the synthetic people or Communication plans.
 
 Seed data is never loaded automatically at startup or added to production. Back up your existing database if it contains anything important. Do not share the seeded database as genuine financial data.
 
@@ -110,3 +110,14 @@ Seed data is never loaded automatically at startup or added to production. Back 
 In both terminals press **Ctrl+C**. From the repository root, run `docker compose stop db`. This **keeps** the PostgreSQL data volume intact.
 
 Production login continues to require a valid email, Argon2 authentication and passwords of at least 12 characters. The development alias and short-password exception must never be used for real Foundation operations.
+
+## Communication and live IST
+
+The former Reminders module is now **Communication** at
+`http://localhost:3000/communication`. Existing `/reminders` links redirect.
+It provides Compose, Campaigns, Templates and Automations, but **does not send**
+WhatsApp or Email merely because a draft is saved or scheduled. Real delivery
+requires separately approved messaging providers and permission controls.
+The global page header shows server-synchronized IST time, refreshed every
+15 seconds and after returning to the browser tab. Read
+`docs/COMMUNICATION_WORKSPACE.md` for provider activation requirements.

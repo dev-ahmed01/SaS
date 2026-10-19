@@ -27,8 +27,11 @@ REQUIRED_TABLES = (
     "message_outbox",
     "prospect_stage_transitions",
     "prospect_stage_definitions",
+    "communication_templates",
+    "communication_campaigns",
+    "communication_rules",
 )
-EXPECTED_MIGRATION = "0015_promoters_pipeline"
+EXPECTED_MIGRATION = "0016_communication"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
@@ -132,6 +135,18 @@ def audit_database(engine) -> dict:
                     LEFT JOIN prospects s ON s.id=a.prospect_id
                        AND s.organization_id=a.organization_id
                     WHERE p.id IS NULL OR s.id IS NULL
+                """,
+                "communication_template_tenants": """
+                    SELECT COUNT(*) FROM communication_campaigns c
+                    LEFT JOIN communication_templates t ON t.id=c.template_id
+                      AND t.organization_id=c.organization_id
+                    WHERE c.template_id IS NOT NULL AND t.id IS NULL
+                """,
+                "communication_rule_tenants": """
+                    SELECT COUNT(*) FROM communication_rules r
+                    LEFT JOIN communication_templates t ON t.id=r.template_id
+                      AND t.organization_id=r.organization_id
+                    WHERE t.id IS NULL
                 """,
                 "reminder_batch_tenants": """
                     SELECT COUNT(*) FROM reminder_intents i

@@ -8,6 +8,10 @@ const shell = read("../components/app-shell.tsx");
 const modules = read("../components/module-workspace.tsx");
 const ui = read("../components/ui/primitives.tsx");
 const routes = read("../app/[module]/[[...view]]/page.tsx");
+const communication = read("../components/communication/workspace.tsx");
+const composer = read("../components/communication/compose.tsx");
+const clock = read("../components/communication/ist-clock.tsx");
+
 
 test("locked brand colors and typography are centralized", () => {
   for (const token of ["--forest:", "--mint:", "--font-heading:", "--font-body:"]) assert.ok(css.includes(token),token);
@@ -18,10 +22,10 @@ test("locked brand colors and typography are centralized", () => {
 });
 
 test("navigation is consistent across exactly the approved seven destinations", () => {
-  for (const name of ["Dashboard", "Prospects", "Promoters", "Collections", "Payouts", "Reminders", "Settings"]) {
+  for (const name of ["Dashboard", "Prospects", "Promoters", "Collections", "Payouts", "Communication", "Settings"]) {
     assert.ok(shell.includes('name:"'+name+'"'),name);
   }
-  assert.equal((shell.match(/name:"(?:Dashboard|Prospects|Promoters|Collections|Payouts|Reminders|Settings)"/g)||[]).length,7);
+  assert.equal((shell.match(/name:"(?:Dashboard|Prospects|Promoters|Collections|Payouts|Communication|Settings)"/g)||[]).length,7);
   assert.match(shell,/aria-current/);
   assert.match(shell,/mobileOpen/);
   assert.match(shell,/drawer-scrim/);
@@ -36,16 +40,24 @@ test("each module has the approved horizontal tab structure", () => {
   assert.match(ui,/aria-current/);
 });
 
-test("reminders have only WhatsApp and Email entry cards", () => {
-  assert.match(modules,/WhatsApp Reminders/);
-  assert.match(modules,/Email Reminders/);
-  assert.match(routes,/whatsapp","email/);
+test("Communication is compose-first and separates plans, templates and automation", () => {
+  for(const label of ["Compose","Campaigns","Templates","Automations"]){
+    assert.ok(communication.includes(label),label);
+  }
+  assert.match(routes,/communication:\["compose","campaigns","templates","automations"\]/);
+  assert.match(modules,/CommunicationWorkspace/);
+  assert.match(composer,/eligible_count/);
+  assert.match(composer,/Saving does not send messages/);
+  assert.doesNotMatch(communication,/Preparation history/);
+  assert.match(shell,/IstClock/);
+  assert.match(clock,/Asia\/Kolkata/);
+  assert.match(clock,/setInterval/);
 });
 
 test("phase 2 never claims functional authentication, payment or reminder delivery", () => {
   assert.match(modules,/disabled/);
   assert.match(ui,/disabled/);
-  assert.match(modules,/No messages are being sent/);
+  assert.match(composer,/No message has been sent or queued/);
   assert.match(modules,/DashboardLive/);
   assert.doesNotMatch(modules,/Waiting for live data/);
   const dashboard = read("../components/dashboard/dashboard-live.tsx");

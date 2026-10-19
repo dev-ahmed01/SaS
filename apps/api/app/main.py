@@ -9,6 +9,7 @@ from app.accounting import router as accounting_router
 from app.admin_settings import router as settings_router
 from app.auth import router as auth_router
 from app.collections import router as collections_router
+from app.communication import router as communication_router
 from app.dashboard import router as dashboard_router
 from app.db import get_engine
 from app.messaging import admin_router as messaging_admin_router
@@ -29,6 +30,7 @@ app.include_router(accounting_router)
 app.include_router(collections_router)
 app.include_router(payouts_router)
 app.include_router(reminders_router)
+app.include_router(communication_router)
 app.include_router(messaging_admin_router)
 app.include_router(messaging_internal_router)
 app.include_router(dashboard_router)
