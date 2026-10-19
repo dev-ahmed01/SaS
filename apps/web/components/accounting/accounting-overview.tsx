@@ -1,5 +1,6 @@
 "use client";
 import { useEffect,useState } from "react";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
 type AccountRow={prospect_id:string;name:string;status:string;due_paise:number;verified_paise:number;outstanding_paise:number;fully_paid:boolean};
 type Overview={period_month:string;as_of:string;total_sponsors:number;due_paise:number;verified_paise:number;outstanding_paise:number;fully_paid_sponsors:number;items:AccountRow[];offset:number;limit:number};
@@ -9,7 +10,7 @@ export function AccountingOverview(){
   const [month,setMonth]=useState("");
   const [offset,setOffset]=useState(0);
   const [revision,setRevision]=useState(0);
-  const [data,setData]=useState<Overview|null>(null);
+  const [data,setData]=useState<Overview|null>(()=>recentSnapshot<Overview>("/api/admin/accounting/overview?limit=20&offset=0"));
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
@@ -18,10 +19,12 @@ export function AccountingOverview(){
     const controller=new AbortController();
     const query=new URLSearchParams({limit:"20",offset:String(offset)});
     if(month)query.set("month",month);
-    setLoading(true);
-    fetch("/api/admin/accounting/overview?"+query,{cache:"no-store",signal:controller.signal})
+    const key="/api/admin/accounting/overview?"+query;
+    const cached=recentSnapshot<Overview>(key);
+    setData(cached);setLoading(!cached);
+    fetch(key,{cache:"no-store",signal:controller.signal})
       .then(async r=>{if(!r.ok)throw Error("Ledger unavailable");return await r.json() as Overview;})
-      .then(v=>{if(!controller.signal.aborted){setData(v);setError("");}})
+      .then(v=>{if(!controller.signal.aborted){rememberSnapshot(key,v);setData(v);setError("");}})
       .catch(()=>{if(!controller.signal.aborted)setError("Unable to load the monthly ledger.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
@@ -72,7 +75,7 @@ export function AccountingOverview(){
       <div className="table-scroll"><table className="data-table">
         <thead><tr><th>Sponsor</th><th>Due</th><th>Received / Outstanding</th>
           <th>Status</th><th>Month paid</th></tr></thead>
-        <tbody>{loading?<tr><td colSpan={5}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
+        <tbody>{loading&&!data?<tr><td colSpan={5}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
         :!data?.items.length?<tr><td colSpan={5}><div className="empty-state"><h3>No sponsorships for this month</h3><p>Register sponsors to create commitments.</p></div></td></tr>
         :data.items.map(row=><tr key={row.prospect_id}>
           <td><strong className="table-name">{row.name}</strong></td>
