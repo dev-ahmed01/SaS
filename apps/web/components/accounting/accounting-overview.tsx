@@ -57,8 +57,8 @@ export function AccountingOverview(){
     <div className="accounting-metrics">
       {[
         ["Monthly commitment",data?money(data.due_paise):"—"],
-        ["Verified collections",data?money(data.verified_paise):"—"],
-        ["Outstanding",data?money(data.outstanding_paise):"—"],
+        ["Received / Outstanding",data
+          ?money(data.verified_paise)+" / "+money(data.outstanding_paise):"—"],
         ["Fully paid sponsors",data?String(data.fully_paid_sponsors):"—"],
       ].map(([label,value])=><div key={label} className="accounting-metric">
         <span>{label}</span><strong>{value}</strong>
@@ -70,14 +70,17 @@ export function AccountingOverview(){
       </div><button type="button" className="btn btn-secondary" disabled={saving||loading}
         onClick={refreshStatuses}>{saving?"Updating…":"Refresh sponsor statuses"}</button></div>
       <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Sponsor</th><th>Due</th><th>Verified</th>
-          <th>Outstanding</th><th>Status</th><th>Month paid</th></tr></thead>
-        <tbody>{loading?<tr><td colSpan={6}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
+        <thead><tr><th>Sponsor</th><th>Due</th><th>Received / Outstanding</th>
+          <th>Status</th><th>Month paid</th></tr></thead>
+        <tbody>{loading?<tr><td colSpan={5}><div className="empty-state" role="status">Loading monthly accounting…</div></td></tr>
         :!data?.items.length?<tr><td colSpan={6}><div className="empty-state"><h3>No sponsorships for this month</h3><p>Register sponsors to create commitments.</p></div></td></tr>
         :data.items.map(row=><tr key={row.prospect_id}>
           <td><strong className="table-name">{row.name}</strong></td>
-          <td>{money(row.due_paise)}</td><td>{money(row.verified_paise)}</td>
-          <td>{money(row.outstanding_paise)}</td>
+          <td>{money(row.due_paise)}</td>
+          <td><span className="finance-paired-values">
+            <span>{money(row.verified_paise)} received</span>
+            <span>{money(row.outstanding_paise)} outstanding</span>
+          </span></td>
           <td><span className={"status-pill "+row.status}>{row.status==="new"?"New":row.status==="active"?"Active":row.status==="archived"?"Archived":"Inactive"}</span></td>
           <td>{row.fully_paid?"Yes":"No"}</td>
         </tr>)}</tbody>
