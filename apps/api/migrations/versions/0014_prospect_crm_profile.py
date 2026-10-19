@@ -18,13 +18,17 @@ depends_on = None
 def upgrade() -> None:
     for name, size in (("first_name", 80), ("last_name", 80), ("email", 320), ("occupation", 120)):
         op.add_column("prospects", sa.Column(name, sa.String(size), nullable=True))
-    op.add_column("prospects", sa.Column("crm_stage", sa.String(12), nullable=False, server_default="active"))
-    op.add_column("prospects", sa.Column("crm_stage_changed_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column("prospects",
+        sa.Column("crm_stage", sa.String(12), nullable=False, server_default="active"))
+    op.add_column("prospects",
+        sa.Column("crm_stage_changed_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("prospects", sa.Column("crm_inactive_reason", sa.String(64), nullable=True))
     op.add_column("prospects", sa.Column("crm_inactive_note", sa.String(500), nullable=True))
-    op.create_index("ix_prospects_org_crm_stage", "prospects", ["organization_id", "crm_stage", "archived_at"])
+    op.create_index("ix_prospects_org_crm_stage", "prospects",
+        ["organization_id", "crm_stage", "archived_at"])
     if op.get_bind().dialect.name == "postgresql":
-        op.create_check_constraint("ck_prospect_crm_stage", "prospects", "crm_stage IN ('active','inactive')")
+        op.create_check_constraint("ck_prospect_crm_stage", "prospects",
+            "crm_stage IN ('active','inactive')")
     elif op.get_bind().dialect.name == "sqlite":
         op.execute("""CREATE TRIGGER trg_prospect_crm_stage_guard
             BEFORE UPDATE OF crm_stage ON prospects
@@ -49,7 +53,8 @@ def upgrade() -> None:
         sa.CheckConstraint("from_stage IN ('active','inactive')", name="ck_stage_from"),
         sa.CheckConstraint("to_stage IN ('active','inactive')", name="ck_stage_to"),
     )
-    op.create_index("ix_prospect_stage_history", "prospect_stage_transitions", ["organization_id", "prospect_id", "changed_at"])
+    op.create_index("ix_prospect_stage_history", "prospect_stage_transitions",
+        ["organization_id", "prospect_id", "changed_at"])
 
 
 def downgrade() -> None:
