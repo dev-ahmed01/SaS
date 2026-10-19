@@ -18,7 +18,7 @@ const tabs=[
 export function ProspectsWorkspace({view}:{view:"add"|"all"|"active"|"inactive"|"stages"}){
   const router=useRouter();
   return <AppShell>
-    <div className="prospect-tabs"><ModuleTabs current={view} tabs={tabs}/></div>
+    <div className="prospect-tabs stages-enabled"><ModuleTabs current={view} tabs={tabs}/></div>
     <div className="prospects-workspace">
       {view==="add"
         ?<ProspectEditor onSaved={saved=>router.push("/prospects/"+saved.id)}/>
