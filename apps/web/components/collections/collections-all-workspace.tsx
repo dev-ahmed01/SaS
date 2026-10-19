@@ -65,7 +65,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
     const controller=new AbortController();
     const params=new URLSearchParams({limit:"20",offset:String(offset)});
     if(month)params.set("period_month",month+"-01");
-    if(activeOnly)params.set("active_only","true");
+    // This-month receipts include all sponsors, not only currently Active CRM sponsors.
     setLoading(true);
     fetch("/api/admin/collections?"+params,{cache:"no-store",signal:controller.signal})
       .then(async response=>{
@@ -126,7 +126,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
   return <section className="collection-review" aria-label="Collection review">
     <div className="review-heading">
       <div>
-        <h2>{activeOnly?"Active collections":"Collection history"}</h2>
+        <h2>{activeOnly?"Received this month":"Collection history"}</h2>
       </div>
       <label className="field review-month">
         <span className="field-label">{activeOnly?"Collection month":"Filter by month"}</span>
@@ -143,7 +143,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           <th scope="col">Entry</th><th scope="col">WhatsApp</th>
           <th scope="col">Action</th></tr></thead>
         <tbody>{loading?<tr><td colSpan={7}>Loading collection history…</td></tr>
-          :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No active collections for this period.":"No manually recorded collections."}</td></tr>
+          :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong></td>
             <td>{rupees(row.amount_paise)}</td>
