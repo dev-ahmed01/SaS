@@ -81,6 +81,7 @@ test("module changes preserve one sidebar and IST clock without repeated loading
     await page.getByRole("navigation",{name:"Modules"}).getByRole("link",{name,exact:true}).click();
     await expect(page.locator(".app-frame")).toHaveCount(1);
     await expect(page.locator(".topbar-ist-clock")).not.toContainText("Loading time");
+    if(name==="Promoters")await expect(page.getByText("Loading promoters…")).toHaveCount(0);
     const result=await page.evaluate(()=>({
       frame:window.__originalAppShell===document.querySelector(".app-frame"),
       clock:window.__originalClock===document.querySelector(".topbar-ist-clock"),
