@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { AccountingOverview } from "../accounting/accounting-overview";
 
 type Payment = {
@@ -66,13 +67,15 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
     const params=new URLSearchParams({limit:"20",offset:String(offset)});
     if(month)params.set("period_month",month+"-01");
     // This-month receipts include all sponsors, not only currently Active CRM sponsors.
-    setLoading(true);
-    fetch("/api/admin/collections?"+params,{cache:"no-store",signal:controller.signal})
+    const key="/api/admin/collections?"+params;
+    const cached=recentSnapshot<Page>(key);
+    setData(cached);setLoading(!cached);
+    fetch(key,{cache:"no-store",signal:controller.signal})
       .then(async response=>{
         if(!response.ok)throw Error("History unavailable");
         return await response.json() as Page;
       })
-      .then(page=>{if(!controller.signal.aborted){setData(page);setError("");}})
+      .then(page=>{if(!controller.signal.aborted){rememberSnapshot(key,page);setData(page);setError("");}})
       .catch(()=>{if(!controller.signal.aborted)setError("Collection history is temporarily unavailable.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
@@ -142,7 +145,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           <th scope="col">Month</th><th scope="col">Reference</th>
           <th scope="col">Entry</th><th scope="col">WhatsApp</th>
           <th scope="col">Action</th></tr></thead>
-        <tbody>{loading?<tr><td colSpan={7}>Loading collection history…</td></tr>
+        <tbody>{loading&&!data?<tr><td colSpan={7}>Loading collection history…</td></tr>
           :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong></td>
