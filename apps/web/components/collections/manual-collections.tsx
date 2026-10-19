@@ -84,7 +84,7 @@ export function ManualCollections(){
         body:JSON.stringify({
           request_id:requestId.current,prospect_id:selected.id,
           amount_paise:paise,period_month:period+"-01",received_on:receivedOn,
-          payment_method:method,receipt_reference:reference.trim(),
+          payment_method:method,receipt_reference:reference.trim()||null,
           funds_confirmed:true,
         }),
       });
