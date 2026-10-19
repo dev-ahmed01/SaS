@@ -350,3 +350,77 @@ def test_location_is_optional_for_new_sponsor_without_fake_placeholder(system):
         assert db.scalars(select(Prospect).where(
             Prospect.id == uuid.UUID(response.json()["id"])
         )).one().area_city == ""
+
+
+
+def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(system):
+    client, engine = system
+    csrf = login(client)
+    record = create(
+        client, csrf,
+        full_name="Nadia Hassan", first_name="Nadia", last_name="Hassan",
+        email="nadia@example.org", occupation="Teacher",
+        area_city="Mysuru", monthly_contribution_paise=75000,
+    ).json()
+    pid = record["id"]
+    assert record["crm_stage"] == "active"
+    assert record["lifecycle_status"] == "new"
+    assert record["first_name"] == "Nadia"
+    assert record["assigned_promoter_name"] is None
+    assert client.get("/v1/prospects?crm_stage=active").json()["total"] == 1
+    assert client.post("/v1/prospects/" + pid + "/stage", json={
+        "version": record["version"], "stage": "inactive", "reason": "budget",
+    }).status_code == 403
+    invalid = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
+        "version": 1, "stage": "inactive",
+    })
+    assert invalid.status_code == 422
+    marked = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
+        "version": 1, "stage": "inactive", "reason": "budget", "note": "Follow up later",
+    })
+    assert marked.status_code == 200, marked.text
+    state = marked.json()
+    assert state["crm_stage"] == "inactive"
+    assert state["crm_inactive_reason"] == "budget"
+    assert state["days_inactive"] == 0
+    assert state["lifecycle_status"] == "new"
+    assert len(state["stage_history"]) == 1
+    assert client.get("/v1/prospects?crm_stage=active").json()["total"] == 0
+    assert client.get("/v1/prospects?crm_stage=inactive").json()["total"] == 1
+    assert client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
+        "version": 1, "stage": "active",
+    }).status_code == 409
+    activated = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
+        "version": state["version"], "stage": "active",
+    })
+    assert activated.status_code == 200, activated.text
+    assert activated.json()["crm_stage"] == "active"
+    assert activated.json()["crm_inactive_reason"] is None
+    assert activated.json()["days_inactive"] is None
+    assert len(activated.json()["stage_history"]) == 2
+    with Session(engine) as db:
+        saved = db.get(Prospect, uuid.UUID(pid))
+        assert saved.lifecycle_status == "new"
+        assert saved.monthly_contribution_paise == 75000
+
+
+def test_tentative_future_month_and_optional_crm_fields(system):
+    client, engine = system
+    csrf = login(client)
+    from app.accounting import ist_today, month_start, shift_month
+    target = shift_month(month_start(ist_today()), 2)
+    r = create(client, csrf, full_name="Salma Noor", first_name="Salma",
+               last_name="Noor", start_month=target.isoformat(), email=None,
+               occupation=None, area_city="")
+    assert r.status_code == 201, r.text
+    item = r.json()
+    assert item["start_month"] == target.isoformat()
+    assert item["area_city"] == ""
+    with Session(engine) as db:
+        rate = db.scalars(select(SponsorshipRate).where(
+            SponsorshipRate.prospect_id == uuid.UUID(item["id"]),
+        )).one()
+        assert rate.effective_month == target
+    invalid = create(client, csrf, full_name="Bad Date", mobile_number="+919878787878",
+                     start_month="2020-01-01")
+    assert invalid.status_code == 422
