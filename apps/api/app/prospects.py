@@ -222,6 +222,18 @@ class UpiRead(BaseModel):
 class ProspectRead(BaseModel):
     id: uuid.UUID
     full_name: str
+    first_name: str | None
+    last_name: str | None
+    email: str | None
+    occupation: str | None
+    crm_stage: Literal["active", "inactive"]
+    crm_inactive_reason: str | None
+    crm_inactive_note: str | None
+    crm_stage_changed_at: datetime | None
+    days_inactive: int | None
+    assigned_promoter_id: uuid.UUID | None
+    assigned_promoter_name: str | None
+    stage_history: list[StageHistoryRead]
     mobile_number: str
     whatsapp_number: str | None
     area_city: str
@@ -276,10 +288,41 @@ def _upi_list(prospect: Prospect) -> list[UpiRead]:
     ]
 
 
-def _read(prospect: Prospect, status_override: str | None = None) -> ProspectRead:
+def _read(prospect: Prospect, status_override: str | None = None,
+          *, db: Session | None = None) -> ProspectRead:
+    promoter = None
+    if db is not None:
+        promoter = db.execute(select(PromoterAssignment.promoter_id, Promoter.full_name).join(
+            Promoter, Promoter.id == PromoterAssignment.promoter_id,
+        ).where(
+            PromoterAssignment.organization_id == prospect.organization_id,
+            PromoterAssignment.prospect_id == prospect.id,
+            PromoterAssignment.ended_at.is_(None),
+            Promoter.organization_id == prospect.organization_id,
+        )).first()
+    changed_at = prospect.crm_stage_changed_at
+    if changed_at is not None and changed_at.tzinfo is None:
+        changed_at = changed_at.replace(tzinfo=UTC)
+    days_inactive = (max(0, (utc_now() - changed_at).days)
+                     if prospect.crm_stage == "inactive" and changed_at else None)
     return ProspectRead(
         id=prospect.id,
         full_name=prospect.full_name,
+        first_name=prospect.first_name,
+        last_name=prospect.last_name,
+        email=prospect.email,
+        occupation=prospect.occupation,
+        crm_stage=prospect.crm_stage,
+        crm_inactive_reason=prospect.crm_inactive_reason,
+        crm_inactive_note=prospect.crm_inactive_note,
+        crm_stage_changed_at=prospect.crm_stage_changed_at,
+        days_inactive=days_inactive,
+        assigned_promoter_id=promoter.promoter_id if promoter else None,
+        assigned_promoter_name=promoter.full_name if promoter else None,
+        stage_history=[StageHistoryRead(
+            from_stage=row.from_stage, to_stage=row.to_stage,
+            reason=row.reason, note=row.note, changed_at=row.changed_at,
+        ) for row in prospect.stage_transitions],
         mobile_number=prospect.mobile_number,
         whatsapp_number=prospect.whatsapp_number,
         area_city=prospect.area_city,
@@ -416,7 +459,7 @@ def list_prospects(
     ).all()
     fresh = _project_statuses(database, admin, results)
     matching = [
-        _read(p, fresh.get(p.id))
+        _read(p, fresh.get(p.id), db=database)
         for p in results
         if status is None or fresh.get(p.id, p.lifecycle_status) == status
     ]
@@ -471,7 +514,7 @@ def create_prospect(
                 raise HTTPException(status_code=409, detail="Request ID reused with different data")
             response.status_code = 200
             response.headers["Cache-Control"] = "no-store"
-            return _read(existing)
+            return _read(existing, db=database)
 
     settings = database.get(OrganizationSettings, admin.organization_id)
     if settings is None:
@@ -532,10 +575,10 @@ def create_prospect(
             if same is not None and same.registration_payload_hash == payload_hash:
                 response.status_code = 200
                 response.headers["Cache-Control"] = "no-store"
-                return _read(same)
+                return _read(same, db=database)
         raise HTTPException(status_code=409, detail="Prospect registration conflict") from exc
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 @router.get("/{prospect_id}", response_model=ProspectRead)
 def get_prospect(
@@ -547,7 +590,7 @@ def get_prospect(
     prospect = _get(database, context[0], prospect_id, allow_archived=True)
     current = _project_statuses(database, context[0], [prospect])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect, current.get(prospect.id))
+    return _read(prospect, current.get(prospect.id), db=database)
 
 
 @router.patch("/{prospect_id}", response_model=ProspectRead)
@@ -601,7 +644,7 @@ def update_prospect(
                after={"version": prospect.version, "changed_fields": sorted(changed)})
         database.commit()
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 
 @router.delete("/{prospect_id}", status_code=204)
@@ -664,7 +707,7 @@ def restore_prospect(
            before={"version": previous}, after={"version": prospect.version})
     database.commit()
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 
 @router.post("/{prospect_id}/upi-ids", status_code=201, response_model=ProspectRead)
@@ -688,7 +731,7 @@ def add_upi(
     database.commit()
     database.refresh(prospect, attribute_names=["upi_ids"])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
 
 
 @router.delete("/{prospect_id}/upi-ids/{upi_id}", response_model=ProspectRead)
@@ -720,4 +763,4 @@ def revoke_upi(
     database.commit()
     database.refresh(prospect, attribute_names=["upi_ids"])
     response.headers["Cache-Control"] = "no-store"
-    return _read(prospect)
+    return _read(prospect, db=database)
