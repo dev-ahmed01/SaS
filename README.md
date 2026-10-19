@@ -2,6 +2,17 @@
 
 **Emlen Foundation — Admin-only charity operations application.**
 
+## Release-readiness status (October 2026)
+
+**Not approved for live Foundation records.** Read
+[the production readiness checklist](docs/PRODUCTION_READINESS_CHECKLIST.md).
+Hosted environments require TLS-enabled PostgreSQL, correct migrated database
+schema, an explicit HTTPS API and public web origin, and guarded messaging.
+Next.js was updated to the security-patched 15.5.27 series. CI adds production
+dependency audits. A real staging deployment, protected main, witnessed
+backup restoration, monitoring and written Foundation approval are still
+separate release gates. Do not use synthetic CI data as live-deployment proof.
+
 ## Project state
 
 **Phases 01–13 are integrated into `main`** through [PR #17](https://github.com/dev-ahmed01/SaS/pull/17), merge commit `e48b3155e4e7bbda65e00f2df07d13cb251b74fe`. [Post-merge CI](https://github.com/dev-ahmed01/SaS/actions/runs/38414100426) passed backend and frontend jobs. The phase branch history and reviews remain available. **The application is source-integrated but NOT production-released**: no provider WhatsApp delivery is enabled, no real payout is executed by the software, and Foundation acceptance is outstanding.

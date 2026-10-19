@@ -21,6 +21,22 @@ test("locked brand colors and typography are centralized", () => {
   assert.match(css,/font-weight: 600/);
 });
 
+test("hosted server boundaries are fail-closed and browser security headers are present", () => {
+  const backend=read("../lib/admin-backend.ts");
+  const next=read("../next.config.ts");
+  const pkg=JSON.parse(read("../package.json"));
+  const lock=JSON.parse(read("../package-lock.json"));
+  assert.equal(pkg.dependencies.next,"15.5.27");
+  assert.equal(lock.packages["node_modules/next"].version,"15.5.27");
+  assert.match(backend,/publicOrigin\.protocol !== "https:"/);
+  assert.match(backend,/url\.protocol !== "https:"/);
+  assert.match(backend,/process\.env\.APP_PUBLIC_ORIGIN/);
+  for(const header of ["X-Frame-Options","X-Content-Type-Options",
+                       "Referrer-Policy","Permissions-Policy"]){
+    assert.ok(next.includes(header),header);
+  }
+});
+
 test("navigation is consistent across exactly the approved seven destinations", () => {
   for (const name of ["Dashboard", "Prospects", "Promoters", "Collections", "Payouts", "Communication", "Settings"]) {
     assert.ok(shell.includes('name:"'+name+'"'),name);

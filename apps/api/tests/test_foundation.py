@@ -22,8 +22,16 @@ def test_liveness_is_public_and_minimal() -> None:
 
 
 def test_ready_uses_database(monkeypatch: pytest.MonkeyPatch) -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:", poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     monkeypatch.setattr("app.main.get_engine", lambda: engine)
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "app.main.get_settings", lambda: SimpleNamespace(app_env="test")
+    )
     response = TestClient(app).get("/health/ready")
     assert response.status_code == 200
     assert response.json() == {"status": "ready"}
@@ -107,3 +115,36 @@ def test_admin_has_hashed_password_column_and_audit_table() -> None:
     assert {"action", "entity_type", "before_data", "after_data"}.issubset(
         AuditEvent.__table__.columns.keys()
     )
+
+
+def test_hosted_ready_fails_closed_on_missing_or_stale_migration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from sqlalchemy import text
+
+    from app.main import _expected_migration_heads
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    monkeypatch.setattr("app.main.get_engine", lambda: engine)
+    monkeypatch.setattr(
+        "app.main.get_settings", lambda: SimpleNamespace(app_env="production")
+    )
+    # The DB connection works but has no migration tracking table.
+    assert TestClient(app).get("/health/ready").status_code == 503
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num TEXT NOT NULL)"))
+        connection.execute(text("INSERT INTO alembic_version VALUES ('obsolete-version')"))
+    stale = TestClient(app).get("/health/ready")
+    assert stale.status_code == 503
+    assert stale.json() == {"status": "unavailable"}
+    # A version matching the actual deployed migration tree passes.
+    latest = next(iter(_expected_migration_heads()))
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE alembic_version SET version_num = :head"), {"head": latest})
+    assert TestClient(app).get("/health/ready").json() == {"status": "ready"}
+    engine.dispose()

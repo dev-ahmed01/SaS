@@ -122,10 +122,12 @@ def enable_org(engine,sponsor_reminder=False,promoter_reminder=False):
     with Session(engine) as db:
         row=db.scalars(select(OrganizationSettings)).one()
         row.automation_enabled=True
-        if sponsor_reminder:
-            row.sponsor_reminder_day=ist_today().day
-        if promoter_reminder:
-            row.promoter_reminder_day=ist_today().day
+        # Keep the two independent schedules disjoint in tests; around the
+        # 5th/20th IST a default reminder day can otherwise accidentally run.
+        today=ist_today().day
+        other=1 if today!=1 else 2
+        row.sponsor_reminder_day=today if sponsor_reminder else other
+        row.promoter_reminder_day=today if promoter_reminder else other
         db.commit()
 
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 from functools import lru_cache
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,6 +60,19 @@ class Settings(BaseSettings):
             not self.upi_match_secret or len(self.upi_match_secret) < 32
         ):
             raise ValueError("Staging and production require UPI_MATCH_SECRET of 32+ characters")
+        if self.app_env in ("staging", "production"):
+            parsed_db = urlsplit(self.database_url)
+            tls_options = parse_qs(parsed_db.query, keep_blank_values=True)
+            modes = tls_options.get("sslmode", [])
+            if (
+                not parsed_db.hostname
+                or len(modes) != 1
+                or modes[0] not in {"require", "verify-ca", "verify-full"}
+            ):
+                raise ValueError(
+                    "Staging and production DATABASE_URL must enable PostgreSQL TLS "
+                    "with sslmode=require, verify-ca or verify-full"
+                )
         if self.messaging_delivery_enabled:
             if self.app_env not in ("test", "production"):
                 raise ValueError("Messaging dispatch is restricted to approved production")

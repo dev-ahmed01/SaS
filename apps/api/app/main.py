@@ -1,5 +1,9 @@
 """Operational probes and authenticated Sponsor a Salah business endpoints."""
 
+from pathlib import Path
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -10,6 +14,7 @@ from app.admin_settings import router as settings_router
 from app.auth import router as auth_router
 from app.collections import router as collections_router
 from app.communication import router as communication_router
+from app.config import get_settings
 from app.dashboard import router as dashboard_router
 from app.db import get_engine
 from app.messaging import admin_router as messaging_admin_router
@@ -21,6 +26,12 @@ from app.prospects import router as prospects_router
 from app.reminders import router as reminders_router
 
 app = FastAPI(title="Sponsor a Salah API", version="0.11.0", docs_url=None, redoc_url=None)
+
+
+def _expected_migration_heads() -> set[str]:
+    """Read the deployed migration scripts, never a hard-coded revision."""
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    return set(ScriptDirectory.from_config(config).get_heads())
 app.include_router(auth_router)
 app.include_router(settings_router)
 app.include_router(prospects_router)
@@ -46,6 +57,15 @@ def readiness() -> JSONResponse:
     try:
         with get_engine().connect() as connection:
             connection.execute(text("SELECT 1"))
+            if get_settings().app_env in ("staging", "production"):
+                # A responsive DB with old/missing tables must not receive traffic.
+                actual = set(
+                    connection.execute(text("SELECT version_num FROM alembic_version"))
+                    .scalars()
+                    .all()
+                )
+                if not actual or actual != _expected_migration_heads():
+                    raise ValueError("Database migrations not at release head")
     except (SQLAlchemyError, OSError, ValueError):
         # Never disclose DSNs, database hostnames or exception details to callers.
         return JSONResponse(status_code=503, content={"status": "unavailable"})
