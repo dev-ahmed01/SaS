@@ -91,7 +91,7 @@ From `C:\Users\Admin\Desktop\SaS\apps\api`:
 .\.venv\Scripts\python.exe -m app.seed_local_crm --apply --confirm-synthetic-only
 ```
 
-It creates **100 clearly named Demo prospects and 10 Demo promoters**, with sample cities, ₹250-tier sponsorship commitments, 75 Active and 25 Inactive CRM statuses, inactivity reasons, optional promoter assignments, and example pipeline stages if none have been configured. Existing stage definitions are retained. This does **not** create payments, verified credits, WhatsApp consent or outbox messages; it changes local dashboard commitment metrics. Rerunning the same command does not duplicate the synthetic people.
+It creates **100 clearly named Demo prospects, 10 Demo promoters and 20 planned Demo payouts**, with sample cities, ₹250-tier sponsorship commitments, 75 Active and 25 Inactive CRM statuses, inactivity reasons, optional promoter assignments, and example pipeline stages if none have been configured. Existing stage definitions are retained. This does **not** create received collections, outgoing payout disbursements, verified credits, WhatsApp consent or outbox messages; it changes local dashboard commitment metrics. Rerunning the same command does not duplicate the synthetic people.
 
 Seed data is never loaded automatically at startup or added to production. Back up your existing database if it contains anything important. Do not share the seeded database as genuine financial data.
 
