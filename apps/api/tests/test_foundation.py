@@ -126,7 +126,10 @@ def test_hosted_ready_fails_closed_on_missing_or_stale_migration(
 
     from app.main import _expected_migration_heads
 
-    engine = create_engine("sqlite+pysqlite:///:memory:", poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     monkeypatch.setattr("app.main.get_engine", lambda: engine)
     monkeypatch.setattr(
         "app.main.get_settings", lambda: SimpleNamespace(app_env="production")
