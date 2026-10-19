@@ -231,7 +231,7 @@ def seed_synthetic_crm(
          "Dear {{name}}, thank you for supporting the Foundation."),
     ]
     templates = []
-    for index, (name, channel, category, body) in enumerate(examples, start=1):
+    for name, channel, category, body in examples:
         template = database.scalars(select(CommunicationTemplate).where(
             CommunicationTemplate.organization_id == organization_id,
             CommunicationTemplate.name_key == name.casefold(),
