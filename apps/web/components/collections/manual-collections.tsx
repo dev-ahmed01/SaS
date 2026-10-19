@@ -39,14 +39,7 @@ export function ManualCollections(){
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [success,setSuccess]=useState("");
-  const [records,setRecords]=useState<Page|null>(null);
-  const [refresh,setRefresh]=useState(0);
   const requestId=useRef<string|null>(null);
-  useEffect(()=>{
-    fetch("/api/admin/collections?limit=10",{cache:"no-store"})
-      .then(async r=>{if(!r.ok)throw Error("Unable to load");return await r.json() as Page;})
-      .then(setRecords).catch(()=>setRecords(null));
-  },[refresh]);
   useEffect(()=>{
     if(search.trim().length<2||selected){setResults([]);return;}
     const controller=new AbortController();
@@ -97,11 +90,11 @@ export function ManualCollections(){
       });
       if(!result.ok){
         if(result.status===409){
-          setError("This receipt or request may already be recorded. Check the recent collections before trying again.");
+          setError("This receipt or request may already exist. Check All Collections before retrying.");
         }else if(result.status===422){
-          setError("Check the billing month, receipt date and reference. Amount must be ₹250 or a multiple of ₹250.");
+          setError("Check the billing month, receipt date and amount. Use ₹250 multiples.");
         }else{
-          setError("The collection was not confirmed. Check the recent list before retrying.");
+          setError("The collection was not confirmed. Check All Collections before retrying.");
         }
         return;
       }
@@ -114,8 +107,8 @@ export function ManualCollections(){
             :"WhatsApp status: "+deliveryLabel(data.message_status)+
               ". View authenticated delivery status in Reminders."));
       setSelected(null);setSearch("");setRupees("");setCustomAmount(false);setReference("");
-      setConfirmed(false);requestId.current=null;setRefresh(x=>x+1);
-    }catch{setError("Connection interrupted. Check the recent list before retrying.");}
+      setConfirmed(false);requestId.current=null;
+    }catch{setError("Connection interrupted. Check All Collections before retrying.");}
     finally{setSaving(false);}
   }
   return <div className="manual-collections-workspace">
@@ -165,9 +158,9 @@ export function ManualCollections(){
                   value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
             </div>
           </div>
-          <label className="field form-cell full"><span className="field-label">UPI transaction ID / bank reference / numbered receipt *</span>
-            <input aria-label="Transaction reference" required minLength={6} maxLength={100}
-              value={reference} placeholder="Enter a unique reference"
+          <label className="field form-cell full"><span className="field-label">UPI transaction ID / bank reference / numbered receipt</span>
+            <input aria-label="Transaction reference" minLength={6} maxLength={100}
+              value={reference} placeholder="Enter reference if available"
               onChange={e=>{setReference(e.target.value);update();}}/></label>
           <label className="checkbox-field form-cell full"><input type="checkbox"
             checked={confirmed} onChange={e=>{setConfirmed(e.target.checked);update();}}/>
@@ -178,17 +171,6 @@ export function ManualCollections(){
         <div className="manual-collections-submit"><button type="submit" disabled={saving||!confirmed||!selected}
           className="btn btn-primary">{saving?"Recording…":"Save Collection"}</button></div>
       </form>
-    </section>
-    <section className="content-panel" aria-label="Recent manual collections">
-      <h2>Recently Recorded</h2>
-      <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Sponsor</th><th>Amount</th><th>Month</th><th>Reference</th><th>WhatsApp</th></tr></thead>
-        <tbody>{!records?.items.length?<tr><td colSpan={5}>No manual collections recorded yet.</td></tr>
-          :records.items.map(item=><tr key={item.id}><td>{item.sponsor_name}</td>
-            <td>{amount(item.amount_paise)}</td><td>{item.period_month.slice(0,7)}</td>
-            <td>{item.reference_mask}</td>
-            <td>{deliveryLabel(item.message_status)}</td></tr>)}</tbody>
-      </table></div>
     </section>
   </div>;
 }
