@@ -45,7 +45,10 @@ def upgrade() -> None:
         sa.Column("reason", sa.String(64), nullable=True),
         sa.Column("note", sa.String(500), nullable=True),
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("actor_admin_id", sa.Uuid(), sa.ForeignKey("admin_users.id", ondelete="SET NULL")),
+        sa.Column(
+            "actor_admin_id", sa.Uuid(),
+            sa.ForeignKey("admin_users.id", ondelete="SET NULL"),
+        ),
         sa.ForeignKeyConstraint(
             ["organization_id", "prospect_id"], ["prospects.organization_id", "prospects.id"],
             ondelete="RESTRICT", name="fk_prospect_stage_same_org",
@@ -59,4 +62,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Deliberately do not permit silently destroying reasons and CRM history.
-    raise RuntimeError("CRM stage/history downgrade needs an explicit export and data-retention review")
+    raise RuntimeError(
+        "CRM stage/history downgrade needs an explicit export and data-retention review"
+    )
