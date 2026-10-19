@@ -532,7 +532,7 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   const amount=agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
   await expect(row.getByRole("cell").nth(1)).toContainText(amount);
   await expect(row.getByRole("cell").nth(2)).toContainText("0.00");
-  await expect(row.getByRole("cell").nth(2)).not.toContainText(amount+" outstanding");
+  await expect(row.getByRole("cell").nth(2)).not.toContainText("outstanding");
   await expect(row.getByText("New",{exact:true})).toBeVisible();
   await expect(row.getByText("No",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Refresh sponsor statuses"}).click();
