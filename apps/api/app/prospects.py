@@ -769,3 +769,43 @@ def revoke_upi(
     database.refresh(prospect, attribute_names=["upi_ids"])
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
+
+
+@router.post("/{prospect_id}/stage", response_model=ProspectRead)
+def change_crm_stage(
+    prospect_id: uuid.UUID,
+    payload: StageDecision,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+    response: Response,
+) -> ProspectRead:
+    """Manually track donor outreach and attrition without rewriting payment status."""
+    admin = context[0]
+    prospect = _get(database, admin, prospect_id, lock=True)
+    _check_version(prospect, payload.version)
+    if prospect.crm_stage == payload.stage:
+        raise HTTPException(status_code=409, detail="Prospect is already in that CRM stage")
+    previous = prospect.crm_stage
+    now = utc_now()
+    database.add(ProspectStageTransition(
+        organization_id=admin.organization_id,
+        prospect_id=prospect.id,
+        from_stage=previous, to_stage=payload.stage,
+        reason=payload.reason if payload.stage == "inactive" else None,
+        note=payload.note if payload.stage == "inactive" else None,
+        changed_at=now, actor_admin_id=admin.id,
+    ))
+    prospect.crm_stage = payload.stage
+    prospect.crm_stage_changed_at = now
+    prospect.crm_inactive_reason = payload.reason if payload.stage == "inactive" else None
+    prospect.crm_inactive_note = payload.note if payload.stage == "inactive" else None
+    prospect.version += 1
+    prospect.updated_at = now
+    _audit(database, admin, prospect, "prospect.crm_stage_changed",
+           before={"stage": previous, "version": payload.version},
+           after={"stage": payload.stage, "reason_code": payload.reason,
+                  "version": prospect.version})
+    database.commit()
+    database.expire(prospect, ["stage_transitions"])
+    response.headers["Cache-Control"] = "no-store"
+    return _read(prospect, db=database)
