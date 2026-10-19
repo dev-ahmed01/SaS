@@ -934,7 +934,7 @@ test("Communication is a full-width, preview-free CRM composer",async ({page})=>
   await expect(page.getByText("New campaigns require channel activation")).toHaveCount(0);
   await expect(page.getByRole("navigation",{name:"Communication views"}).getByRole("link")).toHaveCount(3);
   await page.goto("/communication/automations");
-  await expect(page).toHaveURL(/\\/communication\\/templates$/);
+  await expect(page).toHaveURL(/\/communication\/templates$/);
   await expect(page.getByRole("heading",{name:"New template"})).toBeVisible();
   await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
 });
