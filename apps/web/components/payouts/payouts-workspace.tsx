@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -124,7 +125,9 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const [period,setPeriod]=useState(()=>dateIST().slice(0,7));
   const [offset,setOffset]=useState(0);
   const [refresh,setRefresh]=useState(0);
-  const [plans,setPlans]=useState<PlanPage|null>(null);
+  const [plans,setPlans]=useState<PlanPage|null>(()=>recentSnapshot<PlanPage>(
+    "/api/admin/payouts/plans?"+new URLSearchParams({view,month:dateIST().slice(0,7),offset:"0",limit:"20"})
+  ));
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -139,13 +142,15 @@ export function PayoutList({view}:{view:"all"|"active"}){
   useEffect(()=>{
     const controller=new AbortController();
     const params=new URLSearchParams({view,month:period,offset:String(offset),limit:"20"});
-    setLoading(true);
-    fetch("/api/admin/payouts/plans?"+params,{cache:"no-store",signal:controller.signal})
+    const key="/api/admin/payouts/plans?"+params;
+    const cached=recentSnapshot<PlanPage>(key);
+    setPlans(cached);setLoading(!cached);
+    fetch(key,{cache:"no-store",signal:controller.signal})
       .then(async r=>{
         if(!r.ok)throw Error("Unable to load payout plans");
         return await r.json() as PlanPage;
       })
-      .then(value=>{if(!controller.signal.aborted){setPlans(value);setError("");}})
+      .then(value=>{if(!controller.signal.aborted){rememberSnapshot(key,value);setPlans(value);setError("");}})
       .catch(()=>{if(!controller.signal.aborted)setError("Payout plans could not be loaded.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
@@ -200,7 +205,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
         <th scope="col">Frequency</th><th scope="col">Commitment</th>
         <th scope="col">Paid in month</th><th scope="col">Status</th>
         <th scope="col">Actions</th></tr></thead>
-      <tbody>{loading?<tr><td colSpan={7}>Loading payouts…</td></tr>
+      <tbody>{loading&&!plans?<tr><td colSpan={7}>Loading payouts…</td></tr>
         :!plans?.items.length?<tr><td colSpan={7}><div className="empty-state">
           <h3>No payout plans</h3><p>Create an outgoing commitment using Add Payout.</p>
         </div></td></tr>
