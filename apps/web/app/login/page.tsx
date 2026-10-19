@@ -7,6 +7,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
+  const [showPassword,setShowPassword] = useState(false);
   const [busy,setBusy] = useState(false);
   const localDemo = process.env.NODE_ENV === "development"
     && process.env.NEXT_PUBLIC_LOCAL_DEMO_LOGIN_ENABLED === "true";
@@ -28,7 +29,7 @@ export default function LoginPage() {
         body:JSON.stringify({email,password})
       });
       if(!result.ok){
-        setError(result.status===429?"Too many attempts. Please try again later.":result.status===503?"Sign-in is temporarily unavailable.":"Unable to sign in. Check your details and try again.");
+        setError(result.status===429?"Too many attempts. Please try again later.":result.status===503?"Sign-in is temporarily unavailable.":result.status===403?"Sign-in request was blocked by origin verification. Check the public URL configuration.":result.status===422?"Enter a valid email address, or enable local demo login to use Admin.":"Unable to sign in. Check your details and try again.");
         return;
       }
       router.replace("/prospects");
@@ -48,7 +49,7 @@ export default function LoginPage() {
       <form onSubmit={submit}>
         <div className="login-fields">
           <label className="field"><span className="field-label">{localDemo?"Email or username":"Email address"}</span><input type={localDemo?"text":"email"} autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)} placeholder={localDemo?"Enter Admin or your email":"Enter your email address"}/></label>
-          <label className="field"><span className="field-label">Password</span><input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password"/></label>
+          <div className="field"><label className="field-label" htmlFor="admin-password">Password</label><div className="login-password-wrap"><input id="admin-password" type={showPassword?"text":"password"} autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password"/><button className="login-password-toggle" type="button" aria-label={showPassword?"Hide password":"Show password"} aria-pressed={showPassword} onClick={()=>setShowPassword(value=>!value)}>{showPassword?"Hide":"Show"}</button></div></div>
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="btn btn-primary" type="submit" disabled={busy}>{busy?"Signing in…":"Sign In"}</button>
