@@ -1,0 +1,29 @@
+name: One-time SaS audited npm lock refresh
+on:
+  push:
+    branches: [release/staging-preflight-security-hardening]
+permissions:
+  contents: write
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/release/staging-preflight-security-hardening'
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: true
+          ref: release/staging-preflight-security-hardening
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22'
+      - name: Recompute complete lockfile from pinned security overrides
+        working-directory: apps/web
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit validated lockfile
+        run: |
+          git add apps/web/package-lock.json
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: resolve patched PostCSS and Sharp npm lockfile"
+          git push origin HEAD:release/staging-preflight-security-hardening
