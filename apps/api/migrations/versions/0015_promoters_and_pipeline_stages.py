@@ -60,6 +60,19 @@ def upgrade() -> None:
             ["organization_id", "pipeline_stage_id"], ["organization_id", "id"],
             ondelete="RESTRICT",
         )
+    elif op.get_bind().dialect.name == "sqlite":
+        # SQLite requires a table rebuild for a new composite foreign key.
+        # Recreate the 0014 CRM stage guard after the batch table swap.
+        with op.batch_alter_table("prospects", recreate="always") as batch:
+            batch.create_foreign_key(
+                "fk_prospect_pipeline_stage_org", "prospect_stage_definitions",
+                ["organization_id", "pipeline_stage_id"], ["organization_id", "id"],
+                ondelete="RESTRICT",
+            )
+        op.execute("""CREATE TRIGGER trg_prospect_crm_stage_guard
+            BEFORE UPDATE OF crm_stage ON prospects
+            WHEN NEW.crm_stage NOT IN ('active','inactive')
+            BEGIN SELECT RAISE(ABORT, 'Invalid prospect CRM stage'); END""")
 
 
 def downgrade() -> None:
@@ -79,8 +92,18 @@ def downgrade() -> None:
         op.drop_constraint(
             "fk_prospect_pipeline_stage_org", "prospects", type_="foreignkey"
         )
-    op.drop_index("ix_prospects_org_pipeline_stage", table_name="prospects")
-    op.drop_column("prospects", "pipeline_stage_id")
+        op.drop_index("ix_prospects_org_pipeline_stage", table_name="prospects")
+        op.drop_column("prospects", "pipeline_stage_id")
+    else:
+        op.execute("DROP TRIGGER IF EXISTS trg_prospect_crm_stage_guard")
+        with op.batch_alter_table("prospects", recreate="always") as batch:
+            batch.drop_constraint("fk_prospect_pipeline_stage_org", type_="foreignkey")
+            batch.drop_index("ix_prospects_org_pipeline_stage")
+            batch.drop_column("pipeline_stage_id")
+        op.execute("""CREATE TRIGGER trg_prospect_crm_stage_guard
+            BEFORE UPDATE OF crm_stage ON prospects
+            WHEN NEW.crm_stage NOT IN ('active','inactive')
+            BEGIN SELECT RAISE(ABORT, 'Invalid prospect CRM stage'); END""")
     op.drop_index(
         "ix_stage_definitions_org_sort", table_name="prospect_stage_definitions"
     )
