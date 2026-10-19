@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Dashboard KPIs are intentionally not mocked. First working preview: Prospects.
+// Dashboard is the default landing route; its data is served by the protected dashboard API.
 export default function HomePage() {
-  redirect("/prospects");
+  redirect("/dashboard");
 }
