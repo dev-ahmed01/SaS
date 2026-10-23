@@ -30,6 +30,8 @@ from app.models import (
     OrganizationSettings,
     Promoter,
     PromoterAssignment,
+    ManualCollection,
+    ManualCollectionReversal,
     Prospect,
     ProspectArchiveInterval,
     ProspectFollowUp,
@@ -947,3 +949,77 @@ def add_followup(
         outcome=event.outcome, notes=event.notes,
         next_followup_on=event.next_followup_on, created_at=event.created_at,
     )
+
+
+@router.get("/{prospect_id}/activity", response_model=list[dict[str, str]])
+def prospect_activity(
+    prospect_id: uuid.UUID,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+    response: Response,
+) -> list[dict[str, str]]:
+    """Real CRM, contribution and assignment events; no inferred delivery/payment."""
+    admin = context[0]
+    prospect = _get(database, admin, prospect_id, allow_archived=True)
+    entries: list[dict[str, str]] = []
+
+    def add(key: str, kind: str, title: str, detail: str, when: datetime) -> None:
+        entries.append({
+            "id": key, "kind": kind, "title": title,
+            "detail": detail, "occurred_at": when.isoformat(),
+        })
+
+    add("created", "created", "Prospect created", "Registered in the CRM", prospect.created_at)
+    transitions = database.scalars(select(ProspectStageTransition).where(
+        ProspectStageTransition.organization_id == admin.organization_id,
+        ProspectStageTransition.prospect_id == prospect.id,
+    ).order_by(ProspectStageTransition.changed_at.desc()).limit(100)).all()
+    for row in transitions:
+        label = "Marked active" if row.to_stage == "active" else "Marked inactive"
+        add(str(row.id), "status", label, row.note or row.reason or "CRM status changed",
+            row.changed_at)
+    followups = database.scalars(select(ProspectFollowUp).where(
+        ProspectFollowUp.organization_id == admin.organization_id,
+        ProspectFollowUp.prospect_id == prospect.id,
+    ).order_by(ProspectFollowUp.created_at.desc()).limit(100)).all()
+    for row in followups:
+        add(str(row.id), "followup", "Follow-up: " + row.outcome.replace("_", " "),
+            row.notes, row.created_at)
+    assignments = database.scalars(select(PromoterAssignment).where(
+        PromoterAssignment.organization_id == admin.organization_id,
+        PromoterAssignment.prospect_id == prospect.id,
+    ).order_by(PromoterAssignment.assigned_at.desc()).limit(100)).all()
+    for row in assignments:
+        promoter = database.get(Promoter, row.promoter_id)
+        name = promoter.full_name if promoter and promoter.organization_id == admin.organization_id else "promoter"
+        add(str(row.id) + ":assigned", "assignment", "Promoter assigned",
+            "Assigned to " + name, row.assigned_at)
+        if row.ended_at:
+            add(str(row.id) + ":ended", "assignment", "Promoter assignment ended",
+                "Previous assignment to " + name + " ended", row.ended_at)
+    collections = database.scalars(select(ManualCollection).where(
+        ManualCollection.organization_id == admin.organization_id,
+        ManualCollection.prospect_id == prospect.id,
+    ).order_by(ManualCollection.created_at.desc()).limit(100)).all()
+    for row in collections:
+        amount = f"₹{row.amount_paise / 100:,.0f}"
+        add(str(row.id), "payment", "Collection recorded",
+            f"{amount} received on {row.received_on.strftime('%d/%m/%y')} for {row.period_month.strftime('%m/%Y')}",
+            row.created_at)
+    for row in database.scalars(select(AuditEvent).where(
+        AuditEvent.organization_id == admin.organization_id,
+        AuditEvent.entity_type == "prospect",
+        AuditEvent.entity_id == str(prospect.id),
+        AuditEvent.action.in_(("prospect.updated", "prospect.archived", "prospect.restored")),
+    ).order_by(AuditEvent.occurred_at.desc()).limit(100)).all():
+        changed = (row.after_data or {}).get("changed_fields", [])
+        if row.action == "prospect.updated":
+            title = "Journey stage changed" if "pipeline_stage_id" in changed else "Prospect details updated"
+            detail = "Stage updated by Admin" if "pipeline_stage_id" in changed else "Profile or sponsorship updated by Admin"
+        else:
+            title = "Prospect archived" if row.action == "prospect.archived" else "Prospect restored"
+            detail = "Admin changed archival status"
+        add(str(row.id), "updated", title, detail, row.occurred_at)
+    entries.sort(key=lambda entry: entry["occurred_at"], reverse=True)
+    response.headers["Cache-Control"] = "no-store"
+    return entries[:100]
