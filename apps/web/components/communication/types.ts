@@ -68,8 +68,8 @@ export async function apiWrite<T>(
 }
 export function istDisplay(date:string|null|undefined){
   if(!date)return "—";
-  return new Date(date).toLocaleString("en-IN",{
-    day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",
+  return new Date(date).toLocaleString("en-GB",{
+    day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit",
     timeZone:"Asia/Kolkata",hour12:true,
   })+" IST";
 }
