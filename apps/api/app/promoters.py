@@ -87,6 +87,7 @@ class PromoterPatch(BaseModel):
     whatsapp_opt_in: bool | None = None
     is_active: bool | None = None
     reassign_to_promoter_id: uuid.UUID | None = None
+    reassign_individually: dict[uuid.UUID, uuid.UUID | None] | None = None
 
     @model_validator(mode="after")
     def validate_fields(self) -> "PromoterPatch":
@@ -306,13 +307,15 @@ def update_promoter(
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
     _version(promoter, payload.version)
-    data = payload.model_dump(exclude_unset=True, exclude={"version", "reassign_to_promoter_id"})
+    data = payload.model_dump(exclude_unset=True, exclude={"version", "reassign_to_promoter_id", "reassign_individually"})
     changed = {k: v for k, v in data.items() if getattr(promoter, k) != v}
     if not changed:
         response.headers["Cache-Control"] = "no-store"
         return _present(database, promoter)
-    if payload.reassign_to_promoter_id and changed.get("is_active") is not False:
+    if (payload.reassign_to_promoter_id or payload.reassign_individually is not None) and changed.get("is_active") is not False:
         raise HTTPException(status_code=422, detail="Reassignment requires deactivation")
+    if payload.reassign_to_promoter_id and payload.reassign_individually is not None:
+        raise HTTPException(status_code=422, detail="Choose bulk or individual reassignment")
     transfer_count = 0
     if changed.get("is_active") is False:
         assignments = database.scalars(select(PromoterAssignment).where(
@@ -320,38 +323,52 @@ def update_promoter(
             PromoterAssignment.promoter_id == promoter.id,
             PromoterAssignment.ended_at.is_(None),
         ).order_by(PromoterAssignment.prospect_id).with_for_update()).all()
-        if assignments:
+        assigned_ids = {a.prospect_id for a in assignments}
+        if payload.reassign_individually is not None:
+            destinations = payload.reassign_individually
+            if set(destinations) != assigned_ids:
+                raise HTTPException(
+                    status_code=409, detail="Assignments changed; reload before deactivating"
+                )
+        else:
             target_id = payload.reassign_to_promoter_id
-            if target_id is None or target_id == promoter.id:
+            if assignments and (target_id is None or target_id == promoter.id):
                 raise HTTPException(
                     status_code=422, detail="Select another active promoter for reassignment"
                 )
-            target = _load(database, admin, target_id, lock=True)
-            if not target.is_active:
-                raise HTTPException(status_code=409, detail="Replacement promoter is inactive")
-            now = utc_now()
-            for assignment in assignments:
-                prospect = database.scalars(select(Prospect).where(
-                    Prospect.organization_id == admin.organization_id,
-                    Prospect.id == assignment.prospect_id,
-                ).with_for_update()).one()
-                assignment.ended_at = now
-                assignment.ended_by_admin_id = admin.id
-                prospect.version += 1
-                prospect.updated_at = now
-            database.flush()
-            for assignment in assignments:
+            destinations = {a.prospect_id: target_id for a in assignments}
+        target_ids = sorted({value for value in destinations.values() if value}, key=str)
+        if promoter.id in target_ids:
+            raise HTTPException(status_code=422, detail="Cannot reassign to the inactive promoter")
+        targets = {target_id: _load(database, admin, target_id, lock=True)
+                   for target_id in target_ids}
+        if any(not target.is_active for target in targets.values()):
+            raise HTTPException(status_code=409, detail="Replacement promoter is inactive")
+        now = utc_now()
+        for assignment in assignments:
+            prospect = database.scalars(select(Prospect).where(
+                Prospect.organization_id == admin.organization_id,
+                Prospect.id == assignment.prospect_id,
+            ).with_for_update()).one()
+            assignment.ended_at = now
+            assignment.ended_by_admin_id = admin.id
+            prospect.version += 1
+            prospect.updated_at = now
+        database.flush()
+        for assignment in assignments:
+            destination = destinations[assignment.prospect_id]
+            if destination is not None:
                 database.add(PromoterAssignment(
                     organization_id=admin.organization_id,
-                    promoter_id=target.id, prospect_id=assignment.prospect_id,
+                    promoter_id=destination, prospect_id=assignment.prospect_id,
                     assigned_by_admin_id=admin.id,
                 ))
+                transfer_count += 1
+        for target in targets.values():
             target.version += 1
             target.updated_at = now
-            transfer_count = len(assignments)
-            # All current reminder previews derive ownership from the live assignment.
-            # Historic delivery intents to the old promoter fail eligibility on dispatch.
-            database.flush()
+        # The current assignments, not stale scheduled summaries, determine recipients.
+        database.flush()
     previous = promoter.version
     for key, value in changed.items():
         setattr(promoter, key, value)
@@ -361,6 +378,7 @@ def update_promoter(
            before={"version": previous},
            after={"version": promoter.version, "changed_fields": sorted(changed),
                   "reassigned_sponsor_count": transfer_count,
+                  "unassigned_sponsor_count": len(assigned_ids) - transfer_count if changed.get("is_active") is False else 0,
                   "replacement_promoter_id": (
                       str(payload.reassign_to_promoter_id) if transfer_count else None
                   )})
