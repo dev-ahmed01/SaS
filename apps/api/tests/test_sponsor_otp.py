@@ -29,7 +29,10 @@ def _enable(monkeypatch, delivered):
     )
 
 
-def test_default_off_never_sends(api):
+def test_default_off_never_sends(api, monkeypatch):
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_secret=None,
+    ))
     client, csrf, engine = api
     person = _create(client, csrf, "Disabled", "+918100000001")
     status = client.get("/v1/prospects/" + person["id"] + "/otp/status")
