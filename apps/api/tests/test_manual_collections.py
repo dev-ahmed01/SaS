@@ -63,6 +63,16 @@ def login(client):
     return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
 
 
+def activate_for_financial_flow(client, csrf, record):
+    """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
+    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Synthetic outreach completed for financial flow test",
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def sponsor(client, headers, consent):
     response = client.post("/v1/prospects", headers=headers, json={
         "full_name": "Synthetic Sponsor",
@@ -72,7 +82,7 @@ def sponsor(client, headers, consent):
         "monthly_contribution_paise": 50000,
     })
     assert response.status_code == 201, response.text
-    return response.json()
+    return activate_for_financial_flow(client, headers, response.json())
 
 
 def sample(prospect_id):
