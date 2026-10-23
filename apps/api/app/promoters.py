@@ -307,12 +307,18 @@ def update_promoter(
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
     _version(promoter, payload.version)
-    data = payload.model_dump(exclude_unset=True, exclude={"version", "reassign_to_promoter_id", "reassign_individually"})
+    data = payload.model_dump(
+        exclude_unset=True,
+        exclude={"version", "reassign_to_promoter_id", "reassign_individually"},
+    )
     changed = {k: v for k, v in data.items() if getattr(promoter, k) != v}
     if not changed:
         response.headers["Cache-Control"] = "no-store"
         return _present(database, promoter)
-    if (payload.reassign_to_promoter_id or payload.reassign_individually is not None) and changed.get("is_active") is not False:
+    requesting_reassignment = (
+        payload.reassign_to_promoter_id or payload.reassign_individually is not None
+    )
+    if requesting_reassignment and changed.get("is_active") is not False:
         raise HTTPException(status_code=422, detail="Reassignment requires deactivation")
     if payload.reassign_to_promoter_id and payload.reassign_individually is not None:
         raise HTTPException(status_code=422, detail="Choose bulk or individual reassignment")
@@ -378,7 +384,10 @@ def update_promoter(
            before={"version": previous},
            after={"version": promoter.version, "changed_fields": sorted(changed),
                   "reassigned_sponsor_count": transfer_count,
-                  "unassigned_sponsor_count": len(assigned_ids) - transfer_count if changed.get("is_active") is False else 0,
+                  "unassigned_sponsor_count": (
+                      len(assigned_ids) - transfer_count
+                      if changed.get("is_active") is False else 0
+                  ),
                   "active": promoter.is_active,
                   "replacement_promoter_id": (
                       str(payload.reassign_to_promoter_id) if transfer_count else None
@@ -541,7 +550,10 @@ def promoter_activity(
     ).order_by(PromoterAssignment.assigned_at.desc()).limit(100)).all()
     for assignment in assignments:
         prospect = database.get(Prospect, assignment.prospect_id)
-        name = prospect.full_name if prospect and prospect.organization_id == admin.organization_id else "prospect"
+        name = (
+            prospect.full_name
+            if prospect and prospect.organization_id == admin.organization_id else "prospect"
+        )
         add(str(assignment.id) + ":assigned", "assignment", "Person assigned",
             name + " assigned to this promoter", assignment.assigned_at)
         if assignment.ended_at:
