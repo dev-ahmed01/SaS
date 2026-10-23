@@ -1006,7 +1006,8 @@ def prospect_activity(
     for row in collections:
         amount = f"₹{row.amount_paise / 100:,.0f}"
         add(str(row.id), "payment", "Collection recorded",
-            f"{amount} received on {row.received_on.strftime('%d/%m/%y')} for {row.period_month.strftime('%m/%Y')}",
+            (f"{amount} received on {row.received_on.strftime('%d/%m/%y')} "
+             f"for {row.period_month.strftime('%m/%Y')}"),
             row.created_at)
     for row in database.scalars(select(AuditEvent).where(
         AuditEvent.organization_id == admin.organization_id,
@@ -1016,7 +1017,10 @@ def prospect_activity(
     ).order_by(AuditEvent.occurred_at.desc()).limit(100)).all():
         changed = (row.after_data or {}).get("changed_fields", [])
         if row.action == "prospect.updated":
-            title = "Journey stage changed" if "pipeline_stage_id" in changed else "Prospect details updated"
+            title = (
+                "Journey stage changed" if "pipeline_stage_id" in changed
+                else "Prospect details updated"
+            )
             detail = (
                 "Stage updated by Admin"
                 if "pipeline_stage_id" in changed else "Profile or sponsorship updated by Admin"
