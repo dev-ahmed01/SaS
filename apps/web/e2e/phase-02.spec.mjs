@@ -443,7 +443,7 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await expect(page.getByText("New Inquiry",{exact:true})).toBeVisible();
-  await page.getByRole("button",{name:"Edit",exact:true}).click();
+  await page.getByRole("button",{name:/^Edit\b/}).click();
   await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption({label:renamed});
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText(renamed,{exact:true})).toBeVisible();
@@ -456,7 +456,7 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(person);
   await page.getByRole("row",{name:new RegExp(person)}).getByRole("link",{name:person}).click();
-  await page.getByRole("button",{name:"Edit",exact:true}).click();
+  await page.getByRole("button",{name:/^Edit\b/}).click();
   await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption("");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await page.goto("/prospects/stages");
