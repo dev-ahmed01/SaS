@@ -1,27 +1,58 @@
-# Sponsor OTP provider contract — pending verified Sassito integration
+# Sponsor WhatsApp phone verification — implementation and provider handoff
 
-**Status:** Provider API contract unverified. No WhatsApp/SMS OTP is sent or claimed as verified by this change.
+## Status (24 October 2026)
 
-## Scope
-New sponsor phone verification must be separate from CRM Active/Inactive, documented contact consent, and the financial lifecycle. Verifying possession of a phone number is **not** confirmation of communication opt-in or payment, and must never activate a sponsor automatically.
+**OTP security and UI are implemented; outbound delivery remains OFF by default.**
 
-## Provider information needed before enabling the adapter
-1. Confirm the exact vendor and product name referred to as "Sassito" in the 22 October 2026 meeting, and a vendor-authorized HTTPS API base URL.
-2. Supply official send/check API reference (HTTP methods, paths, authentication headers and scopes, request/response fields, error codes, sandbox mode, test examples). Never store keys in source control or chats.
-3. Confirm whether OTP is vendor-generated/verified or locally generated with vendor delivery only; these have different storage and verification contracts.
-4. Confirm the approved WhatsApp **AUTHENTICATION** template and template ID, linked sending number, and ability to send to uninitiated numbers; include delivery callbacks or status checking.
-5. Provide nonproduction restricted credentials in hosting secrets, webhook signing/verifying details, allowed IPs and rate limits, and provider cost/throughput limits.
-6. Specify intended sponsor UX (admin-created record vs self-registration), number-change rules, resends and contact-number re-verification policy.
+The supplier named in the meeting as **“Sassito”** (also described as **“Sassy WA”**) has not been conclusively identified. Two separate public products were found: [Saasyto](https://saasyto.com/) and [Sassy Infotech](https://www.sassyinfotech.com/). Do **not** assume they are the same company, treat Saasyto's QR-linked personal-number automation as an official OTP sender, or enter unknown vendor credentials into a Meta API setting.
 
-## Required security behavior
-- Use the configured provider only through a server-side adapter, never from the browser or a query parameter.
-- Server-bound challenges must carry organization, sponsor, intended mobile number and creation time; expire quickly (e.g. ten minutes), allow bounded attempts (e.g. five), and apply per-number/IP cooldown plus quotas.
-- Store only salted/peppered verification data or opaque provider challenge IDs, never plaintext OTP in database, logs, audit events, URLs or analytics.
-- Return nonenumerating responses when requesting OTP, and enforce CSRF and authorization at Admin endpoints.
-- Require an approved provider result tied to the exact challenge and phone, not merely a successful HTTP response; update phone-verified status atomically and audit it.
-- Fail closed on missing configuration, provider timeouts, invalid signatures or quota breaches. Do not mutate sponsor status on failures.
-- Use a sandbox adapter for tests: successful verification, wrong/expired code, replay, wrong tenant, wrong phone, retry limit, webhook forgery, and provider error.
-- Do not send real messages in CI or preview and never repurpose payment or reminder templates as OTP authentication templates.
+A documented **direct Meta WhatsApp Cloud API** transport has been prepared as an independent option. Saasyto claims API/webhook capability but its public pages do not supply a verified sponsor-OTP endpoint/authentication contract.
 
-## Release gate
-The current CRM review leaves OTP sending/verification **disabled** until the real provider's documented endpoints and secret setup are verified. Existing WhatsApp consent and reminder transport controls remain separate and unchanged.
+## What works in the code
+
+- Admin-only **Prospect Details → WhatsApp number verification** status, code request, and verification entry.
+- Six-digit server-generated random challenge, ten-minute expiry, 60-second resend cooldown and five requests per 24 hours per prospect. Five incorrect attempts lock a challenge.
+- Database-backed, tenant- and prospect-bound challenge and current-phone HMAC digest. OTP plaintext is never stored, logged, added to audit logs or returned to browsers.
+- Explicit CSRF on request and verification; challenge IDs never function as proof without the OTP.
+- One-time successful verification and audited time; editing the phone/WhatsApp number revokes verified state, and old challenges are refused.
+- State is separate from CRM active/inactive, follow-ups, financial collections and WhatsApp marketing/reminder opt-in.
+- Meta send call uses a preapproved WhatsApp **AUTHENTICATION** copy-code template with identical OTP in body and button. A valid Meta message ID means only **accepted by provider**, not delivered/read.
+- No queued or historical OTP replay; disabled configurations return HTTP 503 before a challenge is issued.
+- Schema migration: `0019_sponsor_otp`. Applying this migration is required before deploying the new API.
+
+## Minimal setup for the Foundation (direct Meta path)
+
+1. Own/control the sender's WhatsApp Business Account (WABA), Meta Business Portfolio and linked phone. Confirm this is the actual agreed sender; **do not** replace the contracted Sassy provider without approval.
+2. In Meta WhatsApp Manager, create and obtain approval for an **AUTHENTICATION → Copy Code** template (for example a vendor-approved template named `sponsor_verify_code`). Confirm approved language code. This is NOT a generic marketing, reminder or utility template.
+3. Store these secrets/config values *only on the API host* (Render secret environment variables or trusted equivalent). Do not commit them, paste the token into chat or set `NEXT_PUBLIC_*`:
+   - `OTP_SECRET` — stable random 32+ character secret, different from `AUTH_SECRET` and messaging webhook secrets
+   - `OTP_META_ACCESS_TOKEN` — restricted Meta system-user access token authorized for WhatsApp messaging
+   - `OTP_META_PHONE_NUMBER_ID` — numeric registered sender phone-number ID
+   - `OTP_META_TEMPLATE_NAME` — exact approved lowercase template name
+   - `OTP_META_TEMPLATE_LANGUAGE` — exact approved language (default `en_US`)
+   - `OTP_META_GRAPH_VERSION` — supported/pinned Graph version (default in example `v23.0`)
+4. Apply Alembic migrations (`alembic upgrade head`) on the backend, verify the sender, template, number ownership, costs and opt-in/notification handling, and only then set `OTP_DELIVERY_ENABLED=true` in **production**. This flag is independent of `MESSAGING_DELIVERY_ENABLED` and Pabbly; turning on OTP does not turn on reminders.
+5. In a controlled test, register a **test** prospect, open Prospect Details, request the code, enter the received 6 digits and check the verified timestamp. Change the phone and confirm verification resets.
+
+Until the flag and all fields are validated the UI intentionally says the provider is not connected and cannot send. Development/staging modes refuse an enabled provider; tests inject a fake delivery adapter and do not call Meta.
+
+## If the agreed supplier is Saasyto or Sassy Infotech
+
+Require the actual vendor's **product link and API PDF/Postman collection** (not screenshots or a generic marketing page), which shows:
+
+- Authorized HTTPS send endpoint, authentication mechanism and scope, exact request/response contract, acceptance status and idempotency behavior.
+- Whether the vendor has an **official Meta WhatsApp Business Platform** sender and can deliver approved AUTHENTICATION OTP templates with copy-code button to new contacts, rather than personal WhatsApp Web/QR-rotation or virtual numbers.
+- Whose WABA and number the Foundation owns, linked sender ID, test environment and safe sandbox phone, quoted India authentication-message costs.
+- Delivery webhook semantics, cryptographic signature verification, event IDs, retry/timeouts, data retention and deletion policy.
+- If the vendor generates and verifies OTP itself, the **verify/check API** and challenge-ID binding contract rather than a code-delivery-only endpoint.
+
+Once provided, the remaining work is implementing an approved adapter behind the current `_deliver` function (or a vendor-verified challenge adapter if OTP is provider-owned), configuring its credentials securely and confirming a genuine test send. **No vendor-specific endpoints have been invented.**
+
+## Safety boundaries
+
+- No OTP message is sent unless an authorized Admin explicitly clicks the send action and provider configuration is validated.
+- OTP is not proof of payment, communication consent, delivered messages or an active sponsorship.
+- Request submission is never echoed as a delivered notification. HTTP send response success only indicates provider acceptance.
+- No blind provider retry after a timeout. Confirmation can be uncertain; operation reports that uncertainty.
+- CI uses fake provider delivery and synthetic numbers, not live donor data.
+- Authentication template docs: [Meta developer hub](https://whatsappbusiness.com/developers/developer-hub/), [Meta Cloud API](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started), [AWS reference payload](https://aws.amazon.com/blogs/messaging-and-targeting/send-whatsapp-business-messages-with-aws-end-user-messaging-social/).
