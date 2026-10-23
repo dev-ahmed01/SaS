@@ -1,12 +1,10 @@
 """CRM redesign acceptance: activity is factual and promoter transfers are atomic."""
-import uuid
-
 from app.accounting import ist_today
 from test_crm_review_2026_10 import api  # noqa: F401
 
 
 def test_individual_handover_is_atomic_and_retains_assignment_history(api):
-    client, csrf, engine = api
+    client, csrf, _ = api
     promoters = []
     for n in range(3):
         response = client.post("/v1/promoters", headers=csrf, json={
