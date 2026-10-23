@@ -29,8 +29,8 @@ from app.models import (
     AuditEvent,
     OrganizationSettings,
     Promoter,
-    PromoterAssignment,
     ManualCollection,
+    PromoterAssignment,
     Prospect,
     ProspectArchiveInterval,
     ProspectFollowUp,
@@ -990,7 +990,10 @@ def prospect_activity(
     ).order_by(PromoterAssignment.assigned_at.desc()).limit(100)).all()
     for row in assignments:
         promoter = database.get(Promoter, row.promoter_id)
-        name = promoter.full_name if promoter and promoter.organization_id == admin.organization_id else "promoter"
+        name = (
+            promoter.full_name
+            if promoter and promoter.organization_id == admin.organization_id else "promoter"
+        )
         add(str(row.id) + ":assigned", "assignment", "Promoter assigned",
             "Assigned to " + name, row.assigned_at)
         if row.ended_at:
@@ -1014,9 +1017,14 @@ def prospect_activity(
         changed = (row.after_data or {}).get("changed_fields", [])
         if row.action == "prospect.updated":
             title = "Journey stage changed" if "pipeline_stage_id" in changed else "Prospect details updated"
-            detail = "Stage updated by Admin" if "pipeline_stage_id" in changed else "Profile or sponsorship updated by Admin"
+            detail = (
+                "Stage updated by Admin"
+                if "pipeline_stage_id" in changed else "Profile or sponsorship updated by Admin"
+            )
         else:
-            title = "Prospect archived" if row.action == "prospect.archived" else "Prospect restored"
+            title = (
+                "Prospect archived" if row.action == "prospect.archived" else "Prospect restored"
+            )
             detail = "Admin changed archival status"
         add(str(row.id), "updated", title, detail, row.occurred_at)
     entries.sort(key=lambda entry: entry["occurred_at"], reverse=True)
