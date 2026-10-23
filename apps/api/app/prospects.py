@@ -606,6 +606,8 @@ def create_prospect(
         )
         database.add(inquiry)
         database.flush()
+    if payload.pipeline_stage_id is not None:
+        _validate_pipeline(database, admin, payload.pipeline_stage_id)
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
         "pipeline_stage_id",
@@ -617,7 +619,7 @@ def create_prospect(
         lifecycle_status="new",
         crm_stage="inactive",
         crm_stage_changed_at=utc_now(),
-        pipeline_stage_id=inquiry.id,
+        pipeline_stage_id=payload.pipeline_stage_id or inquiry.id,
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
