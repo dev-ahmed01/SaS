@@ -28,6 +28,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
     event.preventDefault();
     if(saving)return;
     if(isInactive&&!reason){setError("Select why this prospect is becoming inactive.");return;}
+    if(!isInactive&&note.trim().length<3){setError("Record the follow-up and why the prospect is ready.");return;}
     setSaving(true);setError("");
     try{
       const session=await fetch("/api/admin/session",{cache:"no-store"});
@@ -37,7 +38,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
         method:"POST",credentials:"same-origin",
         headers:{"Content-Type":"application/json","X-CSRF-Token":csrf_token},
         body:JSON.stringify({version:prospect.version,stage:isInactive?"inactive":"active",
-          reason:isInactive?reason:null,note:isInactive?(note.trim()||null):null})
+          reason:isInactive?reason:null,note:note.trim()||null})
       });
       if(!response.ok)throw Error(response.status===409
         ?"This record changed. Close and reopen it to refresh."
@@ -67,15 +68,19 @@ export function StageDialog({prospect,onClose,onChanged}:{
               placeholder="Brief context to help understand attrition"/></label>
           <p className="crm-dialog-help">This pauses reminder eligibility and records the reason. It does not erase payments or alter the accounting ledger.</p>
         </> : <>
-          <p className="crm-dialog-help">Return this person to the active CRM list and reminder eligibility. Existing payment rules still apply.</p>
+          <p className="crm-dialog-help">Confirm you have contacted this prospect and record the outcome. Activating CRM contact does not record a payment.</p>
           <label className="field"><span className="field-label">Previous reason</span>
             <input value={reasonLabel(prospect.crm_inactive_reason)} readOnly/></label>
+          <label className="field"><span className="field-label">Follow-up outcome / reason for activation *</span>
+            <textarea ref={undefined} required minLength={3} maxLength={500} rows={3}
+              value={note} onChange={e=>setNote(e.target.value)}
+              placeholder="Who was contacted, their response, and agreed next step"/></label>
           <select ref={ref} className="sr-only" tabIndex={-1} aria-hidden="true"><option>Confirm</option></select>
         </>}
         {error&&<p className="form-error" role="alert">{error}</p>}
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving||(isInactive&&!reason)}>
+          <button type="submit" className="btn btn-primary" disabled={saving||(isInactive?!reason:note.trim().length<3)}>
             {saving?"Saving…":isInactive?"Confirm Inactive":"Mark Active"}
           </button>
         </div>

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { AccountingOverview } from "../accounting/accounting-overview";
+import { formatCRMDate } from "../../lib/crm-dates";
 
 type Payment = {
   id: string;
@@ -150,7 +151,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong></td>
             <td>{rupees(row.amount_paise)}</td>
-            <td>{row.period_month.slice(0,7)}</td>
+            <td>{formatCRMDate(row.period_month)}</td>
             <td>{row.reference_mask}</td>
             <td><span className={"status-pill "+(row.reversed?"archived":"active")}>
               {row.reversed?"Reversed":"Recorded"}</span></td>
@@ -190,7 +191,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           <div className="reversal-facts">
             <div><span>Sponsor</span><strong>{selected.sponsor_name}</strong></div>
             <div><span>Amount</span><strong>{rupees(selected.amount_paise)}</strong></div>
-            <div><span>Month</span><strong>{selected.period_month.slice(0,7)}</strong></div>
+            <div><span>Month</span><strong>{formatCRMDate(selected.period_month)}</strong></div>
             <div><span>Reference</span><strong>{selected.reference_mask}</strong></div>
           </div>
           <form onSubmit={reverse} aria-label="Confirm collection reversal">

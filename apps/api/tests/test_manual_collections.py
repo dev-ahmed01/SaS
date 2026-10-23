@@ -63,6 +63,16 @@ def login(client):
     return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
 
 
+def activate_for_financial_flow(client, csrf, record):
+    """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
+    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Synthetic outreach completed for financial flow test",
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def sponsor(client, headers, consent):
     response = client.post("/v1/prospects", headers=headers, json={
         "full_name": "Synthetic Sponsor",
@@ -72,7 +82,7 @@ def sponsor(client, headers, consent):
         "monthly_contribution_paise": 50000,
     })
     assert response.status_code == 201, response.text
-    return response.json()
+    return activate_for_financial_flow(client, headers, response.json())
 
 
 def sample(prospect_id):
@@ -189,7 +199,7 @@ def test_date_reference_future_and_archived_rejections(system):
         })
         assert response.status_code == 422, response.text
     assert client.delete(
-        "/v1/prospects/" + p["id"], headers={**csrf, "If-Match": "1"},
+        "/v1/prospects/" + p["id"], headers={**csrf, "If-Match": str(p["version"])},
     ).status_code == 204
     assert client.post("/v1/collections", headers=csrf, json=sample_data).status_code == 404
     with Session(engine) as db:

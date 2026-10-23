@@ -166,7 +166,7 @@ class Prospect(Base):
     email: Mapped[str | None] = mapped_column(String(320))
     occupation: Mapped[str | None] = mapped_column(String(120))
     crm_stage: Mapped[str] = mapped_column(
-        String(12), nullable=False, default="active", server_default="active"
+        String(12), nullable=False, default="inactive", server_default="inactive"
     )
     crm_stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     crm_inactive_reason: Mapped[str | None] = mapped_column(String(64))
@@ -208,6 +208,32 @@ class Prospect(Base):
         order_by="ProspectArchiveInterval.archived_at",
     )
 
+
+
+class ProspectFollowUp(Base):
+    """Append-only notes from Admin contact activity."""
+    __tablename__ = "prospect_followups"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"], ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_followup_prospect_org",
+        ),
+        Index("ix_followups_org_prospect_created", "organization_id", "prospect_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    actor_admin_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="RESTRICT"), nullable=False
+    )
+    occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    notes: Mapped[str] = mapped_column(String(500), nullable=False)
+    next_followup_on: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class ProspectStageDefinition(Base):

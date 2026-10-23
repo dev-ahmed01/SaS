@@ -6,7 +6,7 @@ import { backendOrigin } from "../../../../../lib/admin-backend";
  * No user-controlled upstream host or unrestricted API forwarding.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const allowedQuery = new Set(["active", "q", "limit", "offset"]);
+const allowedQuery = new Set(["active", "q", "limit", "offset", "kind"]);
 const responseHeaders = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",

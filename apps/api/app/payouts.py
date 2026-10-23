@@ -229,6 +229,103 @@ def _render_payment(db: Session, entry: PayoutPayment) -> PaymentRead:
     )
 
 
+class QuickPayoutCreate(BaseModel):
+    """One-shot admin-attested outgoing payment; never initiates a bank transfer."""
+    model_config = ConfigDict(extra="forbid")
+    request_id: uuid.UUID
+    first_name: str = Field(min_length=2, max_length=80)
+    last_name: str = Field(default="", max_length=80)
+    purpose: str = Field(min_length=3, max_length=240)
+    amount_paise: int = Field(gt=0, le=MAX_AMOUNT)
+    paid_on: date
+    payment_method: Literal["upi", "bank_transfer", "cash", "cheque"]
+    payment_reference: str = Field(min_length=6, max_length=100)
+    funds_disbursed: Literal[True]
+
+    @field_validator("first_name", "last_name", "purpose")
+    @classmethod
+    def clean_labels(cls, value: str) -> str:
+        return " ".join(value.split())
+
+    @field_validator("payment_reference")
+    @classmethod
+    def valid_reference(cls, value: str) -> str:
+        return PaymentCreate.normalize_reference(value)
+
+
+@router.post("/quick", response_model=PaymentRead, status_code=201)
+def record_quick_payout(
+    payload: QuickPayoutCreate, response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    db: Annotated[Session, Depends(db_session)],
+) -> PaymentRead:
+    """Create one-time plan and paid record in the same database transaction."""
+    admin = context[0]
+    _settings(db, admin, lock=True)
+    signature = _hash(payload)
+    prior = db.scalars(select(PayoutPayment).where(
+        PayoutPayment.organization_id == admin.organization_id,
+        PayoutPayment.request_id == payload.request_id,
+    )).one_or_none()
+    if prior:
+        if prior.request_payload_hash != signature:
+            raise HTTPException(status_code=409, detail="Request ID used with different payout")
+        response.status_code = 200
+        response.headers["Cache-Control"] = "no-store"
+        return _render_payment(db, prior)
+    if payload.paid_on > ist_today():
+        raise HTTPException(status_code=422, detail="Cannot record a future payout")
+    name = " ".join((payload.first_name, payload.last_name)).strip()
+    reference_digest = hashlib.sha256(payload.payment_reference.encode()).hexdigest()
+    if db.scalar(select(PayoutPayment.id).where(
+        PayoutPayment.organization_id == admin.organization_id,
+        PayoutPayment.reference_digest == reference_digest,
+    )):
+        raise HTTPException(status_code=409, detail="This UTR/reference was already recorded")
+    period = month_start(payload.paid_on)
+    plan = PayoutPlan(
+        organization_id=admin.organization_id,
+        create_request_id=payload.request_id, create_hash=signature,
+        payee_name=name, purpose=payload.purpose,
+        notes=None, cadence="one_time", amount_paise=payload.amount_paise,
+        start_month=period, scheduled_on=payload.paid_on,
+        created_by_admin_id=admin.id,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(PayoutPlanTerm(
+        organization_id=admin.organization_id, plan_id=plan.id,
+        effective_month=period, status="active",
+        recorded_by_admin_id=admin.id,
+    ))
+    payment = PayoutPayment(
+        organization_id=admin.organization_id,
+        plan_id=plan.id, request_id=payload.request_id,
+        request_payload_hash=signature,
+        period_month=period, paid_on=payload.paid_on,
+        amount_paise=payload.amount_paise, payment_method=payload.payment_method,
+        reference_digest=reference_digest,
+        reference_mask="****" + payload.payment_reference[-4:],
+        recorded_by_admin_id=admin.id,
+    )
+    db.add(payment)
+    db.flush()
+    db.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="payout.quick_attested", entity_type="payout_payment",
+        entity_id=str(payment.id),
+        after_data={"plan_id":str(plan.id), "amount_paise":payload.amount_paise,
+                    "payment_method":payload.payment_method, "period_month":str(period)},
+    ))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Payout conflict; check All Payouts") from exc
+    response.headers["Cache-Control"] = "no-store"
+    return _render_payment(db, payment)
+
+
 @router.post("/plans", response_model=PlanRead, status_code=201)
 def create_plan(
     payload: PlanCreate, response: Response,

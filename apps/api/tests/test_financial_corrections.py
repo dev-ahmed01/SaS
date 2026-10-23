@@ -69,6 +69,16 @@ def login(client, email="admin@foundation.org",
     return {"X-CSRF-Token":client.get("/v1/auth/session").json()["csrf_token"]}
 
 
+def activate_for_financial_flow(client, csrf, record):
+    """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
+    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Synthetic outreach completed for financial flow test",
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def sponsor(client, headers, phone="+919876543210", consent=True):
     response = client.post("/v1/prospects", headers=headers, json={
         "full_name":"Synthetic Reversal Sponsor",
@@ -77,7 +87,7 @@ def sponsor(client, headers, phone="+919876543210", consent=True):
         "monthly_contribution_paise":50000,
     })
     assert response.status_code == 201, response.text
-    return response.json()
+    return activate_for_financial_flow(client, headers, response.json())
 
 
 def pay(client, headers, prospect_id, reference="REVERSALREF001",

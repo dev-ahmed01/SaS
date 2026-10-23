@@ -125,7 +125,7 @@ def test_assigned_stages_survive_edits_and_cannot_be_deleted_until_unassigned(sy
     assert person["pipeline_stage_name"] == "Ready for call"
     assert person["pipeline_stage_color"] == "#7c3aed"
     assert person["lifecycle_status"] == "new"
-    assert person["crm_stage"] == "active"
+    assert person["crm_stage"] == "inactive"
     assert client.get("/v1/prospect-stages").json()[0]["prospect_count"] == 1
     assert client.delete(
         "/v1/prospect-stages/"+stage["id"],

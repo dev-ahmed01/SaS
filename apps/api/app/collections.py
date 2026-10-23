@@ -191,6 +191,10 @@ def add_collection(
     ).with_for_update()).one_or_none()
     if sponsor is None:
         raise HTTPException(status_code=404, detail="Sponsor not found or archived")
+    if sponsor.crm_stage != "active":
+        raise HTTPException(
+            status_code=422, detail="Only active CRM sponsors can receive collections"
+        )
     if sponsor.start_month is None or payload.period_month < sponsor.start_month:
         raise HTTPException(status_code=422, detail="Billing month predates registration")
     if payload.received_on < sponsor.start_month:

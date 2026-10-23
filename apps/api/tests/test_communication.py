@@ -104,6 +104,15 @@ def test_communication_requires_auth_and_csrf(system):
     assert client.post("/v1/communication/send", headers=csrf, json={}).status_code == 404
 
 
+def activate_for_communication(client, csrf, record):
+    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Synthetic prospect follow-up completed",
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def test_audience_preview_never_infers_consent_or_sent_status(system):
     client, engine = system
     csrf = login(client)
@@ -115,7 +124,7 @@ def test_audience_preview_never_infers_consent_or_sent_status(system):
             "email": "contact@example.org",
         })
         assert result.status_code == 201, result.text
-        return result.json()
+        return activate_for_communication(client, csrf, result.json())
     consenting = create("Consenting Candidate", "+919877661101", True)
     create("No Consent Candidate", "+919877661102", False)
     count = client.get("/v1/communication/audience?audience=prospects&segment=all"
@@ -254,6 +263,7 @@ def test_preflight_requires_explicit_consent_and_never_dispatches(system):
         "monthly_contribution_paise": 25000,
     })
     assert person.status_code == 201, person.text
+    activate_for_communication(client, csrf, person.json())
     identifier = person.json()["id"]
     campaign = create_campaign(client, csrf)
     assert campaign.status_code == 201, campaign.text
@@ -333,6 +343,7 @@ def test_email_requires_documented_consent_and_preflight_is_tenant_scoped(system
         "monthly_contribution_paise": 25000,
     })
     assert person.status_code == 201, person.text
+    activate_for_communication(client, csrf, person.json())
     identifier = person.json()["id"]
     campaign = create_campaign(client, csrf, channel="email", subject="Foundation notice")
     assert campaign.status_code == 201, campaign.text

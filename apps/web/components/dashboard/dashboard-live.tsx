@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
+import { formatCRMDate } from "../../lib/crm-dates";
 
 type Month = {
   period_month:string;due_paise:number;contributions_paise:number;
@@ -28,9 +29,7 @@ const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{
 const monthLabel=(value:string)=>new Intl.DateTimeFormat("en-IN",{
   month:"short",year:"numeric",timeZone:"UTC",
 }).format(new Date(value.slice(0,10)+"T00:00:00Z"));
-const dateLabel=(value:string)=>new Intl.DateTimeFormat("en-IN",{
-  dateStyle:"medium",timeZone:"Asia/Kolkata",
-}).format(new Date(value));
+const dateLabel=formatCRMDate;
 const barWidth=(value:number,maximum:number)=>{
   return (maximum>0?Math.round(value/maximum*100):0)+"%";
 };

@@ -363,7 +363,14 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
         area_city="Mysuru", monthly_contribution_paise=75000,
     ).json()
     pid = record["id"]
-    assert record["crm_stage"] == "active"
+    assert record["crm_stage"] == "inactive"
+    assert record["pipeline_stage_name"] == "New Inquiry"
+    activated_first = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Initial outreach documented",
+    })
+    assert activated_first.status_code == 200, activated_first.text
+    record = activated_first.json()
     assert record["lifecycle_status"] == "new"
     assert record["first_name"] == "Nadia"
     assert record["assigned_promoter_name"] is None
@@ -372,11 +379,12 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
         "version": record["version"], "stage": "inactive", "reason": "budget",
     }).status_code == 403
     invalid = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
-        "version": 1, "stage": "inactive",
+        "version": record["version"], "stage": "inactive",
     })
     assert invalid.status_code == 422
     marked = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
-        "version": 1, "stage": "inactive", "reason": "budget", "note": "Follow up later",
+        "version": record["version"], "stage": "inactive",
+        "reason": "budget", "note": "Follow up later",
     })
     assert marked.status_code == 200, marked.text
     state = marked.json()
@@ -384,20 +392,22 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
     assert state["crm_inactive_reason"] == "budget"
     assert state["days_inactive"] == 0
     assert state["lifecycle_status"] == "new"
-    assert len(state["stage_history"]) == 1
+    assert len(state["stage_history"]) == 2
     assert client.get("/v1/prospects?crm_stage=active").json()["total"] == 0
     assert client.get("/v1/prospects?crm_stage=inactive").json()["total"] == 1
     assert client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
         "version": 1, "stage": "active",
+        "note": "Old version cannot overwrite the new status",
     }).status_code == 409
     activated = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
         "version": state["version"], "stage": "active",
+        "note": "Sponsor contacted and ready to reactivate",
     })
     assert activated.status_code == 200, activated.text
     assert activated.json()["crm_stage"] == "active"
     assert activated.json()["crm_inactive_reason"] is None
     assert activated.json()["days_inactive"] is None
-    assert len(activated.json()["stage_history"]) == 2
+    assert len(activated.json()["stage_history"]) == 3
     with Session(engine) as db:
         saved = db.get(Prospect, uuid.UUID(pid))
         assert saved.lifecycle_status == "new"
