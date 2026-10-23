@@ -57,6 +57,16 @@ def login(client, email="admin@foundation.org",
     return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
 
 
+def activate_for_financial_flow(client, csrf, record):
+    """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
+    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Synthetic outreach completed for financial flow test",
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def register(client, csrf, phone="+919876555001", consent=True):
     r = client.post("/v1/prospects", headers=csrf, json={
         "full_name": "Synthetic Sponsor", "mobile_number": phone,
@@ -64,7 +74,7 @@ def register(client, csrf, phone="+919876555001", consent=True):
         "monthly_contribution_paise": 50000,
     })
     assert r.status_code == 201, r.text
-    return r.json()
+    return activate_for_financial_flow(client, csrf, r.json())
 
 
 def collection(client, csrf, prospect, reference="DASHBOARDREF0001"):
