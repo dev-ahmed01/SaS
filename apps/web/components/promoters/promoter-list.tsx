@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
 import type { Promoter, PromoterPage } from "./promoter-types";
-import { csrfToken } from "./promoter-types";
+import { PromoterStatusDialog } from "./promoter-status-dialog";
 import { formatCRMDate } from "../../lib/crm-dates";
 
 const displayDate=formatCRMDate;
@@ -18,7 +18,6 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   const [page,setPage]=useState<PromoterPage|null>(()=>recentSnapshot<PromoterPage>("/api/admin/promoters?"+new URLSearchParams({q:"",limit:"20",offset:"0",...(view!=="all"?{active:String(view==="active")}:{})})));
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(true);
-  const [pending,setPending]=useState(false);
   const [target,setTarget]=useState<Promoter|null>(null);
 
   useEffect(()=>{
@@ -49,27 +48,6 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
     return ()=>abort.abort();
   },[fetchPage,revision]);
 
-  async function toggle(){
-    if(!target||pending)return;
-    if(target.is_active && target.sponsor_count){
-      setError("Reassign or unassign every sponsor before deactivating this promoter.");
-      setTarget(null);return;
-    }
-    setPending(true);setError("");
-    try{
-      const csrf=await csrfToken();
-      const res=await fetch("/api/admin/promoters/"+target.id,{
-        method:"PATCH",credentials:"same-origin",
-        headers:{"X-CSRF-Token":csrf,"Content-Type":"application/json"},
-        body:JSON.stringify({version:target.version,is_active:!target.is_active}),
-      });
-      if(!res.ok)throw Error(res.status===409
-        ?"This promoter was updated or still has assigned sponsors. Refresh and retry."
-        :"Could not change promoter status.");
-      setTarget(null);setRevision(v=>v+1);
-    }catch(e){setError(e instanceof Error?e.message:"Unable to update status.");}
-    finally{setPending(false);}
-  }
   const title=view==="all"?"All Promoters":view==="active"?"Active Promoters":"Inactive Promoters";
   return <section className="crm-list" aria-label={title}>
     <div className="crm-list-tools">
@@ -123,21 +101,7 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
           onClick={()=>setOffset(x=>x+20)}>Next</button>
       </div>
     </div>
-    {target&&<div className="crm-dialog-scrim">
-      <section className="crm-dialog" role="dialog" aria-modal="true"
-        aria-label="Confirm promoter status">
-        <h2>{target.is_active?"Deactivate promoter?":"Reactivate promoter?"}</h2>
-        <p>{target.full_name}</p>
-        <p className="crm-muted">{target.is_active
-          ?"Promoters with assigned sponsors must be unassigned or reassigned first."
-          :"The promoter will return to the Active list."}</p>
-        <div className="form-actions">
-          <button type="button" className="btn btn-secondary" disabled={pending}
-            onClick={()=>setTarget(null)}>Cancel</button>
-          <button type="button" className="btn btn-primary" disabled={pending}
-            onClick={toggle}>{pending?"Saving…":"Confirm"}</button>
-        </div>
-      </section>
-    </div>}
+    {target&&<PromoterStatusDialog promoter={target} onClose={()=>setTarget(null)}
+      onChanged={()=>{setTarget(null);setRevision(v=>v+1);}}/>}
   </section>;
 }

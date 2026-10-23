@@ -27,6 +27,7 @@ const istDate=todayISTISO;
 export function ManualCollections(){
   const [search,setSearch]=useState("");
   const [results,setResults]=useState<Prospect[]>([]);
+  const [lookupState,setLookupState]=useState<"idle"|"searching"|"found"|"missing"|"failed">("idle");
   const [selected,setSelected]=useState<Prospect|null>(null);
   const [rupees,setRupees]=useState("");
   const [customAmount,setCustomAmount]=useState(false);
@@ -39,14 +40,15 @@ export function ManualCollections(){
   const [success,setSuccess]=useState("");
   const requestId=useRef<string|null>(null);
   useEffect(()=>{
-    if(search.trim().length<2||selected){setResults([]);return;}
+    if(search.trim().length<2||selected){setResults([]);setLookupState("idle");return;}
+    setLookupState("searching");
     const controller=new AbortController();
     const timeout=setTimeout(()=>{
-      fetch("/api/admin/prospects?"+new URLSearchParams({q:search.trim(),crm_stage:"active",limit:"15"}),{
+      fetch("/api/admin/prospects?"+new URLSearchParams({q:search.trim(),limit:"30"}),{
         cache:"no-store",signal:controller.signal,
       }).then(async r=>{if(!r.ok)throw Error("Search unavailable");return await r.json();})
-        .then(data=>{if(!controller.signal.aborted)setResults((data.items as Prospect[]).filter(p=>p.crm_stage==="active"));})
-        .catch(()=>{if(!controller.signal.aborted)setResults([]);});
+        .then(data=>{if(!controller.signal.aborted){const entries=data.items as Prospect[];setResults(entries);setLookupState(entries.length?"found":"missing");}})
+        .catch(()=>{if(!controller.signal.aborted){setResults([]);setLookupState("failed");}});
     },250);
     return ()=>{clearTimeout(timeout);controller.abort();};
   },[search,selected]);
@@ -60,7 +62,12 @@ export function ManualCollections(){
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(saving)return;
-    if(!selected||selected.crm_stage!=="active"){setError("Select an active sponsor.");return;}
+    if(!selected||selected.crm_stage!=="active"){
+      const inactive=results.some(p=>p.crm_stage==="inactive" &&
+        (p.full_name.toLowerCase()===search.trim().toLowerCase()||p.mobile_number===search.trim()));
+      setError(inactive?"This prospect is inactive. Reactivate them in Prospects before recording a collection.":
+        "This name is not a selected, active prospect. Search and select a registered prospect first.");return;
+    }
     const receivedISO=dateInputToISO(receivedOn);
     if(!receivedISO||receivedISO>istDate()){
       setError("Enter a valid received date as DD/MM/YY (not in the future).");return;
@@ -126,12 +133,18 @@ export function ManualCollections(){
             </label>
             {selected&&<p className="manual-selected">Selected: {selected.full_name} · {selected.mobile_number}
               · {selected.whatsapp_opt_in?"WhatsApp consent recorded":"No WhatsApp consent"}</p>}
-            {!selected&&results.length>0&&<div className="manual-search-results" role="listbox" aria-label="Matching sponsors">
+            {!selected&&results.length>0&&<div className="manual-search-results" aria-label="Matching prospects">
               {results.map(candidate=><button type="button" key={candidate.id}
-                role="option" aria-selected={false} onClick={()=>select(candidate)}>
-                <strong>{candidate.full_name}</strong><span>{candidate.mobile_number}</span>
+                role="option" aria-selected={false} disabled={candidate.crm_stage!=="active"} onClick={()=>select(candidate)}>
+                <strong>{candidate.full_name}</strong><span>{candidate.mobile_number} · {candidate.crm_stage==="active"?"Active":"Inactive — cannot record collection"}</span>
               </button>)}
             </div>}
+            {!selected&&search.trim().length>=2&&lookupState==="missing"&&<p className="form-error" role="status">
+              No registered prospect found for “{search.trim()}”. Add the person in Prospects first.</p>}
+            {!selected&&results.some(p=>p.crm_stage==="inactive")&&<p className="form-error" role="status">
+              Inactive prospects cannot receive collections. Reactivate the person from their Prospect Details page.</p>}
+            {!selected&&lookupState==="failed"&&<p className="form-error" role="alert">Prospect lookup unavailable. Please retry.</p>}
+            {!selected&&lookupState==="searching"&&<p role="status" className="crm-muted">Searching prospects…</p>}
           </div>
           <div className="field"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
             <select id="collection-amount" aria-label="Amount received (₹)" required value={customAmount?"other":rupees}
@@ -168,7 +181,7 @@ export function ManualCollections(){
         </div>
         {error&&<p className="form-error" role="alert">{error}</p>}
         {success&&<p className="form-success" role="status">{success}</p>}
-        <div className="manual-collections-submit"><button type="submit" disabled={saving||!selected}
+        <div className="manual-collections-submit"><button type="submit" disabled={saving}
           className="btn btn-primary">{saving?"Recording…":"Save Collection"}</button></div>
       </form>
     </section>

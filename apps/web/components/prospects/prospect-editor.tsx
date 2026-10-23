@@ -2,13 +2,11 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Prospect } from "./prospects-types";
-import { pipelineStages } from "./pipeline-types";
-import type { PipelineStage } from "./pipeline-types";
 
 type Values = {
   first_name:string;last_name:string;country_code:string;phone:string;
   email:string;city:string;occupation:string;tokens:string;start_month:string;
-  promoter_id:string;pipeline_stage_id:string;whatsapp_opt_in:boolean;
+  promoter_id:string;whatsapp_opt_in:boolean;
 };
 type PromoterOption = {id:string;full_name:string;is_active:boolean};
 
@@ -51,7 +49,6 @@ function initialValues(initial?:Prospect):Values {
     tokens:String((initial?.monthly_contribution_paise??25000)/25000),
     start_month:initial?.start_month?.slice(0,7)??monthNow(),
     promoter_id:initial?.assigned_promoter_id??"",
-    pipeline_stage_id:initial?.pipeline_stage_id??"",
     whatsapp_opt_in:initial?.whatsapp_opt_in??false,
   };
 }
@@ -70,8 +67,6 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   const [error,setError]=useState("");
   const [promoters,setPromoters]=useState<PromoterOption[]>([]);
   const [promotersError,setPromotersError]=useState("");
-  const [stages,setStages]=useState<PipelineStage[]>([]);
-  const [stagesError,setStagesError]=useState("");
   const [current,setCurrent]=useState<Prospect|undefined>(initial);
   const requestId=useRef<string|null>(null);
   const isEdit=Boolean(initial);
@@ -83,19 +78,6 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
       .then(data=>{if(active)setPromoters(data.items??[]);})
       .catch(()=>{if(active)setPromotersError("Promoters are unavailable. You can save without one.");});
     return ()=>{active=false;};
-  },[]);
-  useEffect(()=>{
-    let mounted=true;
-    pipelineStages().then(rows=>{
-      if(!mounted)return;
-      setStages(rows);
-      if(!initial){
-        const inquiry=rows.find(row=>row.name.toLowerCase()==="new inquiry");
-        if(inquiry)setValues(previous=>({...previous,pipeline_stage_id:inquiry.id}));
-      }
-    })
-      .catch(()=>{if(mounted)setStagesError("Stages unavailable. Try reloading.");});
-    return ()=>{mounted=false;};
   },[]);
   useEffect(()=>{
     if(initial)return;
@@ -133,7 +115,6 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         mobile_number:mobile,whatsapp_number:mobile,
         email:values.email.trim()||null,area_city:values.city.trim(),
         occupation:values.occupation.trim()||null,
-        pipeline_stage_id:current?(values.pipeline_stage_id||null):null,
         whatsapp_opt_in:values.whatsapp_opt_in,
         monthly_contribution_paise:tokens*25000,
       };
@@ -248,23 +229,8 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
                 <option value={initial.assigned_promoter_id}>{initial.assigned_promoter_name??"Existing promoter"}</option>}
               {promoters.map(p=><option value={p.id} key={p.id}>{p.full_name}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">Prospect Stage</span>
-            <select aria-label="Prospect Stage" disabled={!isEdit}
-              value={isEdit?values.pipeline_stage_id:(stages.find(s=>s.name.toLowerCase()==="new inquiry")?.id??"new-inquiry")}
-              onChange={e=>set("pipeline_stage_id",e.target.value)}>
-              {!isEdit&&<option value="new-inquiry">New Inquiry</option>}
-              {isEdit&&<option value="">No stage selected</option>}
-              {initial?.pipeline_stage_id&&!stages.some(x=>x.id===initial.pipeline_stage_id)&&
-                <option value={initial.pipeline_stage_id}>
-                  {initial.pipeline_stage_name??"Existing stage"}</option>}
-              {stages.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-            {stages.length===0&&<span className="field-helper">
-              New Inquiry will be created automatically when needed.</span>}
-          </label>
         </div>
         {promotersError&&<p className="form-error" role="status">{promotersError}</p>}
-        {stagesError&&<p className="form-error" role="status">{stagesError}</p>}
         <label className="prospect-consent">
           <input type="checkbox" checked={values.whatsapp_opt_in}
             onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>

@@ -7,23 +7,20 @@ import { Icon } from "../ui/icon";
 import { FollowUpLog } from "./followup-log";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
+import { ProspectStageControl } from "./prospect-stage-control";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
-import { reasonLabel } from "./prospects-types";
 
+type Activity={id:string;kind:string;title:string;detail:string;occurred_at:string};
 const money=(p:number)=>(p/100).toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0});
-const dateFmt=formatCRMDate;
-const monthFmt=(v:string|null)=>formatCRMDate(v);
-
-function Info({label,value}:{label:string;value:React.ReactNode}){
-  return <div className="crm-detail-field"><dt>{label}</dt><dd>{value??"—"}</dd></div>;
+function Tile({label,children}:{label:string;children:React.ReactNode}){
+  return <div className="crm-summary-tile"><span className="crm-muted">{label}</span>
+    <strong>{children}</strong></div>;
 }
-function Card({title,children}:{title:string;children:React.ReactNode}){
-  return <section className="crm-detail-card"><h2>{title}</h2><dl className="crm-detail-grid">{children}</dl></section>;
-}
-
 export function ProspectDetails({id}:{id:string}){
   const [record,setRecord]=useState<Prospect|null>(null);
+  const [activity,setActivity]=useState<Activity[]>([]);
+  const [filter,setFilter]=useState("all");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [editing,setEditing]=useState(false);
@@ -31,20 +28,25 @@ export function ProspectDetails({id}:{id:string}){
   const [archiveOpen,setArchiveOpen]=useState(false);
   const [busy,setBusy]=useState(false);
   const [revision,setRevision]=useState(0);
+  const refresh=()=>setRevision(v=>v+1);
   const load=useCallback(async(signal?:AbortSignal)=>{
-    const result=await fetch("/api/admin/prospects/"+id,{cache:"no-store",signal});
-    if(!result.ok)throw Error(result.status===404?"This prospect could not be found.":"Could not load prospect details.");
-    return await result.json() as Prospect;
+    const response=await fetch("/api/admin/prospects/"+id,{cache:"no-store",signal});
+    if(!response.ok)throw Error(response.status===404?"Prospect not found.":"Could not load prospect details.");
+    return await response.json() as Prospect;
   },[id]);
   useEffect(()=>{
     const controller=new AbortController();
     setLoading(true);setError("");
-    load(controller.signal).then(item=>{if(!controller.signal.aborted)setRecord(item);})
-      .catch(e=>{if(!controller.signal.aborted)setError(e.message);})
+    Promise.all([
+      load(controller.signal),
+      fetch("/api/admin/prospects/"+id+"/activity",{cache:"no-store",signal:controller.signal})
+        .then(async r=>{if(!r.ok)throw Error("Activity timeline unavailable.");return r.json() as Promise<Activity[]>;}),
+    ]).then(([person,events])=>{
+      if(!controller.signal.aborted){setRecord(person);setActivity(events);}
+    }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load details.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
-    return ()=>controller.abort();
+    return()=>controller.abort();
   },[load,revision]);
-
   async function archive(){
     if(!record||busy)return;
     setBusy(true);setError("");
@@ -57,103 +59,96 @@ export function ProspectDetails({id}:{id:string}){
         method:restore?"POST":"DELETE",credentials:"same-origin",
         headers:{"X-CSRF-Token":csrf_token,"If-Match":String(record.version)},
       });
-      if(!response.ok)throw Error(response.status===409
-        ?"This prospect was changed elsewhere. Reload and try again."
-        :"Could not update the record.");
-      setArchiveOpen(false);setRevision(v=>v+1);
-    }catch(e){setError(e instanceof Error?e.message:"Could not update the record.");}
+      if(!response.ok)throw Error(response.status===409?"Prospect changed elsewhere. Reload and retry.":"Could not update prospect.");
+      setArchiveOpen(false);refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not update prospect.");}
     finally{setBusy(false);}
   }
-
-  return <AppShell>
-    <div className="crm-details">
-      <Link href="/prospects" className="back-link"><Icon name="arrow-left" size={17}/> All prospects</Link>
-      {error&&<p className="form-error" role="alert">{error}</p>}
-      {loading?<p role="status">Loading prospect…</p>:record&&<>
-        <div className="crm-details-header">
-          <div><h2>{record.full_name}</h2><p>Created {dateFmt(record.created_at)}</p></div>
-          <span className={"status-pill "+record.crm_stage}>{record.archived_at?"Archived":record.crm_stage==="active"?"Active":"Inactive"}</span>
+  const entries=filter==="all"?activity:activity.filter(item=>item.kind===filter);
+  return <AppShell><div className="crm-details crm-redesign">
+    <Link href="/prospects" className="back-link"><Icon name="arrow-left" size={17}/> All prospects</Link>
+    {error&&<p role="alert" className="form-error">{error}</p>}
+    {loading?<p role="status">Loading prospect…</p>:record&&<>
+      <div className="crm-details-header">
+        <div><div className="crm-title-line">
+          <h2>{record.full_name}</h2>
+          <span className={"status-pill "+record.crm_stage}>
+            {record.archived_at?"Archived":record.crm_stage==="active"?"Active":"Inactive"}
+          </span></div>
+          <p>Created {formatCRMDate(record.created_at)}</p>
         </div>
-        {editing&&<ProspectEditor initial={record}
-          onCancel={()=>setEditing(false)} onSaved={()=>{setEditing(false);setRevision(v=>v+1);}}/>}
-        <div className="crm-detail-cards">
-          <Card title="Personal information">
-            <Info label="First name" value={record.first_name??record.full_name.split(" ")[0]}/>
-            <Info label="Last name" value={record.last_name??(record.full_name.split(" ").slice(1).join(" ")||"—")}/>
-            <Info label="City" value={record.area_city||"—"}/>
-            <Info label="Occupation" value={record.occupation||"—"}/>
-          </Card>
-          <Card title="Contact">
-            <Info label="WhatsApp / Mobile" value={record.mobile_number}/>
-            <Info label="Email" value={record.email||"—"}/>
-            <Info label="WhatsApp consent" value={record.whatsapp_opt_in?"Recorded":"Not recorded"}/>
-          </Card>
-
-          <Card title="Sponsorship">
-            <Info label="Monthly sponsorship" value={money(record.monthly_contribution_paise)}/>
-            <Info label="Tokens" value={String(record.monthly_contribution_paise/25000)+" × ₹250"}/>
-            <Info label="Start month" value={monthFmt(record.start_month)}/>
-            <Info label="Payment status" value={record.lifecycle_status==="new"?"Never paid":record.lifecycle_status}/>
-            <Info label="Last verified contribution" value={dateFmt(record.last_verified_payment_at)}/>
-          </Card>
-          <Card title="Promoter & CRM">
-            <Info label="Assigned promoter" value={record.assigned_promoter_name||"Unassigned"}/>
-            <Info label="Prospect stage" value={record.pipeline_stage_name||"Unassigned"}/>
-            <Info label="CRM status" value={record.crm_stage==="active"?"Active":"Inactive"}/>
-            <Info label="Reason for inactivity" value={record.crm_stage==="inactive"?reasonLabel(record.crm_inactive_reason):"—"}/>
-            <Info label="Inactive since" value={record.crm_stage==="inactive"?dateFmt(record.crm_stage_changed_at):"—"}/>
-            <Info label="Days inactive" value={record.days_inactive!==null?String(record.days_inactive):"—"}/>
-            <Info label="Last change" value={dateFmt(record.updated_at)}/>
-          </Card>
-
-          <section className="crm-detail-card">
-            <FollowUpLog prospect={record} onSaved={()=>setRevision(v=>v+1)}/>
-          </section>
-          <section className="crm-detail-card">
-            <h2>Stage history</h2>
-            {record.stage_history.length===0?<p className="crm-muted">No manual stage changes yet.</p>
-              :<ol className="crm-stage-history">
-                {[...record.stage_history].reverse().map((event,i)=><li key={event.changed_at+i}>
-                  <strong>{event.to_stage==="active"?"Moved to Active":"Moved to Inactive"}</strong>
-                  <span>{dateFmt(event.changed_at)}{event.reason?" · "+reasonLabel(event.reason):""}</span>
-                  {event.note&&<p>{event.note}</p>}
-                </li>)}
-              </ol>}
-          </section>
-        </div>
-        <div className="crm-detail-actions" aria-label="Prospect actions">
-          <button type="button" className="crm-action-card" disabled={Boolean(record.archived_at)}
-            onClick={()=>setStageOpen(true)}>
-            <Icon name="users" size={22}/>
-            <span><strong>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</strong>
-              <small>Log the reason for changing CRM eligibility</small></span>
-          </button>
-          <button type="button" className="crm-action-card" disabled={Boolean(record.archived_at)}
-            onClick={()=>setEditing(v=>!v)}>
-            <Icon name="file" size={22}/>
-            <span><strong>Edit</strong><small>Update contact and sponsorship</small></span>
-          </button>
-          <button type="button" className="crm-action-card danger" onClick={()=>setArchiveOpen(true)}>
-            <Icon name="file" size={22}/>
-            <span><strong>{record.archived_at?"Restore":"Delete"}</strong>
-              <small>{record.archived_at?"Return to CRM":"Archive without deleting payment history"}</small></span>
-          </button>
-        </div>
-      </>}
-      {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}
-        onChanged={()=>{setStageOpen(false);setRevision(v=>v+1);}}/>}
-      {archiveOpen&&record&&<div className="crm-dialog-scrim" role="presentation">
-        <section className="crm-dialog" role="dialog" aria-modal="true" aria-label="Confirm prospect archive">
-          <h2>{record.archived_at?"Restore prospect?":"Archive this prospect?"}</h2>
-          <p>{record.archived_at?"This will return the prospect to normal lists.":"This hides the prospect from normal lists without deleting financial records, receipts, or activity history."}</p>
-          <div className="form-actions">
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={()=>setArchiveOpen(false)}>Cancel</button>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={archive}>
-              {busy?"Saving…":record.archived_at?"Restore prospect":"Archive prospect"}
-            </button>
+      </div>
+      {editing&&<ProspectEditor initial={record}
+        onCancel={()=>setEditing(false)} onSaved={()=>{setEditing(false);refresh();}}/>}
+      <div className="crm-summary-strip">
+        <Tile label="Assigned promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
+        <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)}
+          <small>{record.monthly_contribution_paise/25000} × ₹250</small></Tile>
+        <Tile label="Start month">{formatCRMDate(record.start_month)}</Tile>
+        <Tile label="Payment status">{record.lifecycle_status==="new"?"Never paid":record.lifecycle_status}</Tile>
+      </div>
+      <div className="crm-redesign-columns">
+        <section className="crm-detail-card">
+          <h2>Overview</h2>
+          <div className="crm-overview-grid">
+            <Tile label="Full name">{record.full_name}</Tile>
+            <Tile label="City">{record.area_city||"—"}</Tile>
+            <Tile label="Contact"><span>{record.mobile_number}</span>
+              {record.email&&<small>{record.email}</small>}</Tile>
+            {record.occupation&&<Tile label="Occupation">{record.occupation}</Tile>}
+            <Tile label="Sponsorship">{money(record.monthly_contribution_paise)} / month
+              <small>{record.monthly_contribution_paise/25000} tokens · Starts {formatCRMDate(record.start_month)}</small></Tile>
+            <Tile label="Last contribution">{formatCRMDate(record.last_verified_payment_at)}</Tile>
           </div>
+          <ProspectStageControl prospect={record} onChanged={refresh}/>
         </section>
-      </div>}
-    </div>
-  </AppShell>;
+        <section className="crm-detail-card">
+          <div className="crm-panel-heading"><h2>Activity timeline</h2>
+            <select aria-label="Filter activity" value={filter} onChange={e=>setFilter(e.target.value)}>
+              <option value="all">All activity</option>
+              <option value="payment">Collections</option>
+              <option value="status">Status</option>
+              <option value="assignment">Assignments</option>
+              <option value="followup">Follow-ups</option>
+              <option value="updated">Updates</option>
+            </select></div>
+          <ol className="crm-activity-timeline" aria-label="Prospect activity">
+            {entries.map(item=><li key={item.id}>
+              <span className={"crm-activity-dot "+item.kind} aria-hidden="true"/>
+              <div><strong>{item.title}</strong><p>{item.detail}</p>
+                <small>{formatCRMDate(item.occurred_at)} · {new Date(item.occurred_at).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit"})} IST</small>
+              </div>
+            </li>)}
+          </ol>
+          {entries.length===0&&<p className="crm-muted">No recorded activity of this type.</p>}
+        </section>
+      </div>
+      <section className="crm-detail-card crm-followup-wide">
+        <FollowUpLog prospect={record} onSaved={refresh}/>
+      </section>
+      <div className="crm-redesign-actions" aria-label="Prospect actions">
+        <button type="button" className="btn btn-secondary" disabled={Boolean(record.archived_at)}
+          onClick={()=>setEditing(v=>!v)}><Icon name="file" size={17}/> Edit</button>
+        <button type="button" className="btn btn-secondary crm-danger-btn" onClick={()=>setArchiveOpen(true)}>
+          <Icon name="trash" size={17}/> {record.archived_at?"Restore":"Delete"}</button>
+        <button type="button" className="btn btn-primary" disabled={Boolean(record.archived_at)}
+          onClick={()=>setStageOpen(true)}>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</button>
+      </div>
+    </>}
+    {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}
+      onChanged={()=>{setStageOpen(false);refresh();}}/>}
+    {archiveOpen&&record&&<div className="crm-dialog-scrim">
+      <section className="crm-dialog" role="dialog" aria-modal="true" aria-label="Confirm prospect archive">
+        <h2>{record.archived_at?"Restore prospect?":"Archive this prospect?"}</h2>
+        <p>{record.archived_at?"This returns the prospect to normal lists.":
+          "The prospect will be hidden without deleting collections or activity history."}</p>
+        <div className="form-actions">
+          <button type="button" className="btn btn-secondary" disabled={busy}
+            onClick={()=>setArchiveOpen(false)}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={busy}
+            onClick={archive}>{busy?"Saving…":record.archived_at?"Restore prospect":"Archive prospect"}</button>
+        </div>
+      </section>
+    </div>}
+  </div></AppShell>;
 }
