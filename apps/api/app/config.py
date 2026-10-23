@@ -97,7 +97,7 @@ class Settings(BaseSettings):
                 raise ValueError("Approved WhatsApp authentication template name required")
             if not re.fullmatch(r"[a-z]{2}(?:_[A-Z]{2})?", self.otp_meta_template_language):
                 raise ValueError("Invalid WhatsApp authentication template language")
-            if not re.fullmatch(r"v[0-9]{1,2}\\.0", self.otp_meta_graph_version):
+            if not re.fullmatch(r"v[0-9]{1,2}\.0", self.otp_meta_graph_version):
                 raise ValueError("Unsupported Meta Graph API version")
         if self.messaging_delivery_enabled:
             if self.app_env not in ("test", "production"):
