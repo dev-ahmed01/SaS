@@ -13,9 +13,7 @@ import { reasonLabel } from "./prospects-types";
 
 const money=(p:number)=>(p/100).toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0});
 const dateFmt=formatCRMDate;
-const monthFmt=(v:string|null)=>v?new Date(v.slice(0,7)+"-01T00:00:00Z").toLocaleDateString("en-IN",{
-  month:"long",year:"numeric",timeZone:"UTC",
-}):"—";
+const monthFmt=(v:string|null)=>formatCRMDate(v);
 
 function Info({label,value}:{label:string;value:React.ReactNode}){
   return <div className="crm-detail-field"><dt>{label}</dt><dd>{value??"—"}</dd></div>;

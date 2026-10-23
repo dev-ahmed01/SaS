@@ -261,8 +261,13 @@ export function PayoutList({view}:{view:"all"|"active"}){
         <form onSubmit={submit} aria-label="Confirm payout action">
           {mode==="paid"?<>
             <label className="field"><span className="field-label">Date funds left account (IST) *</span>
-              <input required type="date" aria-label="Date funds left account (IST)"
-                max={dateIST()} value={paymentDate} onChange={e=>{setPaymentDate(e.target.value);request.current=null;}}/>
+              <input required type="text" inputMode="numeric" placeholder="DD/MM/YY"
+                pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" aria-label="Date funds left account (DD/MM/YY)"
+                value={dateInputFromISO(paymentDate)}
+                onChange={e=>{
+                  const iso=dateInputToISO(e.target.value);
+                  setPaymentDate(iso??"");request.current=null;
+                }}/>
             </label>
             <label className="field"><span className="field-label">Payment method *</span>
               <select aria-label="Outgoing payment method" value={method}

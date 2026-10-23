@@ -14,9 +14,7 @@ const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{
   style:"currency",currency:"INR",maximumFractionDigits:0,
 });
 const displayDate=formatCRMDate;
-const displayMonth=(date:string|null)=>date
-  ?new Date(date.slice(0,7)+"-01T00:00:00Z").toLocaleDateString("en-IN",{month:"short",year:"numeric",timeZone:"UTC"})
-  :"—";
+const displayMonth=(date:string|null)=>formatCRMDate(date);
 
 export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   const router=useRouter();
