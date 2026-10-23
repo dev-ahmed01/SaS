@@ -26,6 +26,27 @@ async function logIn(page) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+
+async function activateNewProspect(page) {
+  await page.getByRole("button",{name:/Mark Active/}).click();
+  const modal=page.getByRole("dialog",{name:"Reactivate prospect"});
+  await modal.getByRole("textbox",{name:/Follow-up outcome/})
+    .fill("Contacted the sponsor and confirmed their intention to proceed.");
+  await modal.getByRole("button",{name:"Mark Active"}).click();
+  await expect(modal).toHaveCount(0);
+}
+
+async function recordQuickPayout(page,first,last,amount,utr) {
+  await page.goto("/payouts");
+  await page.getByRole("textbox",{name:"Payee First Name"}).fill(first);
+  await page.getByRole("textbox",{name:"Payee Last Name"}).fill(last);
+  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic Foundation facility upkeep");
+  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill(amount);
+  await page.getByRole("textbox",{name:"UTR"}).fill(utr);
+  await page.getByRole("button",{name:"Save Payout"}).click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
+}
+
 test.beforeEach(async ({page}) => {
   await logIn(page);
 });
@@ -782,88 +803,39 @@ test("Reversal gateway rejects unsigned, forged-origin and malformed operations"
 });
 
 
-test("Recurring payouts are planned before separate attested outgoing payment",async ({page})=>{
-  const stamp=String(Date.now()%1000000).padStart(6,"0");
-  const name="Phase9 Recurring Payee "+stamp;
-  await page.goto("/payouts");
-  await expect(page.getByRole("heading",{name:"Add payout"})).toBeVisible();
-  await page.getByRole("textbox",{name:"Payee name"}).fill(name);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic monthly facility upkeep");
-  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("742.35");
-  await page.getByRole("button",{name:"Save payout plan"}).click();
-  await expect(page.getByRole("status").filter({hasText:"Saved recurring"})).toBeVisible();
+test("One-step payout records a real attested payment with payee and UTR",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
+  await recordQuickPayout(page,"Maintenance "+id,"Vendor","742.35","PAYOUTREF"+id);
   await page.goto("/payouts/all");
-  const section=page.getByRole("region",{name:"All payout plans"});
-  const plan=section.getByRole("table").first().getByRole("row",{name:new RegExp(name)});
-  await expect(plan).toBeVisible();
-  await expect(plan.getByText("₹742.35")).toBeVisible();
-  await expect(plan.getByText("₹0.00")).toBeVisible();
-  await expect(plan.getByText("Active",{exact:true})).toBeVisible();
-  await plan.getByRole("button",{name:"Record paid"}).click();
-  const modal=page.getByRole("dialog",{name:"Record paid payout"});
-  await expect(modal).toBeVisible();
-  const submit=modal.getByRole("button",{name:"Record payment"});
-  await expect(submit).toBeDisabled();
-  await modal.getByRole("textbox",{name:"Outgoing payment reference"}).fill("PAYOUTREF"+stamp);
-  await modal.getByRole("checkbox",{name:/funds were disbursed/}).check();
-  await submit.click();
-  await expect(modal).toHaveCount(0);
-  await expect(section.getByRole("status")).toContainText(/Recorded the actual outgoing payment/);
-  await expect(plan.getByRole("cell").nth(4)).toContainText("742.35");
-  await expect(plan.getByRole("button",{name:"Record paid"})).toHaveCount(0);
-  await expect(page.getByRole("region",{name:"Recorded payout history"})).toHaveCount(0);
-  await expect(plan.getByRole("cell").nth(4)).toContainText("742.35");
-});
-
-test("One-time payouts stay in All after payment; recurring Active excludes them",async ({page})=>{
-  const stamp=String(Date.now()%1000000).padStart(6,"0");
-  const name="Phase9 OneTime Payee "+stamp;
-  await page.goto("/payouts");
-  await page.getByRole("textbox",{name:"Payee name"}).fill(name);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic one-time repair");
-  await page.getByRole("combobox",{name:"Payout type"}).selectOption("one_time");
-  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("2895.00");
-  await page.getByRole("button",{name:"Save payout plan"}).click();
-  await expect(page.getByRole("status").filter({hasText:"Saved one-time"})).toBeVisible();
-  await page.goto("/payouts/active");
-  await expect(page.getByRole("region",{name:"Active payout plans"}).getByText(name)).toHaveCount(0);
-  await page.goto("/payouts/all");
-  const plans=page.getByRole("region",{name:"All payout plans"}).getByRole("table").first();
-  const row=plans.getByRole("row",{name:new RegExp(name)});
+  const row=page.getByRole("region",{name:"All payout plans"})
+    .getByRole("row",{name:new RegExp("Maintenance "+id)});
   await expect(row).toBeVisible();
-  await expect(row.getByRole("cell",{name:"One-time",exact:true})).toBeVisible();
-  await row.getByRole("button",{name:"Record paid"}).click();
-  const modal=page.getByRole("dialog",{name:"Record paid payout"});
-  await modal.getByRole("textbox",{name:"Outgoing payment reference"}).fill("ONETIME"+stamp);
-  await modal.getByRole("checkbox",{name:/funds were disbursed/}).check();
-  await modal.getByRole("button",{name:"Record payment"}).click();
   await expect(row.getByText("Paid",{exact:true})).toBeVisible();
-  await expect(row.getByRole("cell").nth(4)).toContainText("2,895.00");
+  await expect(row.getByText("₹742.35")).toBeVisible();
 });
-
-test("Recurring pause schedules next month without changing current obligations",async ({page})=>{
-  const stamp=String(Date.now()%1000000).padStart(6,"0");
-  const name="Phase9 Pausable Payee "+stamp;
-  await page.goto("/payouts");
-  await page.getByRole("textbox",{name:"Payee name"}).fill(name);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Monthly synthetic maintenance");
-  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("975.00");
-  await page.getByRole("button",{name:"Save payout plan"}).click();
-  await expect(page.getByRole("status").filter({hasText:"Saved recurring"})).toBeVisible();
+test("Recorded one-time payouts remain in All and are excluded from Active recurring",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
+  await recordQuickPayout(page,"OneTime "+id,"Recipient","2895.00","ONETIME"+id);
   await page.goto("/payouts/active");
-  const active=page.getByRole("region",{name:"Active payout plans"});
-  const row=active.getByRole("row",{name:new RegExp(name)});
-  await expect(row).toBeVisible();
-  await row.getByRole("button",{name:"Pause",exact:true}).click();
-  const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
-  await expect(dialog).toContainText("next month");
-  await dialog.getByRole("button",{name:"Confirm status change"}).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(row.getByText("Active",{exact:true})).toBeVisible();
-  await expect(row.getByText("Next: paused")).toBeVisible();
-  await expect(row.getByRole("button",{name:"Pause",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("region",{name:"Active payout plans"})
+    .getByText("OneTime "+id)).toHaveCount(0);
+  await page.goto("/payouts/all");
+  await expect(page.getByRole("region",{name:"All payout plans"})
+    .getByRole("row",{name:new RegExp("OneTime "+id)})).toBeVisible();
 });
-
+test("Add Payout removes recurring planning controls and exposes Type Amount Purpose in one row",async ({page})=>{
+  await page.goto("/payouts");
+  await expect(page.getByRole("combobox",{name:"Payout type"})).toHaveCount(0);
+  const type=page.getByRole("combobox",{name:"Payout payment type"});
+  const amount=page.getByRole("textbox",{name:"Payout amount (₹)"});
+  const purpose=page.getByRole("textbox",{name:"Payout purpose"});
+  await expect(type).toBeVisible();
+  await expect(amount).toBeVisible();
+  await expect(purpose).toBeVisible();
+  const boxes=await Promise.all([type,amount,purpose].map(x=>x.boundingBox()));
+  expect(Math.abs(boxes[0].y-boxes[1].y)).toBeLessThan(20);
+  expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+});
 test("Payout write gateway rejects forged origins, missing CSRF and invalid routes",async ({page})=>{
   const malformed=await page.request.post(
     "/api/admin/payouts/plans/not-a-uuid/payments",{
@@ -884,90 +856,39 @@ test("Payout write gateway rejects forged origins, missing CSRF and invalid rout
 });
 
 
-test("Admin plans and confirms a recurring payout with separate payment evidence",async ({page})=>{
-  const token=String(Date.now()%1000000).padStart(6,"0");
-  const payee="Payout Caretaker "+token;
+test("Payout requires a valid UTR and does not initiate a transfer",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
   await page.goto("/payouts");
-  await expect(page.getByRole("region",{name:"Add payout plan"})).toBeVisible();
-  await page.getByRole("textbox",{name:"Payee name"}).fill(payee);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic building maintenance");
+  await page.getByRole("textbox",{name:"Payee First Name"}).fill("Caretaker "+id);
+  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Facility upkeep");
   await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("735.00");
-  await page.getByRole("button",{name:"Save payout plan"}).click();
-  await expect(page.getByRole("status")).toContainText("No money has been transferred.");
-
-  await page.goto("/payouts/active");
-  const active=page.getByRole("region",{name:"Active payout plans"});
-  const row=active.getByRole("row",{name:new RegExp(payee)});
-  await expect(row).toBeVisible();
-  await expect(row.getByText("Active",{exact:true})).toBeVisible();
-  await expect(row.getByRole("cell").nth(4)).toContainText("0.00");
-  await row.getByRole("button",{name:"Record paid"}).click();
-  const dialog=page.getByRole("dialog",{name:"Record paid payout"});
-  await expect(dialog).toBeVisible();
-  const save=dialog.getByRole("button",{name:"Record payment"});
-  await expect(save).toBeDisabled();
-  await dialog.getByRole("textbox",{name:"Outgoing payment reference"}).fill("SYNTHETICPAYOUT"+token);
-  await dialog.getByRole("checkbox",{name:/confirm the funds were disbursed/}).check();
-  await save.click();
-  await expect(dialog).toHaveCount(0);
-  await expect(active.getByRole("status")).toContainText("No transfer was initiated.");
-  await expect(row.getByRole("cell").nth(4)).toContainText("735.00");
-
-  await page.goto("/payouts/all");
-  const all=page.getByRole("region",{name:"All payout plans"});
-  await expect(all.getByRole("table").first().getByRole("row",{name:new RegExp(payee)})).toBeVisible();
-  await expect(page.getByRole("region",{name:"Recorded payout history"})).toHaveCount(0);
-  await expect(all.getByRole("table").first().getByRole("row",{name:new RegExp(payee)})
-    .getByRole("cell").nth(4)).toContainText("735.00");
+  await page.getByRole("textbox",{name:"UTR"}).fill("BAD");
+  await page.getByRole("button",{name:"Save Payout"}).click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toHaveCount(0);
+  await page.getByRole("textbox",{name:"UTR"}).fill("SYNTHETIC"+id);
+  await page.getByRole("button",{name:"Save Payout"}).click();
+  await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
 });
-
-test("One-time payouts remain in All and are not recurring Active obligations",async ({page})=>{
-  const token=String(Date.now()%1000000).padStart(6,"0");
-  const payee="One Time Payee "+token;
+test("Payout entry uses visible DD/MM/YY and no first payment month",async ({page})=>{
   await page.goto("/payouts");
-  await page.getByRole("textbox",{name:"Payee name"}).fill(payee);
-  await page.getByRole("combobox",{name:"Payout type"}).selectOption("one_time");
-  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("1240.00");
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic supplies purchase");
-  await page.getByRole("button",{name:"Save payout plan"}).click();
-  await expect(page.getByRole("status")).toContainText("one-time payout commitment");
-  await page.goto("/payouts/active");
-  await expect(page.getByRole("region",{name:"Active payout plans"})
-    .getByRole("row",{name:new RegExp(payee)})).toHaveCount(0);
-  await page.goto("/payouts/all");
-  const row=page.getByRole("region",{name:"All payout plans"}).getByRole("table").first().getByRole("row",{name:new RegExp(payee)});
-  await expect(row).toBeVisible();
-  await expect(row.getByText("Scheduled",{exact:true})).toBeVisible();
-  await row.getByRole("button",{name:"Record paid"}).click();
-  const dialog=page.getByRole("dialog",{name:"Record paid payout"});
-  await dialog.getByRole("textbox",{name:"Outgoing payment reference"}).fill("ONETIMEPAYOUT"+token);
-  await dialog.getByRole("checkbox",{name:/confirm the funds were disbursed/}).check();
-  await dialog.getByRole("button",{name:"Record payment"}).click();
-  await expect(row.getByText("Paid",{exact:true})).toBeVisible();
-  await expect(row.getByRole("button",{name:"Record paid"})).toHaveCount(0);
+  const entry=page.getByRole("textbox",{name:"Payout date (DD/MM/YY)"});
+  await expect(entry).toHaveValue(/^\d{2}\/\d{2}\/\d{2}$/);
+  await expect(page.getByText("First Payment Month")).toHaveCount(0);
+  await expect(page.getByRole("textbox",{name:"Payee First Name"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Payee Last Name"})).toBeVisible();
 });
-
-test("Recurring payout status change is scheduled without rewriting current month",async ({page})=>{
-  const token=String(Date.now()%1000000).padStart(6,"0");
-  const payee="Recurring Pause "+token;
+test("Duplicate UTR cannot silently add a second payout",async ({page})=>{
+  const id=String(Date.now()%1000000).padStart(6,"0");
+  const utr="DUPLICATE"+id;
+  await recordQuickPayout(page,"Transfer "+id,"Recipient","950.00",utr);
   await page.goto("/payouts");
-  await page.getByRole("textbox",{name:"Payee name"}).fill(payee);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic monthly caretaker");
-  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("2100.00");
-  await page.getByRole("button",{name:"Save payout plan"}).click();
-  await expect(page.getByRole("status")).toContainText("No money has been transferred.");
-  await page.goto("/payouts/active");
-  const row=page.getByRole("region",{name:"Active payout plans"})
-    .getByRole("row",{name:new RegExp(payee)});
-  await row.getByRole("button",{name:"Pause"}).click();
-  const dialog=page.getByRole("dialog",{name:"Schedule recurring status"});
-  await expect(dialog.getByText(/next month/)).toBeVisible();
-  await dialog.getByRole("button",{name:"Confirm status change"}).click();
-  await expect(row.getByText("Active",{exact:true})).toBeVisible();
-  await expect(row.getByText("Next: paused")).toBeVisible();
-  await expect(row.getByRole("button",{name:"Pause"})).toHaveCount(0);
+  await page.getByRole("textbox",{name:"Payee First Name"}).fill("Second "+id);
+  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Duplicate reference check");
+  await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("950.00");
+  await page.getByRole("textbox",{name:"UTR"}).fill(utr);
+  await page.getByRole("button",{name:"Save Payout"}).click();
+  await expect(page.getByRole("alert")).toContainText("already recorded");
 });
-
 test("Protected payout gateway rejects forged actions or unsupported routes",async ({page})=>{
   await page.goto("/payouts");
   const bad=await page.evaluate(async()=>{
