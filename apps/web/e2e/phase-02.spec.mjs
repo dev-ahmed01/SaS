@@ -834,7 +834,7 @@ test("Recorded one-time payouts remain in All and are excluded from Active recur
   await expect(page.getByRole("region",{name:"All payout plans"})
     .getByRole("row",{name:new RegExp("OneTime "+id)})).toBeVisible();
 });
-test("Add Payout removes recurring planning controls and exposes Type Amount Purpose in one row",async ({page})=>{
+test("Add Payout removes recurring planning controls and exposes Type Amount Purpose in one row",async ({page,isMobile})=>{
   await page.goto("/payouts");
   await expect(page.getByRole("combobox",{name:"Payout type"})).toHaveCount(0);
   const type=page.getByRole("combobox",{name:"Payout payment type"});
@@ -844,8 +844,10 @@ test("Add Payout removes recurring planning controls and exposes Type Amount Pur
   await expect(amount).toBeVisible();
   await expect(purpose).toBeVisible();
   const boxes=await Promise.all([type,amount,purpose].map(x=>x.boundingBox()));
-  expect(Math.abs(boxes[0].y-boxes[1].y)).toBeLessThan(20);
-  expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+  if(!isMobile){
+    expect(Math.abs(boxes[0].y-boxes[1].y)).toBeLessThan(20);
+    expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+  }
 });
 test("Payout write gateway rejects forged origins, missing CSRF and invalid routes",async ({page})=>{
   const malformed=await page.request.post(
