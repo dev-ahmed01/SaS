@@ -135,7 +135,7 @@ export function ManualCollections(){
               · {selected.whatsapp_opt_in?"WhatsApp consent recorded":"No WhatsApp consent"}</p>}
             {!selected&&results.length>0&&<div className="manual-search-results" aria-label="Matching prospects">
               {results.map(candidate=><button type="button" key={candidate.id}
-                disabled={candidate.crm_stage!=="active"} onClick={()=>select(candidate)}>
+                role="option" aria-selected={false} disabled={candidate.crm_stage!=="active"} onClick={()=>select(candidate)}>
                 <strong>{candidate.full_name}</strong><span>{candidate.mobile_number} · {candidate.crm_stage==="active"?"Active":"Inactive — cannot record collection"}</span>
               </button>)}
             </div>}
