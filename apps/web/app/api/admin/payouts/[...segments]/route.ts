@@ -9,6 +9,9 @@ const headersOut = {
 };
 
 function allow(segments: string[], method: string): string | null {
+  if (segments.length === 1 && segments[0] === "quick" && method === "POST") {
+    return "/quick";
+  }
   if (segments.length === 1 && segments[0] === "plans" &&
       ["GET", "POST"].includes(method)) return "/plans";
   if (segments.length === 1 && segments[0] === "payments" &&
