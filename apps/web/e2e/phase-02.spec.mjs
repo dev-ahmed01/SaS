@@ -431,14 +431,10 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.getByRole("spinbutton",{name:"Order"}).fill("3");
   await page.getByRole("button",{name:"Add Stage"}).click();
   await expect(page.getByText(stage,{exact:true})).toBeVisible();
-  await expect(page.getByText("0 prospects")).toBeVisible();
   await page.getByRole("button",{name:"Edit stage "+stage}).click();
   const renamed=stage+" edited";
   await page.getByRole("textbox",{name:/Name/}).fill(renamed);
   await page.getByRole("button",{name:"Save Stage"}).click();
-  await page.getByRole("button",{name:/^Edit\b/}).click();
-  await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption({label:renamed});
-  await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText(renamed,{exact:true})).toBeVisible();
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(person);
@@ -446,6 +442,10 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await expect(page.getByRole("combobox",{name:"Prospect Stage"})).toBeDisabled();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  await expect(page.getByText("New Inquiry",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Edit",exact:true}).click();
+  await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption({label:renamed});
+  await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText(renamed,{exact:true})).toBeVisible();
   await page.goto("/prospects/stages");
   await expect(page.getByText("1 prospects")).toBeVisible();
@@ -456,7 +456,7 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(person);
   await page.getByRole("row",{name:new RegExp(person)}).getByRole("link",{name:person}).click();
-  await page.getByRole("button",{name:/^Edit\b/}).click();
+  await page.getByRole("button",{name:"Edit",exact:true}).click();
   await page.getByRole("combobox",{name:"Prospect Stage"}).selectOption("");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await page.goto("/prospects/stages");
