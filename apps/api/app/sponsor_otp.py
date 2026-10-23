@@ -138,9 +138,11 @@ def request_otp(
     if person.whatsapp_verified_at is not None:
         raise HTTPException(status_code=409, detail="Current WhatsApp number already verified")
     now = utc_now()
+    phone_digest = _digest(cfg.otp_secret, number)
+    # Rate-limit the actual phone across records as well as this sponsor.
     rows = database.scalars(select(SponsorOtpChallenge).where(
         SponsorOtpChallenge.organization_id == admin.organization_id,
-        SponsorOtpChallenge.prospect_id == prospect_id,
+        SponsorOtpChallenge.phone_digest == phone_digest,
         SponsorOtpChallenge.created_at >= now - timedelta(days=1),
     ).order_by(SponsorOtpChallenge.created_at.desc()).with_for_update()).all()
     if len(rows) >= MAX_ISSUES_PER_DAY:
@@ -151,7 +153,7 @@ def request_otp(
     code = f"{secrets.randbelow(1000000):06d}"
     record = SponsorOtpChallenge(
         id=challenge_id, organization_id=admin.organization_id,
-        prospect_id=prospect_id, phone_digest=_digest(cfg.otp_secret, number),
+        prospect_id=prospect_id, phone_digest=phone_digest,
         code_digest=_code_digest(cfg.otp_secret, challenge_id, number, code),
         status="pending", attempts=0,
         created_at=now, expires_at=now + timedelta(minutes=OTP_MINUTES),
