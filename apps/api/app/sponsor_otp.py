@@ -8,13 +8,13 @@ import hmac
 import re
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
@@ -168,7 +168,9 @@ def request_otp(
     except (httpx.HTTPError, ValueError):
         record.status = "failed"
         database.commit()
-        raise HTTPException(status_code=502, detail="WhatsApp provider could not accept OTP") from None
+        raise HTTPException(
+            status_code=502, detail="WhatsApp provider could not accept OTP"
+        ) from None
     record.status = "accepted"
     database.add(AuditEvent(
         organization_id=admin.organization_id, actor_admin_id=admin.id,
