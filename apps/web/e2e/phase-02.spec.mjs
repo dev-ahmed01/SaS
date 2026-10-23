@@ -822,7 +822,7 @@ test("One-step payout records a real attested payment with payee and UTR",async 
     .getByRole("row",{name:new RegExp("Maintenance "+id)});
   await expect(row).toBeVisible();
   await expect(row.getByText("Paid",{exact:true})).toBeVisible();
-  await expect(row.getByText("₹742.35")).toBeVisible();
+  await expect(row.getByRole("cell",{name:"₹742.35"}).first()).toBeVisible();
 });
 test("Recorded one-time payouts remain in All and are excluded from Active recurring",async ({page})=>{
   const id=String(Date.now()%1000000).padStart(6,"0");
@@ -900,7 +900,7 @@ test("Duplicate UTR cannot silently add a second payout",async ({page})=>{
   await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("950.00");
   await page.getByRole("textbox",{name:"UTR"}).fill(utr);
   await page.getByRole("button",{name:"Save Payout"}).click();
-  await expect(page.getByRole("alert")).toContainText("already recorded");
+  await expect(page.locator("p.form-error[role=alert]")).toContainText("already recorded");
 });
 test("Protected payout gateway rejects forged actions or unsupported routes",async ({page})=>{
   await page.goto("/payouts");
