@@ -1258,3 +1258,79 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .crm-followup-form{display:flex;flex-direction:column;gap:13px;margin:12px 0 23px}
 .crm-followup-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 @media(max-width:850px){.promoter-two-column{grid-template-columns:1fr}.payout-inline-row,.crm-followup-fields{grid-template-columns:1fr}}
+
+
+/* Unified October CRM details: readable summaries, chronological activity and safe actions. */
+.site-sidebar .brand-copy strong,
+.app-content .topbar .topbar-name {
+  font-family:var(--font-heading);
+  font-size:clamp(20px,2vw,24px);
+  font-weight:700;
+  letter-spacing:-.035em;
+  line-height:1.18;
+}
+.crm-redesign .crm-details-header{justify-content:flex-start;margin-bottom:18px;}
+.crm-redesign .crm-title-line{display:flex;align-items:center;flex-wrap:wrap;gap:14px;}
+.crm-redesign .crm-title-line h2{margin:0;}
+.crm-redesign .crm-title-line .status-pill{flex:none;}
+.crm-redesign .crm-details-header p{margin-top:8px;}
+.crm-summary-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);
+  border-radius:12px;padding:17px 8px;margin-bottom:18px;background:#fff;}
+.crm-summary-strip .crm-summary-tile{border-right:1px solid var(--line);padding:4px 18px;}
+.crm-summary-strip .crm-summary-tile:last-child{border:0;}
+.crm-summary-tile{min-width:0;display:flex;flex-direction:column;gap:6px;}
+.crm-summary-tile strong{font:600 14px var(--font-body);color:var(--forest-deep);overflow-wrap:anywhere;}
+.crm-summary-tile small{display:block;font:400 11px var(--font-body);color:var(--muted);margin-top:3px;}
+.crm-redesign-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch;margin-bottom:18px;}
+.crm-redesign-columns>.crm-detail-card{min-width:0;}
+.crm-overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.crm-overview-grid .crm-summary-tile{border:1px solid var(--line);border-radius:9px;padding:14px 15px;min-height:78px;}
+.crm-overview-grid .crm-summary-tile strong{font-size:13px;}
+.crm-stage-control{margin-top:16px;max-width:360px;}
+.crm-stage-control select{width:100%;}
+.crm-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;}
+.crm-panel-heading h2{margin:0;}
+.crm-panel-heading select{width:auto;max-width:170px;padding:8px 12px;font-size:12px;}
+.crm-activity-timeline{list-style:none;padding:0 0 0 15px;margin:0;max-height:480px;overflow:auto;}
+.crm-activity-timeline li{display:flex;gap:17px;padding:0 10px 18px 16px;border-left:1px solid var(--line);position:relative;}
+.crm-activity-timeline li:last-child{border-left-color:transparent;padding-bottom:0;}
+.crm-activity-timeline li>div{min-width:0;}
+.crm-activity-timeline li strong{display:block;color:var(--forest-deep);font:600 13px var(--font-body);}
+.crm-activity-timeline li p{margin:3px 0 5px;font:400 12px/1.5 var(--font-body);overflow-wrap:anywhere;}
+.crm-activity-timeline li small{font:400 11px var(--font-body);color:var(--muted);}
+.crm-activity-dot{width:15px;height:15px;border:3px solid #fff;border-radius:50%;background:#a5c9b8;
+  position:absolute;left:-8px;top:1px;box-shadow:0 0 0 1px #d6e8de;}
+.crm-activity-dot.payment{background:#12966c;}
+.crm-activity-dot.status{background:#df9a55;}
+.crm-activity-dot.assignment{background:#54aab2;}
+.crm-activity-dot.followup{background:#708cbd;}
+.crm-followup-wide{margin-top:0;}
+.crm-redesign-actions{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px;margin-top:18px;}
+.crm-redesign-actions .btn{display:inline-flex;align-items:center;gap:8px;}
+.crm-danger-btn{color:#a3363f!important;border-color:#e6c1c5!important;}
+.crm-assignment-panels .crm-assignment-card{grid-column:auto;}
+.crm-handover-dialog{width:min(100%,670px);}
+.crm-handover-mode{display:flex;flex-wrap:wrap;gap:14px;border:0;padding:0;margin:16px 0;}
+.crm-handover-mode legend{font:600 13px var(--font-body);margin-bottom:9px;}
+.crm-handover-mode label{display:flex;align-items:center;gap:8px;font-size:12px;}
+.crm-handover-people{display:grid;gap:8px;max-height:38vh;overflow:auto;margin:14px 0;padding-right:6px;}
+.crm-handover-person{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:12px;}
+.crm-handover-person span{display:flex;flex-direction:column;min-width:0;}
+.crm-handover-person strong{font-size:12px;overflow-wrap:anywhere;}
+.crm-handover-person small{font-size:11px;color:var(--muted);}
+.crm-handover-person select{width:100%;min-width:0;}
+.manual-search-results button:disabled{opacity:.7;cursor:not-allowed;background:#fcf7f7;}
+@media(max-width:920px){
+  .crm-summary-strip{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .crm-summary-strip .crm-summary-tile:nth-child(2){border:0;}
+  .crm-summary-strip .crm-summary-tile:nth-child(n+3){border-top:1px solid var(--line);padding-top:14px;}
+  .crm-redesign-columns{grid-template-columns:1fr;}
+}
+@media(max-width:540px){
+  .crm-summary-strip{grid-template-columns:1fr;}
+  .crm-summary-strip .crm-summary-tile{border:0;border-bottom:1px solid var(--line)!important;padding:12px 15px!important;}
+  .crm-summary-strip .crm-summary-tile:last-child{border:0!important;}
+  .crm-overview-grid{grid-template-columns:1fr;}
+  .crm-handover-person{grid-template-columns:1fr;}
+  .crm-redesign-actions .btn{flex:1;justify-content:center;}
+}
