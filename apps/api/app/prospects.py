@@ -31,7 +31,6 @@ from app.models import (
     Promoter,
     PromoterAssignment,
     ManualCollection,
-    ManualCollectionReversal,
     Prospect,
     ProspectArchiveInterval,
     ProspectFollowUp,
