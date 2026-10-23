@@ -593,20 +593,22 @@ def create_prospect(
             _upi_digest(identifier)
     # Every registration starts at New Inquiry regardless of the supplied stage.
     # The default is established lazily for organizations created after migrations.
-    inquiry = database.scalars(select(ProspectStageDefinition).where(
-        ProspectStageDefinition.organization_id == admin.organization_id,
-        ProspectStageDefinition.name_key == "new inquiry",
-    )).one_or_none()
-    if inquiry is None:
-        inquiry = ProspectStageDefinition(
-            organization_id=admin.organization_id,
-            name="New Inquiry", name_key="new inquiry",
-            description="Awaiting first documented follow-up",
-            color="#64748b", sort_order=0, version=1,
-        )
-        database.add(inquiry)
-        database.flush()
-    if payload.pipeline_stage_id is not None:
+    inquiry = None
+    if payload.pipeline_stage_id is None:
+        inquiry = database.scalars(select(ProspectStageDefinition).where(
+            ProspectStageDefinition.organization_id == admin.organization_id,
+            ProspectStageDefinition.name_key == "new inquiry",
+        )).one_or_none()
+        if inquiry is None:
+            inquiry = ProspectStageDefinition(
+                organization_id=admin.organization_id,
+                name="New Inquiry", name_key="new inquiry",
+                description="Awaiting first documented follow-up",
+                color="#64748b", sort_order=0, version=1,
+            )
+            database.add(inquiry)
+            database.flush()
+    else:
         _validate_pipeline(database, admin, payload.pipeline_stage_id)
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
