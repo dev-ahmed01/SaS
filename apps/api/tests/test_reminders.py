@@ -79,6 +79,16 @@ def login(client, email="office@foundation.org",
     return {"X-CSRF-Token":client.get("/v1/auth/session").json()["csrf_token"]}
 
 
+def activate_for_financial_flow(client, csrf, record):
+    """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
+    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
+        "version": record["version"], "stage": "active",
+        "note": "Synthetic outreach completed for financial flow test",
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def sponsor(client, csrf, index, consent=True):
     response=client.post("/v1/prospects", headers=csrf, json={
         "full_name":f"Sponsor {index:04d}",
@@ -88,7 +98,7 @@ def sponsor(client, csrf, index, consent=True):
         "monthly_contribution_paise":50000,
     })
     assert response.status_code==201,response.text
-    return response.json()
+    return activate_for_financial_flow(client, csrf, response.json())
 
 
 def promoter(client, csrf, index, consent=True, active=True):
