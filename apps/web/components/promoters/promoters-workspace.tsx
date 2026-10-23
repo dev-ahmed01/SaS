@@ -8,7 +8,6 @@ import { PromoterList } from "./promoter-list";
 const tabs=[
   {id:"all",label:"All Promoters",href:"/promoters"},
   {id:"add",label:"Add Promoters",href:"/promoters/add"},
-  {id:"active",label:"Active",href:"/promoters/active"},
   {id:"inactive",label:"Inactive",href:"/promoters/inactive"},
 ] as const;
 
