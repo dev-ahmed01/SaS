@@ -199,7 +199,7 @@ def test_date_reference_future_and_archived_rejections(system):
         })
         assert response.status_code == 422, response.text
     assert client.delete(
-        "/v1/prospects/" + p["id"], headers={**csrf, "If-Match": "1"},
+        "/v1/prospects/" + p["id"], headers={**csrf, "If-Match": str(p["version"])},
     ).status_code == 204
     assert client.post("/v1/collections", headers=csrf, json=sample_data).status_code == 404
     with Session(engine) as db:
