@@ -1,13 +1,7 @@
 """CRM redesign acceptance: activity is factual and promoter transfers are atomic."""
-import pytest
-
 from app.accounting import ist_today
-from test_crm_review_2026_10 import api as review_api
 
-
-@pytest.fixture(name="api")
-def _api_fixture(review_api):
-    return review_api
+pytest_plugins = ("test_crm_review_2026_10",)
 
 
 def test_individual_handover_is_atomic_and_retains_assignment_history(api):
