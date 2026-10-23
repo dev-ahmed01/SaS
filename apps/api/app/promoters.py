@@ -86,6 +86,7 @@ class PromoterPatch(BaseModel):
     notes: str | None = Field(default=None, max_length=1500)
     whatsapp_opt_in: bool | None = None
     is_active: bool | None = None
+    reassign_to_promoter_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def validate_fields(self) -> "PromoterPatch":
@@ -305,16 +306,50 @@ def update_promoter(
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
     _version(promoter, payload.version)
-    data = payload.model_dump(exclude_unset=True, exclude={"version"})
+    data = payload.model_dump(exclude_unset=True, exclude={"version", "reassign_to_promoter_id"})
     changed = {k: v for k, v in data.items() if getattr(promoter, k) != v}
     if not changed:
         response.headers["Cache-Control"] = "no-store"
         return _present(database, promoter)
-    if changed.get("is_active") is False and _count(database, promoter):
-        raise HTTPException(
-            status_code=409,
-            detail="Reassign or unassign the promoter's sponsors before deactivation",
-        )
+    if payload.reassign_to_promoter_id and changed.get("is_active") is not False:
+        raise HTTPException(status_code=422, detail="Reassignment requires deactivation")
+    transfer_count = 0
+    if changed.get("is_active") is False:
+        assignments = database.scalars(select(PromoterAssignment).where(
+            PromoterAssignment.organization_id == admin.organization_id,
+            PromoterAssignment.promoter_id == promoter.id,
+            PromoterAssignment.ended_at.is_(None),
+        ).order_by(PromoterAssignment.prospect_id).with_for_update()).all()
+        if assignments:
+            target_id = payload.reassign_to_promoter_id
+            if target_id is None or target_id == promoter.id:
+                raise HTTPException(status_code=422, detail="Select another active promoter for sponsor reassignment")
+            target = _load(database, admin, target_id, lock=True)
+            if not target.is_active:
+                raise HTTPException(status_code=409, detail="Replacement promoter is inactive")
+            now = utc_now()
+            for assignment in assignments:
+                prospect = database.scalars(select(Prospect).where(
+                    Prospect.organization_id == admin.organization_id,
+                    Prospect.id == assignment.prospect_id,
+                ).with_for_update()).one()
+                assignment.ended_at = now
+                assignment.ended_by_admin_id = admin.id
+                prospect.version += 1
+                prospect.updated_at = now
+            database.flush()
+            for assignment in assignments:
+                database.add(PromoterAssignment(
+                    organization_id=admin.organization_id,
+                    promoter_id=target.id, prospect_id=assignment.prospect_id,
+                    assigned_by_admin_id=admin.id,
+                ))
+            target.version += 1
+            target.updated_at = now
+            transfer_count = len(assignments)
+            # All current reminder previews derive ownership from the live assignment.
+            # Historic delivery intents to the old promoter fail eligibility on dispatch.
+            database.flush()
     previous = promoter.version
     for key, value in changed.items():
         setattr(promoter, key, value)
@@ -322,7 +357,9 @@ def update_promoter(
     promoter.updated_at = utc_now()
     _audit(database, admin, promoter, "promoter.updated",
            before={"version": previous},
-           after={"version": promoter.version, "changed_fields": sorted(changed)})
+           after={"version": promoter.version, "changed_fields": sorted(changed),
+                  "reassigned_sponsor_count": transfer_count,
+                  "replacement_promoter_id": str(payload.reassign_to_promoter_id) if transfer_count else None})
     try:
         database.commit()
     except IntegrityError as exc:

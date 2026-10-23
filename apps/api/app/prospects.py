@@ -32,6 +32,7 @@ from app.models import (
     PromoterAssignment,
     Prospect,
     ProspectArchiveInterval,
+    ProspectFollowUp,
     ProspectStageDefinition,
     ProspectStageTransition,
     ProspectUpiIdentifier,
@@ -103,9 +104,9 @@ class ProspectFields(BaseModel):
             return None
         today = _ist_month()
         delta = (value.year - today.year) * 12 + value.month - today.month
-        if value.day != 1 or not 0 <= delta <= 18:
+        if value.day != 1 or not 0 <= delta < 6:
             raise ValueError(
-                "Tentative start must be a first-of-month date within the next 18 months"
+                "Tentative start must be a first-of-month date within the current and next five months"
             )
         return value
 
@@ -197,8 +198,10 @@ class StageDecision(BaseModel):
     def require_inactive_reason(self) -> "StageDecision":
         if self.stage == "inactive" and not self.reason:
             raise ValueError("An inactive reason is required")
+        if self.stage == "active" and not self.note:
+            raise ValueError("A follow-up note is required before activation")
         if self.stage == "active" and self.reason:
-            raise ValueError("Reactivation does not take an inactive reason")
+            raise ValueError("Use a follow-up note instead of an inactivity reason")
         if self.note is not None:
             self.note = _clean_text(self.note) or None
         return self
@@ -258,6 +261,32 @@ class ProspectRead(BaseModel):
     archived_at: datetime | None
     version: int
     upi_ids: list[UpiRead]
+
+
+class FollowUpInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    occurred_on: date
+    outcome: Literal["contacted", "no_answer", "interested", "not_interested", "callback"]
+    notes: str = Field(min_length=3, max_length=500)
+    next_followup_on: date | None = None
+
+    @field_validator("notes")
+    @classmethod
+    def normalize_notes(cls, value: str) -> str:
+        cleaned = _clean_text(value)
+        if len(cleaned) < 3:
+            raise ValueError("A meaningful follow-up note is required")
+        return cleaned
+
+
+class FollowUpRead(BaseModel):
+    id: uuid.UUID
+    occurred_on: date
+    outcome: str
+    notes: str
+    next_followup_on: date | None
+    created_at: datetime
 
 
 class ProspectPage(BaseModel):
@@ -562,16 +591,33 @@ def create_prospect(
     if ids:
         for identifier in ids:
             _upi_digest(identifier)
-    if payload.pipeline_stage_id is not None:
-        _validate_pipeline(database, admin, payload.pipeline_stage_id)
+    # Every registration starts at New Inquiry regardless of the supplied stage.
+    # The default is established lazily for organizations created after migrations.
+    inquiry = database.scalars(select(ProspectStageDefinition).where(
+        ProspectStageDefinition.organization_id == admin.organization_id,
+        ProspectStageDefinition.name_key == "new inquiry",
+    )).one_or_none()
+    if inquiry is None:
+        inquiry = ProspectStageDefinition(
+            organization_id=admin.organization_id,
+            name="New Inquiry", name_key="new inquiry",
+            description="Awaiting first documented follow-up",
+            color="#64748b", sort_order=0, version=1,
+        )
+        database.add(inquiry)
+        database.flush()
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
+        "pipeline_stage_id",
     })
     prospect = Prospect(
         organization_id=admin.organization_id,
         **fields,
         monthly_contribution_paise=amount,
         lifecycle_status="new",
+        crm_stage="inactive",
+        crm_stage_changed_at=utc_now(),
+        pipeline_stage_id=inquiry.id,
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
@@ -820,7 +866,7 @@ def change_crm_stage(
         prospect_id=prospect.id,
         from_stage=previous, to_stage=payload.stage,
         reason=payload.reason if payload.stage == "inactive" else None,
-        note=payload.note if payload.stage == "inactive" else None,
+        note=payload.note,
         changed_at=now, actor_admin_id=admin.id,
     ))
     prospect.crm_stage = payload.stage
@@ -837,3 +883,63 @@ def change_crm_stage(
     database.expire(prospect, ["stage_transitions"])
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
+
+
+@router.get("/{prospect_id}/followups", response_model=list[FollowUpRead])
+def list_followups(
+    prospect_id: uuid.UUID,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+    response: Response,
+) -> list[FollowUpRead]:
+    prospect = _get(database, context[0])
+    rows = database.scalars(select(ProspectFollowUp).where(
+        ProspectFollowUp.organization_id == context[0].organization_id,
+        ProspectFollowUp.prospect_id == prospect.id,
+    ).order_by(ProspectFollowUp.created_at.desc(), ProspectFollowUp.id.desc()).limit(100)).all()
+    response.headers["Cache-Control"] = "no-store"
+    return [FollowUpRead.model_validate({
+        "id": row.id, "occurred_on": row.occurred_on, "outcome": row.outcome,
+        "notes": row.notes, "next_followup_on": row.next_followup_on,
+        "created_at": row.created_at,
+    }) for row in rows]
+
+
+@router.post("/{prospect_id}/followups", response_model=FollowUpRead, status_code=201)
+def add_followup(
+    prospect_id: uuid.UUID,
+    payload: FollowUpInput,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+    response: Response,
+) -> FollowUpRead:
+    admin = context[0]
+    prospect = _get(database, admin, prospect_id, lock=True)
+    _check_version(prospect, payload.version)
+    today = ist_today()
+    if payload.occurred_on > today:
+        raise HTTPException(status_code=422, detail="Follow-up cannot be in the future")
+    if payload.next_followup_on is not None and payload.next_followup_on < today:
+        raise HTTPException(status_code=422, detail="Next follow-up cannot be in the past")
+    event = ProspectFollowUp(
+        organization_id=admin.organization_id,
+        prospect_id=prospect.id, actor_admin_id=admin.id,
+        occurred_on=payload.occurred_on, outcome=payload.outcome,
+        notes=payload.notes, next_followup_on=payload.next_followup_on,
+    )
+    database.add(event)
+    prospect.last_contact_on = payload.occurred_on
+    prospect.next_followup_on = payload.next_followup_on
+    prospect.updated_at = utc_now()
+    prospect.version += 1
+    database.flush()
+    _audit(database, admin, prospect, "prospect.followup_logged",
+           after={"outcome": payload.outcome, "followup_id": str(event.id)})
+    database.commit()
+    database.refresh(event)
+    response.headers["Cache-Control"] = "no-store"
+    return FollowUpRead(
+        id=event.id, occurred_on=event.occurred_on,
+        outcome=event.outcome, notes=event.notes,
+        next_followup_on=event.next_followup_on, created_at=event.created_at,
+    )
