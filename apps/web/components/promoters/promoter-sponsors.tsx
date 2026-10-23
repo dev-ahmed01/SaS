@@ -58,8 +58,8 @@ export function PromoterSponsors({promoter,onChanged,kind}:{promoter:Promoter;
     }catch{setError("Connection problem. Assignment was not confirmed.");}
     finally{setBusy(false);}
   }
-  return <section className="promoter-assignments" aria-label="Sponsor assignments">
-    <h3>{kind==="sponsors"?"Sponsors":"Prospects"} ({links?.total??"…"}</h3>
+  return <section className="promoter-assignments" aria-label={kind==="sponsors"?"Sponsor assignments":"Prospect assignments"}>
+    <h3>{kind==="sponsors"?"Sponsors":"Prospects"} ({links?.total??"…" }{")"}</h3>
     <p className="panel-description">{kind==="sponsors"
       ?"Registered contributors assigned to this promoter"
       :"Registered prospects awaiting a first contribution"}</p>
