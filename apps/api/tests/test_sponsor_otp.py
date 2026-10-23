@@ -1,9 +1,11 @@
 """Sponsor OTP: bounded challenge, tenant binding, no delivery claims or consent changes."""
+import uuid
 from types import SimpleNamespace
 
-from app.models import SponsorOtpChallenge
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.models import SponsorOtpChallenge
 
 pytest_plugins = ("test_crm_review_2026_10",)
 SECRET = "test-only-sponsor-otp-secret-that-is-long-enough"
@@ -56,7 +58,7 @@ def test_success_and_replay_without_crm_or_consent_side_effects(api, monkeypatch
     assert sent[0][0] == person["mobile_number"]
     assert len(sent[0][1]) == 6
     with Session(engine) as db:
-        record = db.get(SponsorOtpChallenge, challenge["challenge_id"])
+        record = db.get(SponsorOtpChallenge, uuid.UUID(challenge["challenge_id"]))
         assert record is not None
         assert record.code_digest != sent[0][1]
         assert person["mobile_number"] not in repr(record.code_digest)
