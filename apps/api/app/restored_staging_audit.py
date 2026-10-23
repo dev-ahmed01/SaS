@@ -26,6 +26,7 @@ REQUIRED_TABLES = (
     "audit_events",
     "message_outbox",
     "prospect_stage_transitions",
+    "prospect_followups",
     "prospect_stage_definitions",
     "communication_templates",
     "communication_campaigns",
@@ -34,7 +35,7 @@ REQUIRED_TABLES = (
     "communication_preparations",
     "communication_recipient_snapshots",
 )
-EXPECTED_MIGRATION = "0017_comm_preflight"
+EXPECTED_MIGRATION = "0018_crm_fathom"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
