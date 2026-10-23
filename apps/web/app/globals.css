@@ -1260,12 +1260,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:850px){.promoter-two-column{grid-template-columns:1fr}.payout-inline-row,.crm-followup-fields{grid-template-columns:1fr}}
 
 
+.crm-communication-preferences{margin-top:18px;}
+.crm-communication-preferences summary{cursor:pointer;font-weight:600;color:var(--forest-deep);}
+.crm-communication-preferences[open] summary{margin-bottom:12px;}
 /* Unified October CRM details: readable summaries, chronological activity and safe actions. */
 .site-sidebar .brand-copy strong,
 .app-content .topbar .topbar-name {
   font-family:var(--font-heading);
   font-size:clamp(20px,2vw,24px);
-  font-weight:700;
+  font-weight:800;
   letter-spacing:-.035em;
   line-height:1.18;
 }
