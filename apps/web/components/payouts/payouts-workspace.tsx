@@ -127,7 +127,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const [notice,setNotice]=useState("");
   const [chosen,setChosen]=useState<Plan|null>(null);
   const [mode,setMode]=useState<"paid"|"pause"|"resume"|"close">("paid");
-  const [paymentDate,setPaymentDate]=useState(dateIST);
+  const [paymentDate,setPaymentDate]=useState(()=>dateInputFromISO(dateIST()));
   const [method,setMethod]=useState<PaymentMethod>("upi");
   const [reference,setReference]=useState("");
   const [confirmed,setConfirmed]=useState(false);
@@ -151,7 +151,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   },[view,period,offset,refresh]);
   function open(plan:Plan,action:typeof mode){
     if(loading)return; // Stale navigation snapshots are read-only until refresh completes.
-    setChosen(plan);setMode(action);setPaymentDate(dateIST());setMethod("upi");
+    setChosen(plan);setMode(action);setPaymentDate(dateInputFromISO(dateIST()));setMethod("upi");
     setReference("");setConfirmed(false);setError("");setNotice("");request.current=null;
   }
   function close(){if(!saving){setChosen(null);request.current=null;}}
@@ -159,6 +159,10 @@ export function PayoutList({view}:{view:"all"|"active"}){
     event.preventDefault();
     if(!chosen||saving)return;
     if(mode==="paid"&&!confirmed){setError("Confirm the money was actually disbursed.");return;}
+    const normalizedPaymentDate=dateInputToISO(paymentDate);
+    if(mode==="paid"&&(!normalizedPaymentDate||normalizedPaymentDate>dateIST())){
+      setError("Use an actual payment date in DD/MM/YY.");return;
+    }
     setSaving(true);setError("");setNotice("");
     if(!request.current)request.current=crypto.randomUUID();
     const status=mode==="pause"?"paused":mode==="resume"?"active":"closed";
@@ -166,7 +170,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
       ?"/api/admin/payouts/plans/"+chosen.id+"/payments"
       :"/api/admin/payouts/plans/"+chosen.id+"/status";
     const payload=mode==="paid"?{
-      request_id:request.current,period_month:period+"-01",paid_on:paymentDate,
+      request_id:request.current,period_month:period+"-01",paid_on:normalizedPaymentDate,
       payment_method:method,payment_reference:reference,funds_disbursed:true,
     }:{
       request_id:request.current,new_status:status,
@@ -263,11 +267,8 @@ export function PayoutList({view}:{view:"all"|"active"}){
             <label className="field"><span className="field-label">Date funds left account (IST) *</span>
               <input required type="text" inputMode="numeric" placeholder="DD/MM/YY"
                 pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" aria-label="Date funds left account (DD/MM/YY)"
-                value={dateInputFromISO(paymentDate)}
-                onChange={e=>{
-                  const iso=dateInputToISO(e.target.value);
-                  setPaymentDate(iso??"");request.current=null;
-                }}/>
+                value={paymentDate}
+                onChange={e=>{setPaymentDate(e.target.value);request.current=null;}}/>
             </label>
             <label className="field"><span className="field-label">Payment method *</span>
               <select aria-label="Outgoing payment method" value={method}
