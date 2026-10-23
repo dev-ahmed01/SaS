@@ -6,15 +6,14 @@ import { useCallback, useEffect, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
 import { StageDialog } from "./stage-dialog";
+import { formatCRMDate } from "../../lib/crm-dates";
 import type { Prospect,ProspectPage } from "./prospects-types";
 import { reasonLabel } from "./prospects-types";
 
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{
   style:"currency",currency:"INR",maximumFractionDigits:0,
 });
-const displayDate=(date:string|null)=>date
-  ?new Date(date).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric",timeZone:"Asia/Kolkata"})
-  :"—";
+const displayDate=formatCRMDate;
 const displayMonth=(date:string|null)=>date
   ?new Date(date.slice(0,7)+"-01T00:00:00Z").toLocaleDateString("en-IN",{month:"short",year:"numeric",timeZone:"UTC"})
   :"—";
@@ -66,12 +65,12 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
     <div className="table-scroll crm-table-scroll">
       <table className="data-table prospects-table crm-table">
         <thead><tr>
-          {["Created","Full Name","Mobile","City","Sponsorship","Start","Promoter","Stage","Status","Action"].map(name=>
+          {["Created","Full Name","Mobile","City","Sponsorship","Start","Promoter","Stage",...(view==="all"?[]:["Status"]),"Action"].map(name=>
             <th key={name} scope="col">{name}</th>)}
         </tr></thead>
         <tbody>
-          {loading&&!page?<tr><td colSpan={10}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
-          :!page||page.items.length===0?<tr><td colSpan={8}>
+          {loading&&!page?<tr><td colSpan={view==="all"?9:10}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
+          :!page||page.items.length===0?<tr><td colSpan={view==="all"?9:10}>
             <div className="crm-list-empty"><Icon name="users" size={29}/>
               <h2>{view==="inactive"?"No inactive prospects":view==="active"?"No active prospects":"No prospects yet"}</h2>
               <p>{q?"Try another search.":view==="all"?"Add a prospect to begin.":"Stage changes will appear here."}</p>
@@ -94,13 +93,13 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
                 <span className="crm-ellipsis">{p.pipeline_stage_name??"Unassigned"}</span>
               </span>
             </td>
-            <td><div className="crm-stage-cell">
+            {view!=="all"&&<td><div className="crm-stage-cell">
               <span className={"status-pill "+p.crm_stage}>
                 {p.crm_stage==="active"?"Active":"Inactive"}</span>
               {p.crm_stage==="inactive"&&<span className="crm-stage-muted"
                 title={reasonLabel(p.crm_inactive_reason)}>
                 {p.days_inactive??0} days</span>}
-            </div></td>
+            </div></td>}
             <td className="crm-action-cell">
               <select className="crm-row-actions" value="" aria-label={"Actions for "+p.full_name}
                 onChange={e=>{

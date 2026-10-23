@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { dateInputFromISO, dateInputToISO, todayISTISO } from "../../lib/crm-dates";
 
 type Prospect={id:string;full_name:string;mobile_number:string;monthly_contribution_paise:number;
-  lifecycle_status:string;whatsapp_opt_in:boolean};
+  lifecycle_status:string;crm_stage:"active"|"inactive";whatsapp_opt_in:boolean};
 type Entry={id:string;sponsor_name:string;amount_paise:number;received_on:string;
   period_month:string;reference_mask:string;message_status:string;payment_method:string};
 type Page={items:Entry[];total:number};
@@ -21,9 +22,7 @@ const deliveryLabel=(value:string):string=>({
 
 const contributionOptions=[250,500,750,1000,1250,1500,1750,2000,2500,3000,5000,10000];
 const amount=(value:number)=>(value/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
-const istDate=()=>new Intl.DateTimeFormat("en-CA",{
-  timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit",
-}).format(new Date());
+const istDate=todayISTISO;
 
 export function ManualCollections(){
   const [search,setSearch]=useState("");
@@ -31,11 +30,10 @@ export function ManualCollections(){
   const [selected,setSelected]=useState<Prospect|null>(null);
   const [rupees,setRupees]=useState("");
   const [customAmount,setCustomAmount]=useState(false);
-  const [receivedOn,setReceivedOn]=useState(istDate);
+  const [receivedOn,setReceivedOn]=useState(()=>dateInputFromISO(istDate()));
   const [period,setPeriod]=useState(()=>istDate().slice(0,7));
   const [method,setMethod]=useState("upi");
   const [reference,setReference]=useState("");
-  const [confirmed,setConfirmed]=useState(false);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [success,setSuccess]=useState("");
@@ -44,10 +42,10 @@ export function ManualCollections(){
     if(search.trim().length<2||selected){setResults([]);return;}
     const controller=new AbortController();
     const timeout=setTimeout(()=>{
-      fetch("/api/admin/prospects?"+new URLSearchParams({q:search.trim(),limit:"15"}),{
+      fetch("/api/admin/prospects?"+new URLSearchParams({q:search.trim(),crm_stage:"active",limit:"15"}),{
         cache:"no-store",signal:controller.signal,
       }).then(async r=>{if(!r.ok)throw Error("Search unavailable");return await r.json();})
-        .then(data=>{if(!controller.signal.aborted)setResults(data.items as Prospect[]);})
+        .then(data=>{if(!controller.signal.aborted)setResults((data.items as Prospect[]).filter(p=>p.crm_stage==="active"));})
         .catch(()=>{if(!controller.signal.aborted)setResults([]);});
     },250);
     return ()=>{clearTimeout(timeout);controller.abort();};
@@ -62,7 +60,11 @@ export function ManualCollections(){
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(saving)return;
-    if(!selected){setError("Select an existing sponsor.");return;}
+    if(!selected||selected.crm_stage!=="active"){setError("Select an active sponsor.");return;}
+    const receivedISO=dateInputToISO(receivedOn);
+    if(!receivedISO||receivedISO>istDate()){
+      setError("Enter a valid received date as DD/MM/YY (not in the future).");return;
+    }
     const trimmed=rupees.trim();
     if(!/^\d{1,8}(?:\.\d{1,2})?$/.test(trimmed)){setError("Enter a valid amount in rupees, in ₹250 steps.");return;}
     const [whole,fraction=""]=trimmed.split(".");
@@ -71,7 +73,6 @@ export function ManualCollections(){
       ||paise%25000!==0){
       setError("Record ₹250, ₹500, ₹750, or another positive multiple of ₹250.");return;
     }
-    if(!confirmed){setError("Please confirm that the Foundation has actually received the funds.");return;}
     setSaving(true);setError("");setSuccess("");
     if(!requestId.current)requestId.current=crypto.randomUUID();
     try{
@@ -83,7 +84,7 @@ export function ManualCollections(){
         headers:{"Content-Type":"application/json","X-CSRF-Token":csrf_token},
         body:JSON.stringify({
           request_id:requestId.current,prospect_id:selected.id,
-          amount_paise:paise,period_month:period+"-01",received_on:receivedOn,
+          amount_paise:paise,period_month:period+"-01",received_on:receivedISO,
           payment_method:method,receipt_reference:reference.trim()||null,
           funds_confirmed:true,
         }),
@@ -107,14 +108,14 @@ export function ManualCollections(){
             :"WhatsApp status: "+deliveryLabel(data.message_status)+
               ". View authenticated delivery status in Reminders."));
       setSelected(null);setSearch("");setRupees("");setCustomAmount(false);setReference("");
-      setConfirmed(false);requestId.current=null;
+      requestId.current=null;
     }catch{setError("Connection interrupted. Check All Collections before retrying.");}
     finally{setSaving(false);}
   }
   return <div className="manual-collections-workspace">
     <section className="content-panel" aria-label="Record a manual collection">
       <h2>Record Collection</h2>
-      <p className="crm-form-summary">Record confirmed funds against the correct sponsor and sponsorship month.</p>
+      <p className="crm-form-summary">Select an active sponsor. Saving a collection confirms the Foundation received these funds.</p>
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="form-cell full">
@@ -151,7 +152,8 @@ export function ManualCollections(){
           <div className="collection-date-row">
             <div className="optional-fields">
               <label className="field"><span className="field-label">Received date (IST) *</span>
-                <input aria-label="Received date (IST)" required type="date" max={istDate()}
+                <input aria-label="Received date (DD/MM/YY)" required type="text" inputMode="numeric"
+                  pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" placeholder="DD/MM/YY"
                   value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/></label>
               <label className="field"><span className="field-label">Sponsorship month *</span>
                 <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
@@ -162,13 +164,11 @@ export function ManualCollections(){
             <input aria-label="Transaction reference" minLength={6} maxLength={100}
               value={reference} placeholder="Enter reference if available"
               onChange={e=>{setReference(e.target.value);update();}}/></label>
-          <label className="checkbox-field form-cell full"><input type="checkbox"
-            checked={confirmed} onChange={e=>{setConfirmed(e.target.checked);update();}}/>
-            <span>I have checked the Foundation's records and confirm these funds were received.</span></label>
+
         </div>
         {error&&<p className="form-error" role="alert">{error}</p>}
         {success&&<p className="form-success" role="status">{success}</p>}
-        <div className="manual-collections-submit"><button type="submit" disabled={saving||!confirmed||!selected}
+        <div className="manual-collections-submit"><button type="submit" disabled={saving||!selected}
           className="btn btn-primary">{saving?"Recording…":"Save Collection"}</button></div>
       </form>
     </section>

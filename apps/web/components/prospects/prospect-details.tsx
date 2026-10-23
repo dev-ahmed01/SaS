@@ -4,16 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
-import { ContactConsent } from "../communication/contact-consent";
+import { FollowUpLog } from "./followup-log";
+import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
 import { reasonLabel } from "./prospects-types";
 
 const money=(p:number)=>(p/100).toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0});
-const dateFmt=(v:string|null)=>v?new Date(v).toLocaleDateString("en-IN",{
-  day:"2-digit",month:"short",year:"numeric",timeZone:"Asia/Kolkata",
-}):"—";
+const dateFmt=formatCRMDate;
 const monthFmt=(v:string|null)=>v?new Date(v.slice(0,7)+"-01T00:00:00Z").toLocaleDateString("en-IN",{
   month:"long",year:"numeric",timeZone:"UTC",
 }):"—";
@@ -77,22 +76,6 @@ export function ProspectDetails({id}:{id:string}){
           <div><h2>{record.full_name}</h2><p>Created {dateFmt(record.created_at)}</p></div>
           <span className={"status-pill "+record.crm_stage}>{record.archived_at?"Archived":record.crm_stage==="active"?"Active":"Inactive"}</span>
         </div>
-        <div className="crm-detail-actions">
-          <button type="button" className="crm-action-card" disabled={Boolean(record.archived_at)}
-            onClick={()=>setEditing(v=>!v)}>
-            <Icon name="file" size={22}/><span><strong>Edit details</strong><small>Update contact and sponsorship</small></span>
-          </button>
-          <button type="button" className="crm-action-card"
-            disabled={Boolean(record.archived_at)}
-            onClick={()=>setStageOpen(true)}>
-            <Icon name="users" size={22}/><span><strong>{record.crm_stage==="active"?"Mark inactive":"Reactivate"}</strong>
-              <small>Track stage and reason</small></span>
-          </button>
-          <button type="button" className="crm-action-card danger" onClick={()=>setArchiveOpen(true)}>
-            <Icon name="file" size={22}/><span><strong>{record.archived_at?"Restore prospect":"Delete prospect"}</strong>
-              <small>{record.archived_at?"Return to CRM":"Archive without erasing history"}</small></span>
-          </button>
-        </div>
         {editing&&<ProspectEditor initial={record}
           onCancel={()=>setEditing(false)} onSaved={()=>{setEditing(false);setRevision(v=>v+1);}}/>}
         <div className="crm-detail-cards">
@@ -107,9 +90,7 @@ export function ProspectDetails({id}:{id:string}){
             <Info label="Email" value={record.email||"—"}/>
             <Info label="WhatsApp consent" value={record.whatsapp_opt_in?"Recorded":"Not recorded"}/>
           </Card>
-          <ContactConsent recipientKind="prospect" recipientId={record.id}
-            legacyWhatsAppOptIn={record.whatsapp_opt_in}
-            allowGrant={!Boolean(record.archived_at)}/>
+
           <Card title="Sponsorship">
             <Info label="Monthly sponsorship" value={money(record.monthly_contribution_paise)}/>
             <Info label="Tokens" value={String(record.monthly_contribution_paise/25000)+" × ₹250"}/>
@@ -126,10 +107,10 @@ export function ProspectDetails({id}:{id:string}){
             <Info label="Days inactive" value={record.days_inactive!==null?String(record.days_inactive):"—"}/>
             <Info label="Last change" value={dateFmt(record.updated_at)}/>
           </Card>
-          <Card title="Payment identifiers">
-            <Info label="Registered UPI IDs" value={record.upi_ids.length
-              ?record.upi_ids.map(item=>item.masked_vpa).join(", "):"None"}/>
-          </Card>
+
+          <section className="crm-detail-card">
+            <FollowUpLog prospect={record} onSaved={()=>setRevision(v=>v+1)}/>
+          </section>
           <section className="crm-detail-card">
             <h2>Stage history</h2>
             {record.stage_history.length===0?<p className="crm-muted">No manual stage changes yet.</p>
@@ -141,6 +122,24 @@ export function ProspectDetails({id}:{id:string}){
                 </li>)}
               </ol>}
           </section>
+        </div>
+        <div className="crm-detail-actions" aria-label="Prospect actions">
+          <button type="button" className="crm-action-card" disabled={Boolean(record.archived_at)}
+            onClick={()=>setStageOpen(true)}>
+            <Icon name="users" size={22}/>
+            <span><strong>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</strong>
+              <small>Log the reason for changing CRM eligibility</small></span>
+          </button>
+          <button type="button" className="crm-action-card" disabled={Boolean(record.archived_at)}
+            onClick={()=>setEditing(v=>!v)}>
+            <Icon name="file" size={22}/>
+            <span><strong>Edit</strong><small>Update contact and sponsorship</small></span>
+          </button>
+          <button type="button" className="crm-action-card danger" onClick={()=>setArchiveOpen(true)}>
+            <Icon name="file" size={22}/>
+            <span><strong>{record.archived_at?"Restore":"Delete"}</strong>
+              <small>{record.archived_at?"Return to CRM":"Archive without deleting payment history"}</small></span>
+          </button>
         </div>
       </>}
       {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}

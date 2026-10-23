@@ -29,7 +29,7 @@ function monthNow():string {
 }
 function monthOptions(){
   const [year,month]=monthNow().split("-").map(Number);
-  return Array.from({length:19},(_,i)=>{
+  return Array.from({length:6},(_,i)=>{
     const date=new Date(Date.UTC(year,month-1+i,1));
     const value=date.toISOString().slice(0,7);
     const label=new Intl.DateTimeFormat("en-IN",{month:"long",year:"numeric",timeZone:"UTC"}).format(date);
@@ -86,7 +86,14 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   },[]);
   useEffect(()=>{
     let mounted=true;
-    pipelineStages().then(rows=>{if(mounted)setStages(rows);})
+    pipelineStages().then(rows=>{
+      if(!mounted)return;
+      setStages(rows);
+      if(!initial){
+        const inquiry=rows.find(row=>row.name.toLowerCase()==="new inquiry");
+        if(inquiry)setValues(previous=>({...previous,pipeline_stage_id:inquiry.id}));
+      }
+    })
       .catch(()=>{if(mounted)setStagesError("Stages unavailable. Try reloading.");});
     return ()=>{mounted=false;};
   },[]);
@@ -126,7 +133,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         mobile_number:mobile,whatsapp_number:mobile,
         email:values.email.trim()||null,area_city:values.city.trim(),
         occupation:values.occupation.trim()||null,
-        pipeline_stage_id:values.pipeline_stage_id||null,
+        pipeline_stage_id:current?(values.pipeline_stage_id||null):null,
         whatsapp_opt_in:values.whatsapp_opt_in,
         monthly_contribution_paise:tokens*25000,
       };
@@ -242,16 +249,18 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
               {promoters.map(p=><option value={p.id} key={p.id}>{p.full_name}</option>)}
             </select></label>
           <label className="field"><span className="field-label">Prospect Stage</span>
-            <select aria-label="Prospect Stage" value={values.pipeline_stage_id}
+            <select aria-label="Prospect Stage" disabled={!isEdit}
+              value={isEdit?values.pipeline_stage_id:(stages.find(s=>s.name.toLowerCase()==="new inquiry")?.id??"new-inquiry")}
               onChange={e=>set("pipeline_stage_id",e.target.value)}>
-              <option value="">No stage selected</option>
+              {!isEdit&&<option value="new-inquiry">New Inquiry</option>}
+              {isEdit&&<option value="">No stage selected</option>}
               {initial?.pipeline_stage_id&&!stages.some(x=>x.id===initial.pipeline_stage_id)&&
                 <option value={initial.pipeline_stage_id}>
                   {initial.pipeline_stage_name??"Existing stage"}</option>}
               {stages.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
             {stages.length===0&&<span className="field-helper">
-              Create a stage in Prospects → Stages to use this field.</span>}
+              New Inquiry will be created automatically when needed.</span>}
           </label>
         </div>
         {promotersError&&<p className="form-error" role="status">{promotersError}</p>}
