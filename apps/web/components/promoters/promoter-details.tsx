@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
 import { PromoterEditor } from "./promoter-editor";
+import { ContactConsent } from "../communication/contact-consent";
 import { PromoterSponsors } from "./promoter-sponsors";
 import { PromoterStatusDialog } from "./promoter-status-dialog";
 import type { Promoter } from "./promoter-types";
@@ -100,6 +101,11 @@ export function PromoterDetails({id}:{id:string}){
           <PromoterSponsors promoter={record} kind="prospects" onChanged={refresh}/>
         </section>
       </div>
+      <details className="crm-detail-card crm-communication-preferences">
+        <summary>Communication preferences</summary>
+        <ContactConsent recipientKind="promoter" recipientId={record.id}
+          legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={record.is_active}/>
+      </details>
       <div className="crm-redesign-actions" aria-label="Promoter actions">
         <button type="button" className="btn btn-secondary" onClick={()=>setEditing(v=>!v)}>
           <Icon name="file" size={17}/> Edit</button>
