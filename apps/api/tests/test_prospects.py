@@ -383,7 +383,8 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
     })
     assert invalid.status_code == 422
     marked = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
-        "version": record["version"], "stage": "inactive", "reason": "budget", "note": "Follow up later",
+        "version": record["version"], "stage": "inactive",
+        "reason": "budget", "note": "Follow up later",
     })
     assert marked.status_code == 200, marked.text
     state = marked.json()
