@@ -1249,3 +1249,12 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .comm-review-footer{align-items:flex-start;flex-direction:column;}
   .comm-review-footer .btn{align-self:flex-end;}
 }
+
+/* October CRM review: compact payout row, accessible two-column promoter details. */
+.promoter-two-column{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start;margin-top:20px}
+.promoter-column{display:flex;flex-direction:column;gap:16px;min-width:0}
+.promoter-column .crm-detail-card{margin:0}
+.payout-inline-row{display:grid;grid-template-columns:1fr 1fr 1.45fr;gap:14px;min-width:0}
+.crm-followup-form{display:flex;flex-direction:column;gap:13px;margin:12px 0 23px}
+.crm-followup-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:850px){.promoter-two-column{grid-template-columns:1fr}.payout-inline-row,.crm-followup-fields{grid-template-columns:1fr}}

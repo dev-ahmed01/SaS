@@ -4,7 +4,7 @@ No reminder messages are emitted here. The 20th-day aggregate is Phase 11.
 """
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -377,6 +377,7 @@ def assigned_sponsors(
     response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    kind: Literal["sponsors", "prospects"] | None = None,
 ) -> SponsorPage:
     promoter = _load(database, context[0], promoter_id)
     filters = [
@@ -384,7 +385,13 @@ def assigned_sponsors(
         PromoterAssignment.promoter_id == promoter.id,
         PromoterAssignment.ended_at.is_(None),
     ]
-    total = database.scalar(select(func.count(PromoterAssignment.id)).where(*filters)) or 0
+    if kind == "prospects":
+        filters.append(Prospect.lifecycle_status == "new")
+    elif kind == "sponsors":
+        filters.append(Prospect.lifecycle_status != "new")
+    total = database.scalar(select(func.count(PromoterAssignment.id))
+                            .join(Prospect, Prospect.id == PromoterAssignment.prospect_id)
+                            .where(*filters)) or 0
     assignments = database.execute(
         select(PromoterAssignment, Prospect)
         .join(Prospect, Prospect.id == PromoterAssignment.prospect_id)

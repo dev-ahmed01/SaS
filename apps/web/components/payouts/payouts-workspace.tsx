@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
+import { dateInputFromISO, dateInputToISO, formatCRMDate } from "../../lib/crm-dates";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -12,7 +13,6 @@ type Plan = {
   current_month_due_paise:number;current_month_paid_paise:number;payment_count:number;
 };
 type PlanPage = {items:Plan[];total:number;limit:number;offset:number;period_month:string};
-type Kind="recurring"|"one_time";
 type PaymentMethod="upi"|"bank_transfer"|"cash"|"cheque";
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 const dateIST=()=>new Intl.DateTimeFormat("en-CA",{
@@ -36,13 +36,13 @@ async function securedPost(path:string,body:unknown):Promise<Response>{
 }
 
 export function PayoutAdd(){
-  const [payee,setPayee]=useState("");
+  const [first,setFirst]=useState("");
+  const [last,setLast]=useState("");
   const [purpose,setPurpose]=useState("");
-  const [notes,setNotes]=useState("");
-  const [kind,setKind]=useState<Kind>("recurring");
+  const [method,setMethod]=useState<PaymentMethod>("upi");
   const [value,setValue]=useState("");
-  const [start,setStart]=useState(()=>dateIST().slice(0,7));
-  const [scheduled,setScheduled]=useState(dateIST);
+  const [paidOn,setPaidOn]=useState(()=>dateInputFromISO(dateIST()));
+  const [utr,setUtr]=useState("");
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -51,72 +51,66 @@ export function PayoutAdd(){
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(saving)return;
-    const amount=amountPaise(value);
-    if(!amount){setError("Enter a positive amount in rupees (up to two decimal places).");return;}
+    const paise=amountPaise(value);
+    const paid=dateInputToISO(paidOn);
+    if(!paise){setError("Enter a valid positive payout amount.");return;}
+    if(!paid||paid>dateIST()){setError("Enter the actual payment date in DD/MM/YY, not in the future.");return;}
+    if(first.trim().length<2||purpose.trim().length<3||utr.trim().length<6){
+      setError("Enter the payee, purpose and UTR/reference number.");return;
+    }
     setSaving(true);setError("");setNotice("");
     if(!request.current)request.current=crypto.randomUUID();
     try{
-      const response=await securedPost("/api/admin/payouts/plans",{
-        request_id:request.current,payee_name:payee,purpose,notes:notes||null,
-        cadence:kind,amount_paise:amount,
-        start_month:(kind==="recurring"?start:scheduled.slice(0,7))+"-01",
-        scheduled_on:kind==="one_time"?scheduled:null,
+      const response=await securedPost("/api/admin/payouts/quick",{
+        request_id:request.current,first_name:first.trim(),last_name:last.trim(),
+        purpose:purpose.trim(),amount_paise:paise,paid_on:paid,
+        payment_method:method,payment_reference:utr.trim().toUpperCase(),
+        funds_disbursed:true,
       });
-      if(!response.ok){
-        if(response.status===409)throw Error("The plan may already exist. Check All Payouts before retrying.");
-        if(response.status===422)throw Error("Check the payee, amount and scheduled dates.");
-        throw Error("The payout plan was not confirmed. Please check All Payouts.");
-      }
-      const result:Plan=await response.json();
-      setNotice("Saved "+(result.cadence==="recurring"?"recurring":"one-time")+
-        " payout commitment of "+money(result.amount_paise)+
-        ". No money has been transferred.");
-      setPayee("");setPurpose("");setValue("");setNotes("");request.current=null;
-      // Remain on the approved Add screen so Admin can enter another plan.
-    }catch(e){setError(e instanceof Error?e.message:"Unable to save payout plan.");}
+      if(!response.ok)throw Error(response.status===409
+        ?"This payout or UTR was already recorded. Check All Payouts."
+        :response.status===422?"Check the date and payment reference.":"Could not record payout.");
+      setNotice("Recorded "+money(paise)+" paid to "+[first,last].filter(Boolean).join(" ")+".");
+      setFirst("");setLast("");setPurpose("");setValue("");setUtr("");
+      request.current=null;
+    }catch(e){setError(e instanceof Error?e.message:"Could not record payout.");}
     finally{setSaving(false);}
   }
-  return <section className="content-panel payouts-form" aria-label="Add payout plan">
-    <div className="payout-panel-heading">
-      <div><h2>Add payout</h2></div>
-
-    </div>
+  return <section className="content-panel payouts-form" aria-label="Record payout">
     <form onSubmit={submit}>
       <div className="form-grid">
-        <label className="field form-cell full"><span className="field-label">Payee name *</span>
-          <input required aria-label="Payee name" maxLength={160} minLength={2}
-            value={payee} placeholder="Enter recipient or organization"
-            onChange={e=>{setPayee(e.target.value);change();}}/></label>
-        <label className="field"><span className="field-label">Payout type *</span>
-          <select aria-label="Payout type" value={kind} onChange={e=>{setKind(e.target.value as Kind);change();}}>
-            <option value="recurring">Recurring monthly</option>
-            <option value="one_time">One-time</option>
-          </select></label>
-        <label className="field"><span className="field-label">Amount (₹) *</span>
-          <input required aria-label="Payout amount (₹)" inputMode="decimal" value={value}
-            placeholder="5000.00" onChange={e=>{setValue(e.target.value);change();}}/></label>
-        <label className="field form-cell full"><span className="field-label">Purpose *</span>
-          <input required aria-label="Payout purpose" minLength={3} maxLength={240}
-            value={purpose} placeholder="e.g. Facility support"
-            onChange={e=>{setPurpose(e.target.value);change();}}/></label>
-        {kind==="one_time"&&<label className="field"><span className="field-label">Scheduled payment date (IST) *</span>
-          <input required type="date" aria-label="Scheduled payment date (IST)" value={scheduled}
-            onChange={e=>{setScheduled(e.target.value);change();}}/></label>}
-        <div className="payout-schedule-fields">
-          <div className="optional-fields">
-            {kind==="recurring"&&<label className="field"><span className="field-label">First payment month (IST) *</span>
-              <input required type="month" aria-label="First payment month (IST)" value={start}
-                onChange={e=>{setStart(e.target.value);change();}}/></label>}
-            <label className="field full"><span className="field-label">Notes</span>
-              <textarea rows={2} aria-label="Payout notes" maxLength={800} value={notes}
-                onChange={e=>{setNotes(e.target.value);change();}}/></label>
-          </div>
+        <label className="field"><span className="field-label">Payee First Name *</span>
+          <input required minLength={2} maxLength={80} aria-label="Payee First Name"
+            value={first} onChange={e=>{setFirst(e.target.value);change();}}/></label>
+        <label className="field"><span className="field-label">Payee Last Name</span>
+          <input maxLength={80} aria-label="Payee Last Name"
+            value={last} onChange={e=>{setLast(e.target.value);change();}}/></label>
+        <div className="payout-inline-row form-cell full">
+          <label className="field"><span className="field-label">Type *</span>
+            <select aria-label="Payout payment type" value={method}
+              onChange={e=>{setMethod(e.target.value as PaymentMethod);change();}}>
+              <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
+              <option value="cash">Cash</option><option value="cheque">Cheque</option>
+            </select></label>
+          <label className="field"><span className="field-label">Amount (₹) *</span>
+            <input required inputMode="decimal" aria-label="Payout amount (₹)"
+              value={value} onChange={e=>{setValue(e.target.value);change();}}/></label>
+          <label className="field"><span className="field-label">Purpose *</span>
+            <input required minLength={3} maxLength={240} aria-label="Payout purpose"
+              value={purpose} onChange={e=>{setPurpose(e.target.value);change();}}/></label>
         </div>
+        <label className="field"><span className="field-label">Date (DD/MM/YY) *</span>
+          <input required value={paidOn} placeholder="DD/MM/YY"
+            pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" aria-label="Payout date (DD/MM/YY)"
+            onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
+        <label className="field"><span className="field-label">UTR / Reference Number *</span>
+          <input required minLength={6} maxLength={100} aria-label="UTR"
+            value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
-      <div className="form-actions"><button className="btn btn-primary" type="submit" disabled={saving}>
-        {saving?"Saving…":"Save payout plan"}</button></div>
+      <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>
+        {saving?"Recording…":"Save Payout"}</button></div>
     </form>
   </section>;
 }

@@ -6,10 +6,9 @@ import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
 import type { Promoter, PromoterPage } from "./promoter-types";
 import { csrfToken } from "./promoter-types";
+import { formatCRMDate } from "../../lib/crm-dates";
 
-const displayDate=(value:string)=>new Date(value).toLocaleDateString("en-IN",{
-  day:"2-digit",month:"short",year:"numeric",timeZone:"Asia/Kolkata",
-});
+const displayDate=formatCRMDate;
 
 export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   const [search,setSearch]=useState("");

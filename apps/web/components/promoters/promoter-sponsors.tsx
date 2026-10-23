@@ -3,7 +3,8 @@ import { useEffect,useState } from "react";
 import type { Candidate,Promoter,SponsorPage } from "./promoter-types";
 import { csrfToken } from "./promoter-types";
 
-export function PromoterSponsors({promoter,onChanged}:{promoter:Promoter;onChanged:()=>void}){
+export function PromoterSponsors({promoter,onChanged,kind}:{promoter:Promoter;
+  onChanged:()=>void;kind:"sponsors"|"prospects"}){
   const [links,setLinks]=useState<SponsorPage|null>(null);
   const [available,setAvailable]=useState<Candidate[]>([]);
   const [search,setSearch]=useState("");
@@ -13,13 +14,13 @@ export function PromoterSponsors({promoter,onChanged}:{promoter:Promoter;onChang
   const [error,setError]=useState("");
   useEffect(()=>{
     const controller=new AbortController();
-    const query=new URLSearchParams({limit:"20",offset:String(offset)});
+    const query=new URLSearchParams({limit:"20",offset:String(offset),kind});
     fetch("/api/admin/promoters/"+promoter.id+"/sponsors?"+query,{cache:"no-store",signal:controller.signal})
       .then(async r=>{if(!r.ok)throw Error("Unable to load assigned sponsors.");return await r.json() as SponsorPage;})
       .then(result=>{if(!controller.signal.aborted)setLinks(result);})
       .catch(()=>{if(!controller.signal.aborted)setError("Unable to load assigned sponsors.");});
     return ()=>controller.abort();
-  },[promoter.id,version,offset]);
+  },[promoter.id,version,offset,kind]);
   useEffect(()=>{
     if(search.trim().length<2){setAvailable([]);return;}
     const controller=new AbortController();
@@ -58,8 +59,10 @@ export function PromoterSponsors({promoter,onChanged}:{promoter:Promoter;onChang
     finally{setBusy(false);}
   }
   return <section className="promoter-assignments" aria-label="Sponsor assignments">
-    <h3>Assigned sponsors</h3>
-    <p className="panel-description">Each sponsor has one primary promoter. The 20th-day combined follow-up will use these links once WhatsApp delivery is configured.</p>
+    <h3>{kind==="sponsors"?"Sponsors":"Prospects"} ({links?.total??"…"}</h3>
+    <p className="panel-description">{kind==="sponsors"
+      ?"Registered contributors assigned to this promoter"
+      :"Registered prospects awaiting a first contribution"}</p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     <div className="promoter-sponsor-list">
       {links?.items.map(link=><div key={link.assignment_id} className="promoter-sponsor-row">
@@ -69,7 +72,7 @@ export function PromoterSponsors({promoter,onChanged}:{promoter:Promoter;onChang
           version:link.prospect_version,archived_at:null
         },true)}>Unassign</button>
       </div>)}
-      {links?.items.length===0&&<p className="muted">No sponsors assigned to this promoter.</p>}
+      {links?.items.length===0&&<p className="muted">No assigned {kind}.</p>}
       {!links&&<p role="status">Loading assignments…</p>}
     </div>
     {links&&links.total>20&&<div className="paging-footer">
@@ -79,8 +82,8 @@ export function PromoterSponsors({promoter,onChanged}:{promoter:Promoter;onChang
         <button type="button" className="btn btn-secondary" disabled={offset+20>=links.total} onClick={()=>setOffset(n=>n+20)}>Next</button>
       </div>
     </div>}
-    {promoter.is_active&&<div className="promoter-assign-search">
-      <h3>Assign another sponsor</h3>
+    {promoter.is_active&&kind==="prospects"&&<div className="promoter-assign-search">
+      <h3>Assign a prospect</h3>
       <label className="field"><span className="field-label">Search registered prospects</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, phone or area" aria-label="Find sponsor"/></label>
       {search.trim().length>=2&&<div className="promoter-candidate-list">
         {available.length===0&&<span className="muted">No matching prospects found.</span>}
