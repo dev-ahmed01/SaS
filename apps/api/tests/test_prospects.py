@@ -397,6 +397,7 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
     assert client.get("/v1/prospects?crm_stage=inactive").json()["total"] == 1
     assert client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
         "version": 1, "stage": "active",
+        "note": "Old version cannot overwrite the new status",
     }).status_code == 409
     activated = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
         "version": state["version"], "stage": "active",
