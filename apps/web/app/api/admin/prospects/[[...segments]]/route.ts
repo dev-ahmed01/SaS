@@ -15,6 +15,10 @@ const responseHeaders = {
 
 function resolveRoute(segments: string[], method: string): string | null {
   if (segments.length === 0 && ["GET", "POST"].includes(method)) return "";
+  if (segments.length === 2 && UUID.test(segments[0]) &&
+      segments[1] === "activity" && method === "GET") {
+    return "/" + segments[0] + "/activity";
+  }
   if (segments.length === 1 && UUID.test(segments[0]) &&
       ["GET", "PATCH", "DELETE"].includes(method)) return "/" + segments[0];
   if (segments.length === 2 && UUID.test(segments[0]) &&
