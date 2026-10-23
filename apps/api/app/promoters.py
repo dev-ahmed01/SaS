@@ -323,7 +323,9 @@ def update_promoter(
         if assignments:
             target_id = payload.reassign_to_promoter_id
             if target_id is None or target_id == promoter.id:
-                raise HTTPException(status_code=422, detail="Select another active promoter for sponsor reassignment")
+                raise HTTPException(
+                    status_code=422, detail="Select another active promoter for reassignment"
+                )
             target = _load(database, admin, target_id, lock=True)
             if not target.is_active:
                 raise HTTPException(status_code=409, detail="Replacement promoter is inactive")
@@ -359,7 +361,9 @@ def update_promoter(
            before={"version": previous},
            after={"version": promoter.version, "changed_fields": sorted(changed),
                   "reassigned_sponsor_count": transfer_count,
-                  "replacement_promoter_id": str(payload.reassign_to_promoter_id) if transfer_count else None})
+                  "replacement_promoter_id": (
+                      str(payload.reassign_to_promoter_id) if transfer_count else None
+                  )})
     try:
         database.commit()
     except IntegrityError as exc:

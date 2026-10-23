@@ -106,7 +106,7 @@ class ProspectFields(BaseModel):
         delta = (value.year - today.year) * 12 + value.month - today.month
         if value.day != 1 or not 0 <= delta < 6:
             raise ValueError(
-                "Tentative start must be a first-of-month date within the current and next five months"
+                "Tentative start must be the first of a month, within the next six months"
             )
         return value
 
