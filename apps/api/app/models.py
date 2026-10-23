@@ -174,6 +174,7 @@ class Prospect(Base):
     pipeline_stage_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
     whatsapp_number: Mapped[str | None] = mapped_column(String(16))
+    whatsapp_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     area_city: Mapped[str] = mapped_column(String(120), nullable=False)
     monthly_contribution_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
     version: Mapped[int] = mapped_column(nullable=False, default=1)
@@ -208,6 +209,31 @@ class Prospect(Base):
         order_by="ProspectArchiveInterval.archived_at",
     )
 
+
+
+class SponsorOtpChallenge(Base):
+    """Server-generated WhatsApp OTP challenge; no plaintext code or number stored."""
+
+    __tablename__ = "sponsor_otp_challenges"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "prospect_id"],
+            ["prospects.organization_id", "prospects.id"],
+            ondelete="RESTRICT", name="fk_otp_prospect_org",
+        ),
+        Index("ix_otp_org_prospect_created", "organization_id", "prospect_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    phone_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    code_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempts: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProspectFollowUp(Base):

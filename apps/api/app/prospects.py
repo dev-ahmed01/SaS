@@ -692,6 +692,12 @@ def update_prospect(
                if getattr(prospect, field) != value}
     if "pipeline_stage_id" in changed and changed["pipeline_stage_id"] is not None:
         _validate_pipeline(database, admin, changed["pipeline_stage_id"])
+    if "mobile_number" in changed or "whatsapp_number" in changed:
+        # A verified phone cannot remain trusted after its contact number changes.
+        if (changed.get("mobile_number", prospect.mobile_number) != prospect.mobile_number
+                or changed.get("whatsapp_number", prospect.whatsapp_number)
+                != prospect.whatsapp_number):
+            changed["whatsapp_verified_at"] = None
     if "monthly_contribution_paise" in changed and not valid_commitment(
         changed["monthly_contribution_paise"]
     ):

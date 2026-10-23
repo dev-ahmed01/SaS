@@ -1337,3 +1337,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .crm-handover-person{grid-template-columns:1fr;}
   .crm-redesign-actions .btn{flex:1;justify-content:center;}
 }
+
+/* OTP is a normal CRM verification action, not a messaging campaign. */
+.crm-otp-control{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.crm-otp-control h3{margin:0 0 10px;font:600 14px var(--font-heading)}
+.crm-otp-control p{line-height:1.6;margin:7px 0 13px}
+.crm-otp-verify-form{display:flex;align-items:end;gap:12px;margin-top:11px;flex-wrap:wrap}
+.crm-otp-verify-form .field{flex:1;min-width:140px}
+.crm-otp-verify-form button{min-height:40px}

@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     whatsapp_template_sponsor: str | None = None
     whatsapp_template_promoter: str | None = None
     promoter_disclosure_approved: bool = False
+    # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
+    otp_delivery_enabled: bool = False
+    otp_secret: str | None = None
+    otp_meta_access_token: str | None = None
+    otp_meta_phone_number_id: str | None = None
+    otp_meta_template_name: str | None = None
+    otp_meta_template_language: str = "en_US"
+    otp_meta_graph_version: str = "v23.0"
+
 
     @model_validator(mode="after")
     def validate_production_database(self) -> "Settings":
@@ -73,6 +82,23 @@ class Settings(BaseSettings):
                     "Staging and production DATABASE_URL must enable PostgreSQL TLS "
                     "with sslmode=require, verify-ca or verify-full"
                 )
+        if self.otp_delivery_enabled:
+            import re
+
+            if self.app_env not in ("production", "test"):
+                raise ValueError("WhatsApp OTP delivery is restricted to approved production")
+            if not self.otp_secret or len(self.otp_secret) < 32:
+                raise ValueError("OTP_SECRET of 32+ characters is required")
+            if not self.otp_meta_access_token or len(self.otp_meta_access_token) < 20:
+                raise ValueError("Meta WhatsApp OTP access token required")
+            if not re.fullmatch(r"[0-9]{5,25}", self.otp_meta_phone_number_id or ""):
+                raise ValueError("Meta WhatsApp sender phone ID required")
+            if not re.fullmatch(r"[a-z0-9_]{2,160}", self.otp_meta_template_name or ""):
+                raise ValueError("Approved WhatsApp authentication template name required")
+            if not re.fullmatch(r"[a-z]{2}(?:_[A-Z]{2})?", self.otp_meta_template_language):
+                raise ValueError("Invalid WhatsApp authentication template language")
+            if not re.fullmatch(r"v[0-9]{1,2}\.0", self.otp_meta_graph_version):
+                raise ValueError("Unsupported Meta Graph API version")
         if self.messaging_delivery_enabled:
             if self.app_env not in ("test", "production"):
                 raise ValueError("Messaging dispatch is restricted to approved production")
