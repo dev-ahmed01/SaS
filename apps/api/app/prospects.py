@@ -28,6 +28,7 @@ from app.models import (
     AdminUser,
     AuditEvent,
     ManualCollection,
+    ManualCollectionReversal,
     OrganizationSettings,
     Promoter,
     PromoterAssignment,
@@ -1009,6 +1010,16 @@ def prospect_activity(
             (f"{amount} received on {row.received_on.strftime('%d/%m/%y')} "
              f"for {row.period_month.strftime('%m/%Y')}"),
             row.created_at)
+    collection_ids = [row.id for row in collections]
+    if collection_ids:
+        reversals = database.scalars(select(ManualCollectionReversal).where(
+            ManualCollectionReversal.organization_id == admin.organization_id,
+            ManualCollectionReversal.collection_id.in_(collection_ids),
+        ).order_by(ManualCollectionReversal.created_at.desc()).limit(100)).all()
+        for row in reversals:
+            add(str(row.id), "payment", "Collection reversed",
+                "Recorded contribution voided: " + row.reason_code.replace("_", " "),
+                row.created_at)
     for row in database.scalars(select(AuditEvent).where(
         AuditEvent.organization_id == admin.organization_id,
         AuditEvent.entity_type == "prospect",
