@@ -36,8 +36,8 @@ export function IstClock(){
       document.removeEventListener("visibilitychange",onVisible);
     };
   },[]);
-  const time=current?.toLocaleString("en-IN",{
-    timeZone:"Asia/Kolkata",day:"2-digit",month:"short",year:"numeric",
+  const time=current?.toLocaleString("en-GB",{
+    timeZone:"Asia/Kolkata",day:"2-digit",month:"2-digit",year:"2-digit",
     hour:"2-digit",minute:"2-digit",hour12:true,
   })??"Loading time";
   return <time className="topbar-ist-clock" dateTime={current?.toISOString()}

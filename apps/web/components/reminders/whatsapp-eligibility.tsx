@@ -2,6 +2,7 @@
 
 import { useEffect,useRef,useState } from "react";
 import { MessageDeliveryStatus } from "./message-delivery-status";
+import { formatCRMDate } from "../../lib/crm-dates";
 
 type Kind="sponsor"|"promoter";
 type Unpaid={prospect_id:string;full_name:string;outstanding_paise:number};
@@ -85,7 +86,7 @@ export function WhatsAppEligibility(){
       }
       const batch:Batch=await result.json();
       setMessage("Prepared "+batch.recipient_count+" "+kind+" recipient intents for "+
-        batch.period_month.slice(0,7)+". No messages were sent.");
+        formatCRMDate(batch.period_month)+". No messages were sent.");
       request.current=null;setAck(false);setRevision(n=>n+1);
     }catch(err){
       setError(err instanceof Error?err.message:"Unable to confirm reminder preparation.");
@@ -121,7 +122,7 @@ export function WhatsAppEligibility(){
     {message&&<p role="status" className="form-success">{message}</p>}
     <div className="accounting-metrics">
       {[
-        ["Scheduled IST date",preview?.scheduled_on||"—"],
+        ["Scheduled IST date",formatCRMDate(preview?.scheduled_on)],
         ["Eligible recipients",String(preview?.eligible_recipients??"—")],
         ["Unpaid sponsors",String(preview?.unpaid_sponsors??"—")],
         ["Outstanding",preview?money(preview.total_outstanding_paise):"—"],
@@ -172,7 +173,7 @@ export function WhatsAppEligibility(){
       </tr></thead><tbody>{!history?.items.length?<tr><td colSpan={4}>
         No prepared batches yet.</td></tr>
       :history.items.map(batch=><tr key={batch.id}>
-        <td>{batch.period_month.slice(0,7)}</td>
+        <td>{formatCRMDate(batch.period_month)}</td>
         <td>{batch.kind==="sponsor"?"Sponsors":"Promoters"}</td>
         <td>{batch.recipient_count}</td>
         <td><span className={"status-pill "+(batch.status==="delivered"?"active":"scheduled")}>
