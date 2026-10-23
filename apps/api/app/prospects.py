@@ -896,7 +896,7 @@ def list_followups(
     database: Annotated[Session, Depends(db_session)],
     response: Response,
 ) -> list[FollowUpRead]:
-    prospect = _get(database, context[0])
+    prospect = _get(database, context[0], prospect_id)
     rows = database.scalars(select(ProspectFollowUp).where(
         ProspectFollowUp.organization_id == context[0].organization_id,
         ProspectFollowUp.prospect_id == prospect.id,
