@@ -158,7 +158,7 @@ def test_assign_reassign_history_stale_protection_and_deactivation_gate(system):
     assert client.patch(
         "/v1/promoters/"+p1["id"],headers=csrf,
         json={"version":2,"is_active":False},
-    ).status_code==409
+    ).status_code==422
     assert client.put(b,headers={**csrf,"If-Match":"1"}).status_code==409
     switched=client.put(b,headers={**csrf,"If-Match":"2"})
     assert switched.status_code==200,switched.text

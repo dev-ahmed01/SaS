@@ -157,6 +157,12 @@ def test_250_receipt_reactivates_and_full_reversal_deactivates(policy_api):
     })
     assert person.status_code == 201, person.text
     profile = person.json()
+    started = client.post("/v1/prospects/" + profile["id"] + "/stage", headers=csrf, json={
+        "version": profile["version"], "stage": "active",
+        "note": "Synthetic sponsor consented to activation",
+    })
+    assert started.status_code == 200, started.text
+    profile = started.json()
     assert profile["monthly_contribution_paise"] == 25000
     current = month_start(ist_today())
     first = shift_month(current, -2)
