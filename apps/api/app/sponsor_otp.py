@@ -133,7 +133,7 @@ def request_otp(
     admin = context[0]
     person = _load(database, admin, prospect_id)
     number = _phone(person)
-    if not re.fullmatch(r"\\+[1-9][0-9]{7,14}", number):
+    if not re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
         raise HTTPException(status_code=422, detail="Prospect needs a valid WhatsApp number")
     if person.whatsapp_verified_at is not None:
         raise HTTPException(status_code=409, detail="Current WhatsApp number already verified")
