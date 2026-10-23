@@ -379,6 +379,7 @@ def update_promoter(
            after={"version": promoter.version, "changed_fields": sorted(changed),
                   "reassigned_sponsor_count": transfer_count,
                   "unassigned_sponsor_count": len(assigned_ids) - transfer_count if changed.get("is_active") is False else 0,
+                  "active": promoter.is_active,
                   "replacement_promoter_id": (
                       str(payload.reassign_to_promoter_id) if transfer_count else None
                   )})
@@ -513,3 +514,57 @@ def unassign_sponsor(
                      _version_header(version), remove=True)
     database.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/{promoter_id}/activity", response_model=list[dict[str, str]])
+def promoter_activity(
+    promoter_id: uuid.UUID,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+    response: Response,
+) -> list[dict[str, str]]:
+    """Authenticated factual promoter changes and assignment history."""
+    admin = context[0]
+    promoter = _load(database, admin, promoter_id)
+    entries: list[dict[str, str]] = []
+
+    def add(key: str, kind: str, title: str, detail: str, when: datetime) -> None:
+        entries.append({
+            "id": key, "kind": kind, "title": title,
+            "detail": detail, "occurred_at": when.isoformat(),
+        })
+
+    add("created", "created", "Promoter created", "Registered in the CRM", promoter.created_at)
+    assignments = database.scalars(select(PromoterAssignment).where(
+        PromoterAssignment.organization_id == admin.organization_id,
+        PromoterAssignment.promoter_id == promoter.id,
+    ).order_by(PromoterAssignment.assigned_at.desc()).limit(100)).all()
+    for assignment in assignments:
+        prospect = database.get(Prospect, assignment.prospect_id)
+        name = prospect.full_name if prospect and prospect.organization_id == admin.organization_id else "prospect"
+        add(str(assignment.id) + ":assigned", "assignment", "Person assigned",
+            name + " assigned to this promoter", assignment.assigned_at)
+        if assignment.ended_at:
+            add(str(assignment.id) + ":ended", "assignment", "Assignment ended",
+                name + " moved or unassigned", assignment.ended_at)
+    changes = database.scalars(select(AuditEvent).where(
+        AuditEvent.organization_id == admin.organization_id,
+        AuditEvent.entity_type == "promoter",
+        AuditEvent.entity_id == str(promoter.id),
+        AuditEvent.action == "promoter.updated",
+    ).order_by(AuditEvent.occurred_at.desc()).limit(100)).all()
+    for row in changes:
+        changed = (row.after_data or {}).get("changed_fields", [])
+        if "is_active" in changed:
+            active = (row.after_data or {}).get("active")
+            title = "Promoter activated" if active is True else (
+                "Promoter deactivated" if active is False else "Promoter status changed"
+            )
+        else:
+            title = "Promoter details updated"
+        count = (row.after_data or {}).get("reassigned_sponsor_count", 0)
+        detail = f"{count} assignments transferred" if count else "Updated by Admin"
+        add(str(row.id), "updated", title, detail, row.occurred_at)
+    entries.sort(key=lambda entry: entry["occurred_at"], reverse=True)
+    response.headers["Cache-Control"] = "no-store"
+    return entries[:100]
