@@ -193,7 +193,7 @@ test("desktop branding and landscape artwork have the right proportions",async (
         scroll:panel.scrollHeight<=panel.clientHeight+1
       };
     });
-    expect(metrics.moduleSize).toBeGreaterThan(metrics.foundationSize);
+    expect(Math.abs(metrics.moduleSize-metrics.foundationSize)).toBeLessThan(1);
     expect(metrics.brandFits).toBe(true);
     expect(metrics.scroll).toBe(true);
   }
