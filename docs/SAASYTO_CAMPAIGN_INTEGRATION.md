@@ -149,7 +149,11 @@ X-Saasyto-Runner-Token: <private runner secret>
 
 The worker handles at most ten queued recipients per invocation, in IST-scheduled
 order. Suggested cadence: every minute via a privately configured Render Cron
-Job or equivalent. **A scheduled job must be configured and tested before
+Job or equivalent.
+A runnable private tick is included: `python scripts/saasyto_tick.py`.
+Configure the cron job with `SAS_API_PUBLIC_ORIGIN=https://YOUR-API-HOST`
+(no path) and the same `SAASYTO_RUNNER_SECRET` as the API. The job will
+refuse non-HTTPS endpoints, follows no redirects and emits aggregate counts only. **A scheduled job must be configured and tested before
 promising unattended scheduled delivery.** The endpoint is safe to run against
 an empty or disabled queue. It returns aggregate attempt counts only.
 
