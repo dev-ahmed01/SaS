@@ -10,6 +10,7 @@ import re
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
@@ -211,7 +212,7 @@ def cancel_campaign_run(
 
 
 def _render(body: str, person: Prospect | Promoter, now: datetime) -> str:
-    month = now.astimezone(__import__("zoneinfo").ZoneInfo("Asia/Kolkata")).strftime("%B %Y")
+    month = now.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%B %Y")
     return VALID_TEMPLATE.sub(
         lambda match: person.full_name if match.group(1) == "name" else month,
         body,
