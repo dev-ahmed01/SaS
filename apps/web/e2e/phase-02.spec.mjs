@@ -194,6 +194,7 @@ test("desktop branding and landscape artwork have the right proportions",async (
       };
     });
     expect(Math.abs(metrics.moduleSize-metrics.foundationSize)).toBeLessThan(1);
+    expect(metrics.moduleSize).toBeGreaterThanOrEqual(25);
     expect(metrics.brandFits).toBe(true);
     expect(metrics.scroll).toBe(true);
   }
@@ -443,10 +444,14 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("combobox",{name:"Change prospect stage"})).toBeVisible();
+  const savedStage=page.waitForResponse(r=>r.url().includes("/api/admin/prospects/") &&
+    r.request().method()==="PATCH" && r.status()===200);
   await page.getByRole("combobox",{name:"Change prospect stage"}).selectOption({label:renamed});
+  await savedStage;
   await expect(page.getByRole("combobox",{name:"Change prospect stage"})).toHaveValue(/.+/);
   await page.goto("/prospects/stages");
-  await expect(page.getByText("1 prospects")).toBeVisible();
+  await expect(page.locator(".pipeline-stage-row").filter({hasText:renamed})
+    .locator(".pipeline-stage-count")).toHaveText("1 prospects");
   await page.getByRole("button",{name:"Delete stage "+renamed}).click();
   const dialog=page.getByRole("dialog",{name:"Confirm stage deletion"});
   await expect(dialog.getByRole("button",{name:"Delete stage"})).toBeDisabled();
@@ -454,7 +459,10 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(person);
   await page.getByRole("row",{name:new RegExp(person)}).getByRole("link",{name:person}).click();
+  const clearedStage=page.waitForResponse(r=>r.url().includes("/api/admin/prospects/") &&
+    r.request().method()==="PATCH" && r.status()===200);
   await page.getByRole("combobox",{name:"Change prospect stage"}).selectOption("");
+  await clearedStage;
   await page.goto("/prospects/stages");
   await page.getByRole("button",{name:"Delete stage "+renamed}).click();
   await page.getByRole("dialog",{name:"Confirm stage deletion"})
@@ -498,11 +506,24 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading",{name:"Personal information"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Internal promoter notes"})).toBeVisible();
+  await expect(page.getByText("Communication preferences")).toHaveCount(0);
+  await expect(page.locator(".crm-summary-strip")).toHaveCount(0);
+  await expect(page.locator(".promoter-metric")).toHaveCount(3);
+  const noteField=page.getByRole("textbox",{name:"Notes about this promoter"});
+  await noteField.fill("Promoter confirmed the next visit.");
+  await page.getByRole("button",{name:"Save note"}).click();
+  await expect(page.getByText("Saved",{exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("textbox",{name:"Notes about this promoter"}))
+    .toHaveValue("Promoter confirmed the next visit.");
   await page.getByRole("button",{name:"Edit",exact:true}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText("Architect")).toBeVisible();
-  await page.getByRole("button",{name:/^Deactivate/}).click();
+  await page.getByRole("button",{name:"Mark Inactive"}).click();
   const confirm=page.getByRole("dialog",{name:"Confirm promoter status"});
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button",{name:"Confirm deactivation"}).click();
@@ -536,6 +557,8 @@ test("Promoter details safely assign and unassign a sponsor",async ({page})=>{
   page.once("dialog",d=>d.accept());
   await section.getByRole("button",{name:"Assign",exact:true}).click();
   await expect(section.getByRole("button",{name:"Unassign"})).toBeVisible();
+  await expect(section.getByRole("link",{name:sponsor})).toBeVisible();
+  await expect(page.locator(".promoter-metric").filter({hasText:"Prospects"})).toContainText("1");
   await section.getByRole("button",{name:"Unassign"}).click();
   await expect(section.getByText("No assigned prospects.")).toBeVisible();
 });

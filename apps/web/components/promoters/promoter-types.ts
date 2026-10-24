@@ -22,6 +22,10 @@ export type SponsorLink = {
   prospect_id:string;
   full_name:string;
   mobile_number:string;
+  area_city:string;
+  start_month:string|null;
+  monthly_contribution_paise:number;
+  crm_stage:"active"|"inactive";
   lifecycle_status:"new"|"active"|"inactive";
   prospect_version:number;
 };

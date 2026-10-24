@@ -3,7 +3,7 @@
 No reminder messages are emitted here. The 20th-day aggregate is Phase 11.
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -144,6 +144,10 @@ class SponsorAssignment(BaseModel):
     prospect_id: uuid.UUID
     full_name: str
     mobile_number: str
+    area_city: str
+    start_month: date | None
+    monthly_contribution_paise: int
+    crm_stage: str
     lifecycle_status: str
     prospect_version: int
 
@@ -435,7 +439,10 @@ def assigned_sponsors(
     return SponsorPage(
         items=[SponsorAssignment(
             assignment_id=a.id, prospect_id=p.id, full_name=p.full_name,
-            mobile_number=p.mobile_number, lifecycle_status=p.lifecycle_status,
+            mobile_number=p.mobile_number, area_city=p.area_city,
+            start_month=p.start_month,
+            monthly_contribution_paise=p.monthly_contribution_paise,
+            crm_stage=p.crm_stage, lifecycle_status=p.lifecycle_status,
             prospect_version=p.version,
         ) for a, p in assignments], total=total, limit=limit, offset=offset,
     )
