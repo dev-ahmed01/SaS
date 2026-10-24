@@ -5,6 +5,7 @@ fresh reviewed preparation, and a worker rechecks *live* consent/status/address.
 Provider status is only submitted/unknown/failed, never delivered without a
 documented, authenticated callback protocol (not yet available).
 """
+import hashlib
 import hmac
 import re
 import uuid
@@ -96,6 +97,11 @@ def _campaign(db: Session, admin: AdminUser, identifier: uuid.UUID):
     return row
 
 
+def _phone_digest(cfg, address: str) -> str:
+    secret = cfg.saasyto_runner_secret.get_secret_value()
+    return hmac.new(secret.encode(), address.encode(), hashlib.sha256).hexdigest()
+
+
 def _existing_run(db: Session, org: uuid.UUID, campaign: uuid.UUID):
     return db.scalars(select(SaasytoCampaignRun).where(
         SaasytoCampaignRun.organization_id == org,
@@ -168,7 +174,10 @@ def approve_campaign(
     for person, kind in eligible:
         db.add(SaasytoCampaignRecipient(
             organization_id=admin.organization_id, run_id=run.id,
-            recipient_kind=kind, recipient_id=person.id, status="queued",
+            recipient_kind=kind, recipient_id=person.id,
+            approved_phone_digest=_phone_digest(
+                cfg, contact_address(person, "whatsapp")
+            ), status="queued",
         ))
     db.add(AuditEvent(
         organization_id=admin.organization_id, actor_admin_id=admin.id,
@@ -255,6 +264,10 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     ):
         return None
     phone = contact_address(person, "whatsapp")
+    if not hmac.compare_digest(
+        item.approved_phone_digest, _phone_digest(get_settings(), phone)
+    ):
+        return None
     message = _render(row.body, person, now)
     return phone, message
 
