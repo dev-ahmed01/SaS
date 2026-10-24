@@ -7,12 +7,12 @@ from pydantic import SecretStr
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from test_communication import activate_for_communication, create_campaign, login
+from test_communication import system as system
 
 from app.models import SaasytoCampaignRecipient, SaasytoCampaignRun
 from app.saasyto_client import Submission
 from app.security import utc_now
 
-pytest_plugins = ("test_communication",)
 RUNNER = "synthetic-saasyto-runner-secret-exactly-long-enough"
 
 
