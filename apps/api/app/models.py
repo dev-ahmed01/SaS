@@ -909,6 +909,7 @@ class SaasytoCampaignRecipient(Base):
     run_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     recipient_kind: Mapped[str] = mapped_column(String(12), nullable=False)
     recipient_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    approved_phone_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(32))
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
