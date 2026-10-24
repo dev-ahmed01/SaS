@@ -1345,3 +1345,114 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .crm-otp-verify-form{display:flex;align-items:end;gap:12px;margin-top:11px;flex-wrap:wrap}
 .crm-otp-verify-form .field{flex:1;min-width:140px}
 .crm-otp-verify-form button{min-height:40px}
+
+/* Approved promoter CRM detail — compact profile, no repeated profile fields in metric strip. */
+.site-sidebar .brand-copy strong,
+.app-content .topbar .topbar-name {
+  font-family:var(--font-heading);
+  font-size:26px;
+  font-weight:800;
+  letter-spacing:-.04em;
+  line-height:1.12;
+}
+.site-sidebar .brand-copy strong{white-space:normal;overflow-wrap:normal;}
+.site-sidebar .brand-copy small{font-size:12px;line-height:1.3;margin-top:6px;}
+.app-content .topbar{min-height:94px;}
+.promoter-modern-detail{max-width:none;margin:0 auto;}
+.promoter-modern-detail .back-link{display:inline-flex;align-items:center;gap:8px;}
+.promoter-identity-row{
+  display:flex;align-items:center;gap:18px;margin:23px 0;
+}
+.promoter-identity-avatar{
+  display:inline-flex;justify-content:center;align-items:center;
+  width:70px;height:70px;flex:0 0 70px;border-radius:50%;
+  background:linear-gradient(138deg,#edf9f2,#cbefe0);
+  color:var(--forest-deep);font:700 27px var(--font-heading);
+}
+.promoter-identity-copy{min-width:0;}
+.promoter-identity-copy h2{font:700 clamp(27px,2.8vw,35px) var(--font-heading);margin:0;}
+.promoter-identity-copy p{font-size:12px;margin:7px 0 0;color:var(--muted);}
+.promoter-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 18px;}
+.promoter-metric{
+  display:flex;align-items:flex-start;gap:13px;min-width:0;padding:18px 19px;
+  border:1px solid var(--line);border-radius:12px;background:#fbfefc;
+}
+.promoter-metric-icon{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 43px;
+  width:43px;height:43px;border-radius:12px;color:var(--forest);background:var(--mint);
+}
+.promoter-metric>div{min-width:0;display:flex;flex-direction:column;gap:3px;}
+.promoter-metric>div>span{color:var(--muted);font:400 12px var(--font-body);}
+.promoter-metric strong{color:var(--forest-deep);font:700 27px var(--font-heading);line-height:1.2;}
+.promoter-metric-link{
+  align-self:flex-start;border:0;background:transparent;padding:1px 0;
+  color:var(--forest);font:500 11px var(--font-body);
+}
+.promoter-metric-link:hover{text-decoration:underline;}
+.promoter-information-row{grid-template-columns:1.1fr 1fr;align-items:stretch;}
+.promoter-modern-detail .crm-detail-card{padding:25px 27px;border-radius:12px;}
+.promoter-modern-detail .crm-detail-card>h2,
+.promoter-modern-detail .crm-panel-heading h2{
+  margin:0 0 21px;font:600 20px var(--font-heading);
+}
+.promoter-modern-detail .crm-panel-heading h2{margin:0;}
+.promoter-profile-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 23px;margin:0;}
+.promoter-profile-fact{display:flex;flex-direction:column;gap:6px;min-width:0;padding:0 0 15px;border-bottom:1px solid #ebf2ee;}
+.promoter-profile-fact:nth-last-child(-n+2){border:0;padding-bottom:0;}
+.promoter-profile-fact dt{font:400 12px var(--font-body);color:var(--muted);}
+.promoter-profile-fact dd{margin:0;font:500 13px/1.5 var(--font-body);color:var(--forest-deep);overflow-wrap:anywhere;}
+.promoter-timeline-card .crm-activity-timeline{max-height:400px;}
+.promoter-assignments-grid{grid-template-columns:1fr 1.15fr;align-items:start;}
+.promoter-assignments-grid>div{scroll-margin-top:22px;}
+.promoter-assignments-grid .promoter-assignments{margin:0;padding:0;border:0;}
+.promoter-assignments-grid .promoter-assignments h3{font:600 18px var(--font-heading);margin:0;}
+.promoter-list-heading h3{display:flex;align-items:center;gap:10px;}
+.promoter-assignments-grid .promoter-assignments .panel-description{font-size:11px;margin:8px 0 18px;}
+.promoter-assignment-scroll{overflow-x:auto;min-width:0;}
+.promoter-assignment-table{
+  width:100%;min-width:570px;border-collapse:collapse;font:400 11px var(--font-body);text-align:left;
+}
+.promoter-assignment-table th{
+  background:#f3f8f5;color:#536960;font:500 10px var(--font-body);padding:11px 9px;white-space:nowrap;
+}
+.promoter-assignment-table td{padding:12px 9px;border-bottom:1px solid var(--line);vertical-align:middle;}
+.promoter-assignment-table td:first-child{min-width:124px;}
+.promoter-assignment-table td small{display:block;color:var(--muted);font-size:10px;}
+.promoter-assignment-table .status-pill{font-size:10px;white-space:nowrap;}
+.promoter-person-link{font-weight:600;color:var(--forest-deep);}
+.promoter-person-link:hover{text-decoration:underline;}
+.promoter-empty-state{display:flex;align-items:center;flex-direction:column;text-align:center;gap:7px;padding:29px 12px;}
+.promoter-empty-icon{display:inline-flex;justify-content:center;align-items:center;width:52px;height:52px;border-radius:50%;background:#f3f7f5;color:#84998f;}
+.promoter-empty-state p{font:500 12px var(--font-body);color:var(--ink);margin:2px 0 0;}
+.promoter-empty-state small{font:400 11px var(--font-body);color:var(--muted);}
+.promoter-assignments-grid .promoter-assign-search{margin-top:21px;border-top:1px solid var(--line);padding-top:15px;}
+.promoter-assignments-grid .promoter-assign-search h3{font-size:15px;margin:0 0 13px;}
+.promoter-final-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.85fr);gap:16px;align-items:end;}
+.promoter-final-row .promoter-notes-panel{min-width:0;}
+.promoter-notes-panel .crm-panel-heading{margin:0 0 12px;}
+.promoter-notes-panel .crm-panel-heading h2{margin:0;}
+.promoter-notes-panel textarea{width:100%;min-height:80px;resize:vertical;}
+.promoter-notes-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;color:var(--muted);font-size:11px;}
+.promoter-final-row .crm-redesign-actions{margin:0 0 2px;align-self:end;}
+.promoter-final-row .crm-redesign-actions .btn{min-height:40px;padding:10px 16px;white-space:nowrap;}
+@media(max-width:1050px){
+  .promoter-assignments-grid{grid-template-columns:1fr;}
+  .promoter-assignments-grid .crm-assignment-card{grid-column:1;}
+}
+@media(max-width:920px){
+  .promoter-information-row{grid-template-columns:1fr;}
+  .promoter-final-row{grid-template-columns:1fr;}
+  .promoter-final-row .crm-redesign-actions{justify-content:flex-end;}
+}
+@media(max-width:650px){
+  .app-content .topbar{min-height:72px;}
+  .promoter-metrics{grid-template-columns:1fr 1fr;}
+  .promoter-metric:last-child{grid-column:1/-1;}
+  .promoter-modern-detail .crm-detail-card{padding:20px 17px;}
+  .promoter-profile-facts{grid-template-columns:1fr;}
+  .promoter-profile-fact:nth-last-child(2){border-bottom:1px solid #ebf2ee;padding-bottom:15px;}
+  .promoter-identity-avatar{height:55px;width:55px;flex-basis:55px;font-size:22px;}
+  .promoter-identity-row{gap:11px;}
+  .promoter-identity-copy h2{font-size:25px;}
+  .site-sidebar .brand-copy strong,.app-content .topbar .topbar-name{font-size:26px;}
+}
