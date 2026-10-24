@@ -46,7 +46,7 @@ export function PromoterDetails({id}:{id:string}){
   },[id]);
   useEffect(()=>{
     const controller=new AbortController();
-    setLoading(true);setError("");
+    setError("");
     Promise.all([
       load(controller.signal),
       fetch("/api/admin/promoters/"+id+"/activity",{cache:"no-store",signal:controller.signal})
