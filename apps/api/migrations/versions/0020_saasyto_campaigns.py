@@ -50,6 +50,7 @@ def upgrade():
         sa.Column("run_id", sa.Uuid(), nullable=False),
         sa.Column("recipient_kind", sa.String(12), nullable=False),
         sa.Column("recipient_id", sa.Uuid(), nullable=False),
+        sa.Column("approved_phone_digest", sa.String(64), nullable=False),
         sa.Column("status", sa.String(24), nullable=False),
         sa.Column("reason", sa.String(32)),
         sa.Column("claimed_at", sa.DateTime(timezone=True)),
