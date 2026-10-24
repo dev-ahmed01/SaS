@@ -3,17 +3,52 @@ import uuid
 from datetime import timedelta
 from types import SimpleNamespace
 
-from pydantic import SecretStr
-from sqlalchemy import func, select
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
-from test_communication import activate_for_communication, create_campaign, login
-from test_communication import system as system
+from sqlalchemy.pool import StaticPool
 
-from app.models import SaasytoCampaignRecipient, SaasytoCampaignRun
+from pydantic import SecretStr
+from test_communication import activate_for_communication, create_campaign, login
+
+from app.bootstrap_admin import provision_admin
+from app.main import app
+from app.models import Base, SaasytoCampaignRecipient, SaasytoCampaignRun
 from app.saasyto_client import Submission
 from app.security import utc_now
 
 RUNNER = "synthetic-saasyto-runner-secret-exactly-long-enough"
+
+
+@pytest.fixture
+def dispatch_system(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org",
+            password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings", lambda: SimpleNamespace(
+            auth_secret="synthetic-secure-auth-key-longer-than-thirty-two",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.prospects.get_settings", lambda: SimpleNamespace(
+            upi_match_secret="synthetic-unique-hmac-secret-for-communication-test",
+        ),
+    )
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
 
 
 def _cfg(enabled=True, cutoff=None):
@@ -67,8 +102,8 @@ def _approved(client, csrf, name):
     return cid, approval.json()
 
 
-def test_no_approval_or_claim_when_provider_off(system, monkeypatch):
-    client, engine = system
+def test_no_approval_or_claim_when_provider_off(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
     csrf = login(client)
     person = _person(client, csrf, "1001")
     _consent(client, csrf, person, "opted_in")
@@ -90,8 +125,8 @@ def test_no_approval_or_claim_when_provider_off(system, monkeypatch):
         assert db.scalar(select(func.count(SaasytoCampaignRun.id))) == 0
 
 
-def test_approval_is_explicit_idempotent_and_runner_rechecks_opt_out(system, monkeypatch):
-    client, engine = system
+def test_approval_is_explicit_idempotent_and_runner_rechecks_opt_out(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
     csrf = login(client)
     person = _person(client, csrf, "1002")
     _consent(client, csrf, person, "opted_in")
@@ -122,8 +157,8 @@ def test_approval_is_explicit_idempotent_and_runner_rechecks_opt_out(system, mon
         assert db.scalar(select(func.count(SaasytoCampaignRecipient.id))) == 1
 
 
-def test_one_attempt_unknown_outcome_is_never_replayed(system, monkeypatch):
-    client, _ = system
+def test_one_attempt_unknown_outcome_is_never_replayed(dispatch_system, monkeypatch):
+    client, _ = dispatch_system
     csrf = login(client)
     person = _person(client, csrf, "1003")
     _consent(client, csrf, person, "opted_in")
@@ -144,8 +179,8 @@ def test_one_attempt_unknown_outcome_is_never_replayed(system, monkeypatch):
     assert result["unknown"] == 1 and result["status"] == "completed"
 
 
-def test_cross_tenant_auth_and_cancellation(system, monkeypatch):
-    client, _ = system
+def test_cross_tenant_auth_and_cancellation(dispatch_system, monkeypatch):
+    client, _ = dispatch_system
     csrf = login(client)
     assert client.get("/v1/communication/campaigns/"+str(uuid.uuid4())+"/saasyto"
                       ).status_code == 404
@@ -166,8 +201,8 @@ def test_cross_tenant_auth_and_cancellation(system, monkeypatch):
     }).json() == {}
 
 
-def test_approval_requires_fresh_review_and_new_campaign(system, monkeypatch):
-    client, _ = system
+def test_approval_requires_fresh_review_and_new_campaign(dispatch_system, monkeypatch):
+    client, _ = dispatch_system
     csrf = login(client)
     person = _person(client, csrf, "1005")
     _consent(client, csrf, person, "opted_in")
