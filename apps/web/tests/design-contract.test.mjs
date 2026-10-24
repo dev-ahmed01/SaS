@@ -97,7 +97,9 @@ test("Consent and Campaign review keep the no-send CRM boundary", () => {
   assert.match(campaigns,/Check recipients/);
   assert.match(proxy,/name==="consent-events"/);
   assert.doesNotMatch(prospect,/ContactConsent/);
-  assert.match(promoter,/ContactConsent/);
+  assert.doesNotMatch(promoter,/ContactConsent|Communication preferences/);
+  assert.match(promoter,/PromoterNotes/);
+  assert.match(promoter,/PromoterSponsors/);
   assert.doesNotMatch(campaigns,/\/send|\/dispatch/);
 });
 
