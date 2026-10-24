@@ -181,6 +181,7 @@ def test_one_attempt_unknown_outcome_is_never_replayed(dispatch_system, monkeypa
 def test_cross_tenant_auth_and_cancellation(dispatch_system, monkeypatch):
     client, _ = dispatch_system
     csrf = login(client)
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
     assert client.get("/v1/communication/campaigns/"+str(uuid.uuid4())+"/saasyto"
                       ).status_code == 404
     assert client.post("/internal/saasyto/dispatch", headers={
