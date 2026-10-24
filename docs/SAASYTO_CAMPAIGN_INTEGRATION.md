@@ -83,6 +83,29 @@ backend-secret settings.
   WhatsApp's terms and consent restrictions before launching automated sends.
 
 
+## Additional provider documentation confirmed from the authenticated portal
+
+The Saasyto Developer API **Reference → Success Response** shows a generic
+JSON envelope:
+
+```json
+{"status":"success","message":"Action completed successfully","data":{}}
+```
+
+This is not a send-specific receipt: no stable message ID or delivery event
+correlation has been verified. The portal also documents a separate
+`POST https://web.saasyto.com/api/sendtemplate` endpoint and a
+`POST /api/drip_enroll` for a **pre-existing drip sequence**. Neither is
+proof of an API for creating new bulk campaigns.
+
+The current account selector lists multiple sender instances, but the API
+page does not establish their connection or WhatsApp platform compliance.
+No instance is selected or changed by the integration. The documented
+`/api/set_webhook` route is for receiving connection, incoming and outgoing
+events, but the portal does not show a verifiable cryptographic signature
+or delivery-correlation schema. Consequently SaS does not accept webhook
+events as delivery proof yet.
+
 ## Campaign approval, durable delivery and reporting (PR #46)
 
 The SaS Communication screen now supports *explicit* manual approval after a recipient
@@ -148,9 +171,9 @@ schema and matching fields are proven with a controlled provider fixture.
 
 1. Rotate the potentially exposed example access token. Confirm your Saasyto
    sender is authorized and opt-ins are documented.
-2. Ask Saasyto support for *one redacted* response body from `POST /api/send`
-   (success and failure), whether the same request can be idempotently retried,
-   and the connected sender type.
+2. Confirm the generic documented success envelope with *one redacted*, real
+   `POST /api/send` response (success and failure), the stable message ID, whether
+   calls are idempotent, and the connected sender type.
 3. Ask for one redacted sent/delivered/failed webhook event plus sender
    authentication or signature specification, webhook retries, and message ID
    correlation. Do not configure a webhook URL to a real SaS endpoint until
