@@ -11,7 +11,7 @@ export function PromoterNotes({promoter,onChanged}:{
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [saved,setSaved]=useState(false);
-  useEffect(()=>{setDraft(promoter.notes??"");setSaved(false);},[promoter.id,promoter.notes]);
+  useEffect(()=>{setDraft(promoter.notes??"");},[promoter.id,promoter.notes]);
   const changed=draft.trim()!==(promoter.notes??"");
   async function save(){
     if(saving||!changed)return;
