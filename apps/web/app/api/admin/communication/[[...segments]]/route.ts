@@ -11,6 +11,8 @@ const output={
 function allowed(parts:string[],method:string):string|null{
   const [name,id,action]=parts;
   if(parts.length===1&&name==="clock"&&method==="GET")return "/clock";
+  if(parts.length===2&&name==="provider"&&id==="saasyto"&&method==="GET")
+    return "/provider/saasyto";
   if(parts.length===1&&name==="audience"&&method==="GET")return "/audience";
   if(parts.length===1&&name==="consent-events"&&["GET","POST"].includes(method))return "/consent-events";
   if(parts.length===1&&["templates","campaigns","rules"].includes(name)&&

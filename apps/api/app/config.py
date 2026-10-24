@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     whatsapp_template_sponsor: str | None = None
     whatsapp_template_promoter: str | None = None
     promoter_disclosure_approved: bool = False
+    # Saasyto account/API connector. Separate from the existing Pabbly reminder
+    # transport and Meta Cloud OTP adapter. Default OFF, even with credentials.
+    saasyto_delivery_enabled: bool = False
+    saasyto_sender_approved: bool = False
+    saasyto_instance_id: str | None = None
+    saasyto_access_token: SecretStr | None = None
+
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
     otp_secret: str | None = None
@@ -82,6 +89,21 @@ class Settings(BaseSettings):
                     "Staging and production DATABASE_URL must enable PostgreSQL TLS "
                     "with sslmode=require, verify-ca or verify-full"
                 )
+        if self.saasyto_delivery_enabled:
+            import re
+
+            if self.app_env not in ("production", "test"):
+                raise ValueError("Saasyto campaign delivery requires approved production")
+            if not self.saasyto_sender_approved:
+                raise ValueError("Saasyto sender and recipient-permission approval required")
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{6,80}", self.saasyto_instance_id or ""):
+                raise ValueError("Configured Saasyto instance ID required")
+            token = (
+                self.saasyto_access_token.get_secret_value()
+                if self.saasyto_access_token else ""
+            )
+            if len(token) < 12 or any(ch.isspace() for ch in token):
+                raise ValueError("Valid Saasyto access token required")
         if self.otp_delivery_enabled:
             import re
 

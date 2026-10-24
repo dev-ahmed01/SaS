@@ -5,6 +5,11 @@ import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
+type SaasytoStatus={
+  provider:string;transport:string;delivery_enabled:boolean;
+  sender_approved:boolean;credentials_configured:boolean;
+  webhook_verified:boolean;connection_tested:boolean;notice:string;
+};
 type RecipientCheck={
   id:string;campaign_id:string;eligible_count:number;suppressed_count:number;
   evaluated_at:string;delivery_activated:false;
@@ -17,6 +22,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState("");
   const [reload,setReload]=useState(0);
+  const [provider,setProvider]=useState<SaasytoStatus|null>(null);
   const [reviewId,setReviewId]=useState<string|null>(null);
   const [check,setCheck]=useState<RecipientCheck|null>(null);
   const [checking,setChecking]=useState(false);
@@ -30,6 +36,13 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     })
       .catch(()=>setError("Could not load saved campaigns."))
       .finally(()=>setLoading(false));
+  },[revision,reload]);
+  useEffect(()=>{
+    let mounted=true;
+    apiGet<SaasytoStatus>("/provider/saasyto")
+      .then(state=>{if(mounted)setProvider(state);})
+      .catch(()=>{if(mounted)setProvider(null);});
+    return()=>{mounted=false;};
   },[revision,reload]);
   async function openReview(item:Campaign){
     if(reviewId===item.id){setReviewId(null);setCheck(null);return;}
@@ -73,6 +86,16 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       <p>Drafts and plans across all audiences.</p></div>
       <button type="button" className="btn btn-secondary" onClick={()=>setReload(x=>x+1)}>
         Refresh</button>
+    </div>
+    <div className="comm-provider-status" role="status">
+      <strong>WhatsApp delivery · Saasyto</strong>
+      <span>{provider
+        ? provider.delivery_enabled
+          ? "Provider configuration enabled · actual delivery and callbacks unverified"
+          : "Not connected for sending · campaigns remain drafts or plans"
+        : "Provider configuration not verified"}
+      </span>
+      <small>{provider?.notice??"No WhatsApp message is sent from this campaign screen."}</small>
     </div>
     {error&&<p className="form-error" role="alert">{error}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
