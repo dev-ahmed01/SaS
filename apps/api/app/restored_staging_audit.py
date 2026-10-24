@@ -35,8 +35,10 @@ REQUIRED_TABLES = (
     "communication_preparations",
     "communication_recipient_snapshots",
     "sponsor_otp_challenges",
+    "saasyto_campaign_runs",
+    "saasyto_campaign_recipients",
 )
-EXPECTED_MIGRATION = "0019_sponsor_otp"
+EXPECTED_MIGRATION = "0020_saasyto_campaigns"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
