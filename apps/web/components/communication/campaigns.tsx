@@ -5,6 +5,12 @@ import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
+type SaasytoRun={
+  id:string;campaign_id:string;status:"approved"|"cancelled"|"completed";
+  due_at:string;eligible_count:number;suppressed_count:number;
+  queued:number;claimed:number;accepted_unverified:number;
+  rejected:number;unknown:number;suppressed_after_approval:number;notice:string;
+};
 type SaasytoStatus={
   provider:string;transport:string;delivery_enabled:boolean;
   sender_approved:boolean;credentials_configured:boolean;
@@ -23,6 +29,8 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [busy,setBusy]=useState("");
   const [reload,setReload]=useState(0);
   const [provider,setProvider]=useState<SaasytoStatus|null>(null);
+  const [run,setRun]=useState<SaasytoRun|null>(null);
+  const [runBusy,setRunBusy]=useState(false);
   const [reviewId,setReviewId]=useState<string|null>(null);
   const [check,setCheck]=useState<RecipientCheck|null>(null);
   const [checking,setChecking]=useState(false);
@@ -46,13 +54,14 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   },[revision,reload]);
   async function openReview(item:Campaign){
     if(reviewId===item.id){setReviewId(null);setCheck(null);return;}
-    setReviewId(item.id);setCheck(null);setReviewError("");
+    setReviewId(item.id);setCheck(null);setRun(null);setReviewError("");
     setChecking(true);
     try{
       const history=await apiGet<RecipientCheck[]>(
         "/campaigns/"+item.id+"/preparations"
       );
       setCheck(history[0]??null);
+      setRun(await apiGet<SaasytoRun|null>("/campaigns/"+item.id+"/saasyto"));
     }catch{
       setReviewError("Recipient checks unavailable.");
     }finally{setChecking(false);}
@@ -70,6 +79,38 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     }catch(e){
       setReviewError(e instanceof Error?e.message:"Recipient check failed.");
     }finally{setChecking(false);}
+  }
+  async function approve(item:Campaign){
+    if(!check||run||runBusy||!provider?.delivery_enabled)return;
+    if(!window.confirm(
+      "Approve Saasyto delivery to "+check.eligible_count+
+      " eligible recipient(s)? This authorizes a one-attempt-only queue. "+
+      "Gateway acceptance is not confirmed WhatsApp delivery."
+    ))return;
+    setRunBusy(true);setReviewError("");
+    try{
+      const result=await apiWrite<SaasytoRun>(
+        "/campaigns/"+item.id+"/saasyto","POST",{
+          preparation_id:check.id,expected_eligible:check.eligible_count,
+          confirm_send:true,
+        }
+      );
+      setRun(result);
+      setNotice("Campaign approved for the private delivery runner; messages are not automatically sent from this browser.");
+    }catch(e){setReviewError(e instanceof Error?e.message:"Approval was not confirmed.");}
+    finally{setRunBusy(false);}
+  }
+  async function cancelRun(item:Campaign){
+    if(!run||runBusy||!window.confirm(
+      "Cancel all not-yet-claimed Saasyto messages? Messages already submitted cannot be recalled."
+    ))return;
+    setRunBusy(true);setReviewError("");
+    try{
+      setRun(await apiWrite<SaasytoRun>(
+        "/campaigns/"+item.id+"/saasyto/cancel","POST",{}
+      ));
+    }catch(e){setReviewError(e instanceof Error?e.message:"Unable to cancel dispatch.");}
+    finally{setRunBusy(false);}
   }
   async function cancel(item:Campaign){
     if(!window.confirm("Cancel this communication plan? It will remain in the audit log."))return;
@@ -138,13 +179,32 @@ export function CommunicationCampaigns({revision}:{revision:number}){
           <span><strong>{check.suppressed_count}</strong> Excluded</span>
           <span>{istDisplay(check.evaluated_at)}</span>
         </div>}
+        {run&&<div className="comm-provider-status" aria-label="Saasyto dispatch results">
+          <strong>Saasyto · {run.status}</strong>
+          <span>Queued {run.queued} · Accepted by gateway {run.accepted_unverified} ·
+            Unknown {run.unknown} · Rejected {run.rejected} ·
+            Excluded {run.suppressed_after_approval}</span>
+          <small>Scheduled {istDisplay(run.due_at)}. {run.notice}</small>
+        </div>}
         {reviewError&&<p className="form-error" role="alert">{reviewError}</p>}
         {!check&&!checking&&!reviewError&&<p className="comm-muted">
           Not checked yet.</p>}
         <div className="comm-review-footer">
-          <span className="comm-muted">Simulation only · no messages sent.</span>
+          <span className="comm-muted">Recipient check is non-sending. Dispatch needs separate approval and an operational runner.</span>
+          {run?.status==="approved"&&<button className="btn btn-secondary"
+            type="button" disabled={runBusy} onClick={()=>{
+              const item=items.find(row=>row.id===reviewId);
+              if(item)void cancelRun(item);
+            }}>{runBusy?"Working…":"Stop pending sends"}</button>}
+          {!run&&check&&provider?.delivery_enabled&&<button
+            className="btn btn-primary" type="button" disabled={
+              checking||runBusy||!check.eligible_count
+            } onClick={()=>{
+              const item=items.find(row=>row.id===reviewId);
+              if(item)void approve(item);
+            }}>{runBusy?"Approving…":"Approve WhatsApp delivery"}</button>}
           <button type="button" className="btn btn-primary"
-            disabled={checking} onClick={()=>{
+            disabled={checking||Boolean(run)} onClick={()=>{
               const item=items.find(row=>row.id===reviewId);
               if(item)void runCheck(item);
             }}>{checking?"Checking…":"Check recipients"}</button>
