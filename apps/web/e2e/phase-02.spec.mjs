@@ -516,7 +516,7 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText("Architect")).toBeVisible();
-  await page.getByRole("button",{name:/^Deactivate/}).click();
+  await page.getByRole("button",{name:"Mark Inactive"}).click();
   const confirm=page.getByRole("dialog",{name:"Confirm promoter status"});
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button",{name:"Confirm deactivation"}).click();
