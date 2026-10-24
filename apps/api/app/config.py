@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     saasyto_sender_approved: bool = False
     saasyto_instance_id: str | None = None
     saasyto_access_token: SecretStr | None = None
+    saasyto_enable_after: datetime | None = None
+    saasyto_runner_secret: SecretStr | None = None
 
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
@@ -94,6 +96,14 @@ class Settings(BaseSettings):
 
             if self.app_env not in ("production", "test"):
                 raise ValueError("Saasyto campaign delivery requires approved production")
+            if not self.saasyto_enable_after or not self.saasyto_enable_after.tzinfo:
+                raise ValueError("Saasyto enable-after cutoff must include a timezone")
+            runner = (
+                self.saasyto_runner_secret.get_secret_value()
+                if self.saasyto_runner_secret else ""
+            )
+            if len(runner) < 32:
+                raise ValueError("Saasyto runner secret must be 32+ characters")
             if not self.saasyto_sender_approved:
                 raise ValueError("Saasyto sender and recipient-permission approval required")
             if not re.fullmatch(r"[a-zA-Z0-9_-]{6,80}", self.saasyto_instance_id or ""):
