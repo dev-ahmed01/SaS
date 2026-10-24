@@ -194,6 +194,7 @@ test("desktop branding and landscape artwork have the right proportions",async (
       };
     });
     expect(Math.abs(metrics.moduleSize-metrics.foundationSize)).toBeLessThan(1);
+    expect(metrics.moduleSize).toBeGreaterThanOrEqual(25);
     expect(metrics.brandFits).toBe(true);
     expect(metrics.scroll).toBe(true);
   }
@@ -498,6 +499,19 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading",{name:"Personal information"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Internal promoter notes"})).toBeVisible();
+  await expect(page.getByText("Communication preferences")).toHaveCount(0);
+  await expect(page.locator(".crm-summary-strip")).toHaveCount(0);
+  await expect(page.locator(".promoter-metric")).toHaveCount(3);
+  const noteField=page.getByRole("textbox",{name:"Notes about this promoter"});
+  await noteField.fill("Promoter confirmed the next visit.");
+  await page.getByRole("button",{name:"Save note"}).click();
+  await expect(page.getByText("Saved",{exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("textbox",{name:"Notes about this promoter"}))
+    .toHaveValue("Promoter confirmed the next visit.");
   await page.getByRole("button",{name:"Edit",exact:true}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
   await page.getByRole("button",{name:"Save Changes"}).click();
@@ -536,6 +550,8 @@ test("Promoter details safely assign and unassign a sponsor",async ({page})=>{
   page.once("dialog",d=>d.accept());
   await section.getByRole("button",{name:"Assign",exact:true}).click();
   await expect(section.getByRole("button",{name:"Unassign"})).toBeVisible();
+  await expect(section.getByRole("link",{name:sponsor})).toBeVisible();
+  await expect(page.locator(".promoter-metric").filter({hasText:"Prospects"})).toContainText("1");
   await section.getByRole("button",{name:"Unassign"}).click();
   await expect(section.getByText("No assigned prospects.")).toBeVisible();
 });
