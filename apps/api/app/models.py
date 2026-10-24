@@ -854,6 +854,67 @@ class CommunicationCampaign(Base):
     )
 
 
+class SaasytoCampaignRun(Base):
+    """Explicit Admin approval; one run per immutable campaign, no backlog replay."""
+
+    __tablename__ = "saasyto_campaign_runs"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "campaign_id", name="uq_saasyto_run_campaign"),
+        UniqueConstraint("organization_id", "id", name="uq_saasyto_run_org_id"),
+        ForeignKeyConstraint(
+            ["organization_id", "campaign_id"],
+            ["communication_campaigns.organization_id", "communication_campaigns.id"],
+            ondelete="RESTRICT", name="fk_saasyto_run_campaign_org",
+        ),
+        CheckConstraint("status IN ('approved','cancelled','completed')",
+                        name="ck_saasyto_run_status"),
+        Index("ix_saasyto_due", "organization_id", "status", "due_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    approved_by_admin_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    eligible_count: Mapped[int] = mapped_column(nullable=False)
+    suppressed_count: Mapped[int] = mapped_column(nullable=False)
+
+
+class SaasytoCampaignRecipient(Base):
+    """Unique per-recipient durable queue. Claimed records are never re-sent."""
+
+    __tablename__ = "saasyto_campaign_recipients"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "run_id"],
+            ["saasyto_campaign_runs.organization_id", "saasyto_campaign_runs.id"],
+            ondelete="RESTRICT", name="fk_saasyto_recipient_run_org",
+        ),
+        UniqueConstraint("run_id", "recipient_kind", "recipient_id",
+                         name="uq_saasyto_run_recipient"),
+        CheckConstraint("recipient_kind IN ('prospect','promoter')",
+                        name="ck_saasyto_recipient_kind"),
+        CheckConstraint(
+            "status IN ('queued','claimed','accepted_unverified','rejected',"
+            "'unknown','suppressed')",
+            name="ck_saasyto_recipient_status",
+        ),
+        Index("ix_saasyto_recipient_queue", "organization_id", "status", "run_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    recipient_kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(32))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class CommunicationRule(Base):
     """Trigger configuration only. No auto-sender is wired to these definitions."""
 
