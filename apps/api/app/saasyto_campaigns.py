@@ -10,8 +10,8 @@ import re
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,8 +24,14 @@ from app.communication import _audience_rows
 from app.communication_consent import contact_address, evaluate_recipients
 from app.config import get_settings
 from app.models import (
-    AdminSession, AdminUser, AuditEvent, CommunicationCampaign,
-    CommunicationPreparation, Promoter, Prospect, SaasytoCampaignRecipient,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    CommunicationCampaign,
+    CommunicationPreparation,
+    Promoter,
+    Prospect,
+    SaasytoCampaignRecipient,
     SaasytoCampaignRun,
 )
 from app.saasyto_client import send_text
