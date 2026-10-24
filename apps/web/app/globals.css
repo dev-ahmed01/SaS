@@ -1456,3 +1456,13 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .promoter-identity-copy h2{font-size:25px;}
   .site-sidebar .brand-copy strong,.app-content .topbar .topbar-name{font-size:26px;}
 }
+
+/* Saasyto readiness is informational only: it never authorizes sending. */
+.comm-provider-status{
+  display:flex;flex-wrap:wrap;align-items:center;column-gap:12px;row-gap:4px;
+  margin:14px 0;padding:12px 15px;background:var(--mint);
+  border:1px solid var(--line);border-radius:10px;
+}
+.comm-provider-status strong{font:600 13px var(--font-body);color:var(--forest-deep);}
+.comm-provider-status span{font:500 12px var(--font-body);color:var(--forest);}
+.comm-provider-status small{display:block;width:100%;font:400 11px/1.5 var(--font-body);color:var(--muted);}
