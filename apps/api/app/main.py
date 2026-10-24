@@ -25,6 +25,7 @@ from app.prospect_stages import router as prospect_stages_router
 from app.prospects import router as prospects_router
 from app.reminders import router as reminders_router
 from app.sponsor_otp import router as sponsor_otp_router
+from app.saasyto import router as saasyto_router
 
 app = FastAPI(title="Sponsor a Salah API", version="0.11.0", docs_url=None, redoc_url=None)
 
@@ -44,6 +45,7 @@ app.include_router(collections_router)
 app.include_router(payouts_router)
 app.include_router(reminders_router)
 app.include_router(communication_router)
+app.include_router(saasyto_router)
 app.include_router(messaging_admin_router)
 app.include_router(messaging_internal_router)
 app.include_router(dashboard_router)
