@@ -190,7 +190,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         {!check&&!checking&&!reviewError&&<p className="comm-muted">
           Not checked yet.</p>}
         <div className="comm-review-footer">
-          <span className="comm-muted">Recipient check is non-sending. Dispatch needs separate approval and an operational runner.</span>
+          <span className="comm-muted">Simulation only · no messages sent.</span>
           {run?.status==="approved"&&<button className="btn btn-secondary"
             type="button" disabled={runBusy} onClick={()=>{
               const item=items.find(row=>row.id===reviewId);
