@@ -5,11 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
-
-from pydantic import SecretStr
 from test_communication import activate_for_communication, create_campaign, login
 
 from app.bootstrap_admin import provision_admin
