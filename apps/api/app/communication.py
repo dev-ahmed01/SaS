@@ -32,6 +32,8 @@ from app.models import (
     Promoter,
     PromoterAssignment,
     Prospect,
+    SaasytoCampaignRecipient,
+    SaasytoCampaignRun,
     SponsorshipRate,
 )
 from app.security import utc_now
@@ -767,6 +769,21 @@ def cancel_campaign(
         raise HTTPException(status_code=404, detail="Campaign not found")
     if row.status != "cancelled":
         row.status = "cancelled"
+        run = database.scalars(select(SaasytoCampaignRun).where(
+            SaasytoCampaignRun.organization_id == admin.organization_id,
+            SaasytoCampaignRun.campaign_id == row.id,
+        ).with_for_update()).one_or_none()
+        if run and run.status == "approved":
+            run.status = "cancelled"
+            pending = database.scalars(select(SaasytoCampaignRecipient).where(
+                SaasytoCampaignRecipient.organization_id == admin.organization_id,
+                SaasytoCampaignRecipient.run_id == run.id,
+                SaasytoCampaignRecipient.status == "queued",
+            ).with_for_update()).all()
+            for item in pending:
+                item.status = "suppressed"
+                item.reason = "campaign_cancelled"
+                item.finished_at = utc_now()
         _audit(database, admin, "communication.campaign_cancelled", "comm_campaign", row.id)
         database.commit()
     response.headers["Cache-Control"] = "no-store"
