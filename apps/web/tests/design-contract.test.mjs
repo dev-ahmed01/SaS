@@ -93,7 +93,7 @@ test("Consent and Campaign review keep the no-send CRM boundary", () => {
   assert.match(consent,/Record opt-out/);
   assert.match(consent,/checked the recipient/);
   assert.match(campaigns,/simulation_only:true/);
-  assert.match(campaigns,/Recipient check is non-sending/);
+  assert.match(campaigns,/Simulation only/);
   assert.match(campaigns,/Approve WhatsApp delivery/);
   assert.match(campaigns,/Check recipients/);
   assert.match(proxy,/name==="consent-events"/);
