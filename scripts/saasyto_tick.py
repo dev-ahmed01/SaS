@@ -9,7 +9,13 @@ import json
 import os
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+class NeverRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        # Never forward a private runner secret to a redirected host.
+        return None
 
 
 def main() -> int:
@@ -40,7 +46,7 @@ def main() -> int:
         data=b"",
     )
     try:
-        with urlopen(request, timeout=90) as response:
+        with build_opener(NeverRedirect()).open(request, timeout=90) as response:
             result = json.loads(response.read(4096))
             allowed = {"claimed", "accepted_unverified", "rejected",
                        "unknown", "suppressed"}
