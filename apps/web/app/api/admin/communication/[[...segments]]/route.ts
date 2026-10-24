@@ -22,6 +22,12 @@ function allowed(parts:string[],method:string):string|null{
   if(parts.length===2&&name==="rules"&&UUID.test(id)&&method==="DELETE")
     return "/rules/"+id;
   if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
+    action==="saasyto"&&["GET","POST"].includes(method))
+    return "/campaigns/"+id+"/saasyto";
+  if(parts.length===4&&name==="campaigns"&&UUID.test(id)&&
+    action==="saasyto"&&parts[3]==="cancel"&&method==="POST")
+    return "/campaigns/"+id+"/saasyto/cancel";
+  if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
     action==="cancel"&&method==="POST")return "/campaigns/"+id+"/cancel";
   if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
     action==="preparations"&&["GET","POST"].includes(method))
