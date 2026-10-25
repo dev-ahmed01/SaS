@@ -354,8 +354,7 @@ def test_future_local_campaign_cannot_be_manually_dispatched(
     person = _person(client, csrf, "1001")
     _consent(client, csrf, person, "opted_in")
     monkeypatch.setattr("app.saasyto_campaigns.get_settings", _manual_pilot)
-    from datetime import timedelta
-    future = (utc_now() + timedelta(days=1)).isoformat()
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
     campaign = create_campaign(client, csrf, title="Tomorrow's update",
                                planned_for=future)
     assert campaign.status_code == 201, campaign.text
