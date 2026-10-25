@@ -4,21 +4,50 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 from test_communication import create_campaign, login
 from test_saasyto_campaign_dispatch import RUNNER, _approved, _cfg, _consent, _person
 
+from app.bootstrap_admin import provision_admin
 from app.config import Settings
-from app.models import SaasytoCampaignRun
+from app.main import app
+from app.models import Base, SaasytoCampaignRun
 from app.saasyto_client import Submission, send_text
-
-pytest_plugins = ("test_saasyto_campaign_dispatch",)
 
 LOCAL_DB = "postgresql+psycopg://sas_dev:local-test@127.0.0.1:5432/sas_dev"
 LOCAL_PHONE = "+919899001001"
 LONG_SECRET = "synthetic-local-config-secret-longer-than-thirty-two"
+
+
+@pytest.fixture
+def dispatch_system(monkeypatch):
+    """Isolated database + authenticated API; imported tests remain independent."""
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org",
+            password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr("app.auth.get_settings", lambda: SimpleNamespace(
+        auth_secret="synthetic-secure-auth-key-longer-than-thirty-two",
+        app_env="test",
+    ))
+    monkeypatch.setattr("app.prospects.get_settings", lambda: SimpleNamespace(
+        upi_match_secret="synthetic-unique-hmac-secret-for-communication-test",
+    ))
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
 
 
 def settings(**overrides):
