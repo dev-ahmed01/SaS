@@ -358,7 +358,7 @@ test("Same-name prospects require different mobile numbers across registrations 
   await page.getByRole("textbox",{name:/First Name/}).fill("Different Person");
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(first);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(page.locator(".prospect-form-panel .form-error")).toContainText(
     "That mobile number already belongs to a prospect"
   );
   await expect(page).toHaveURL(/\/prospects\/add$/);
@@ -827,6 +827,14 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.reload();
   const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
   const dueRow=ledger.getByRole("row",{name:new RegExp(name)});
+  // The ledger intentionally paginates; the sponsor need not be on page one.
+  for(let pageNumber=0;pageNumber<12;pageNumber++){
+    if(await dueRow.count()>0)break;
+    const next=ledger.getByRole("button",{name:"Next"});
+    await expect(next).toBeEnabled();
+    await next.click();
+  }
+  await expect(dueRow).toBeVisible();
   await expect(dueRow.getByRole("cell").nth(1)).toContainText(
     agreed.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})
   );
