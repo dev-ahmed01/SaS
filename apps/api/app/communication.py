@@ -452,7 +452,7 @@ def record_consent(
     person = database.scalars(select(model).where(
         model.organization_id == admin.organization_id,
         model.id == payload.recipient_id,
-    )).one_or_none()
+    ).with_for_update()).one_or_none()
     if person is None:
         raise HTTPException(status_code=404, detail="Recipient not found")
     if payload.decision == "opted_in" and (
@@ -475,6 +475,17 @@ def record_consent(
         actor_admin_id=admin.id, recorded_at=utc_now(),
     )
     database.add(event)
+    # A documented opt-in must synchronize the pre-existing reminder flag.
+    # A documented opt-out must disable it. Both changes share one transaction
+    # and the latest event still independently suppresses any future sending.
+    if payload.channel == "whatsapp":
+        permitted = payload.decision == "opted_in"
+        if person.whatsapp_opt_in != permitted:
+            person.whatsapp_opt_in = permitted
+            person.version += 1
+            _audit(database, admin, "communication.whatsapp_permission_synced",
+                   payload.recipient_kind, person.id,
+                   {"whatsapp_opt_in": permitted})
     database.flush()
     _audit(database, admin, "communication.consent_recorded", "comm_consent", event.id,
            {"channel": event.channel, "decision": event.decision,
