@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
 from app.config import Settings, get_settings
-from app.models import AdminSession, AdminUser, AuditEvent, Prospect, SponsorOtpChallenge
+from app.models import (AdminSession, AdminUser, AuditEvent, Prospect, ProspectStageTransition, SponsorOtpChallenge)
 from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
@@ -33,6 +33,11 @@ class OtpConfirm(BaseModel):
     model_config = ConfigDict(extra="forbid")
     challenge_id: uuid.UUID
     code: str = Field(pattern=r"^[0-9]{6}$")
+
+
+class OtpActivate(OtpConfirm):
+    version: int = Field(ge=1)
+    reactivation_reason: str | None = Field(default=None, max_length=500)
 
 
 def _phone(prospect: Prospect) -> str:
@@ -135,8 +140,6 @@ def request_otp(
     number = _phone(person)
     if not re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
         raise HTTPException(status_code=422, detail="Prospect needs a valid WhatsApp number")
-    if person.whatsapp_verified_at is not None:
-        raise HTTPException(status_code=409, detail="Current WhatsApp number already verified")
     now = utc_now()
     phone_digest = _digest(cfg.otp_secret, number)
     # Rate-limit the actual phone across records as well as this sponsor.
@@ -233,3 +236,87 @@ def verify_otp(
     database.commit()
     response.headers["Cache-Control"] = "no-store"
     return {"status": "verified", "verified_at": now.isoformat()}
+
+
+@router.post("/{prospect_id}/otp/activate")
+def activate_after_otp(
+    prospect_id: uuid.UUID,
+    payload: OtpActivate,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> dict[str, str | bool]:
+    """Consume a fresh OTP and activate in ONE transaction, never by stage PATCH.
+
+    Already-verified numbers must receive a fresh OTP on each reactivation.
+    First activation has no reason; prior Active -> Inactive -> Active needs one.
+    This does not grant communication consent or change payment status.
+    """
+    cfg = get_settings()
+    if not _enabled(cfg) or not cfg.otp_secret:
+        raise HTTPException(status_code=503, detail="WhatsApp OTP is not configured")
+    admin = context[0]
+    person = _load(database, admin, prospect_id)
+    if person.version != payload.version:
+        raise HTTPException(status_code=409, detail="Prospect changed; reload and retry")
+    if person.crm_stage != "inactive":
+        raise HTTPException(status_code=409, detail="Prospect is already active")
+    previously_active = database.scalar(select(ProspectStageTransition.id).where(
+        ProspectStageTransition.organization_id == admin.organization_id,
+        ProspectStageTransition.prospect_id == prospect_id,
+        ProspectStageTransition.to_stage == "active",
+    ).limit(1)) is not None
+    reason = " ".join((payload.reactivation_reason or "").split())
+    if previously_active and not 3 <= len(reason) <= 500:
+        raise HTTPException(status_code=422, detail="Reactivation reason is required")
+    if not previously_active and reason:
+        raise HTTPException(status_code=422, detail="First activation needs no reason")
+
+    record = database.scalars(select(SponsorOtpChallenge).where(
+        SponsorOtpChallenge.id == payload.challenge_id,
+        SponsorOtpChallenge.organization_id == admin.organization_id,
+        SponsorOtpChallenge.prospect_id == prospect_id,
+    ).with_for_update()).one_or_none()
+    now = utc_now()
+    if (record is None or record.status != "accepted" or record.consumed_at
+            or as_utc(record.expires_at) <= now
+            or record.attempts >= MAX_ATTEMPTS
+            or (person.crm_stage_changed_at and
+                as_utc(record.created_at) < as_utc(person.crm_stage_changed_at))):
+        raise HTTPException(status_code=400, detail="Verification is invalid or expired")
+    number = _phone(person)
+    if not hmac.compare_digest(record.phone_digest, _digest(cfg.otp_secret, number)):
+        raise HTTPException(status_code=400, detail="Verification is invalid or expired")
+    record.attempts += 1
+    expected = _code_digest(cfg.otp_secret, record.id, number, payload.code)
+    if not hmac.compare_digest(record.code_digest, expected):
+        if record.attempts >= MAX_ATTEMPTS:
+            record.status = "locked"
+        database.commit()
+        raise HTTPException(status_code=400, detail="Incorrect or expired verification code")
+
+    record.status = "verified"
+    record.consumed_at = now
+    person.whatsapp_verified_at = now
+    person.crm_stage = "active"
+    person.crm_stage_changed_at = now
+    person.crm_inactive_reason = None
+    person.crm_inactive_note = None
+    person.updated_at = now
+    person.version += 1
+    database.add(ProspectStageTransition(
+        organization_id=admin.organization_id, prospect_id=person.id,
+        from_stage="inactive", to_stage="active",
+        reason=None, note=reason or None, changed_at=now,
+        actor_admin_id=admin.id,
+    ))
+    database.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="prospect.otp_activated", entity_type="prospect",
+        entity_id=str(person.id),
+        after_data={"version": person.version, "reactivation": previously_active,
+                    "challenge_id": str(record.id)},
+    ))
+    database.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return {"status": "active", "reactivation": previously_active}
