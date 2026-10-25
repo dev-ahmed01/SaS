@@ -175,7 +175,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         <tr><td colSpan={8} className="comm-empty">No campaigns yet. Start in Compose.</td></tr>:
         items.map(item=><tr key={item.id}>
           <td><div className="comm-campaign-title">
-            <strong><Link href={"/communication/campaigns?campaign="+item.id}>{item.title}</Link></strong>
+            <strong><Link href={"/communication/campaigns#campaign-"+item.id}>{item.title}</Link></strong>
             <span>{item.channel==="whatsapp"?"WhatsApp":"Email"} ·
               {" "+item.category.replace("_"," ")}</span></div></td>
           <td>{item.audience} · {item.segment}</td>
@@ -187,7 +187,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             :0}</td>
           <td>{results[item.id]?.read??"Unavailable"}</td>
           <td><div className="comm-review-actions">
-            <Link className="comm-text-button" href={"/communication/campaigns?campaign="+item.id}>
+            <Link className="comm-text-button" href={"/communication/campaigns#campaign-"+item.id}>
               View results</Link>
             {item.status!=="cancelled"&&<>
               <button type="button" className="comm-text-button"
