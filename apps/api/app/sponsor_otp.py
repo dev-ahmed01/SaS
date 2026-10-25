@@ -1,7 +1,8 @@
-"""Admin-mediated sponsor WhatsApp OTP, independent of marketing consent/status.
+"""Admin-mediated sponsor WhatsApp OTP, independent of marketing consent.
 
-Only approved Meta AUTHENTICATION templates can carry the six-digit code.
-Provider acceptance is not a delivery receipt. The code is never persisted.
+Production uses approved Meta AUTHENTICATION templates. An explicit, single-
+number development pilot may use Saasyto; never as a production OTP sender.
+Provider acceptance is not delivery. Plaintext OTP is never persisted.
 """
 import hashlib
 import hmac
@@ -27,6 +28,7 @@ from app.models import (
     ProspectStageTransition,
     SponsorOtpChallenge,
 )
+from app.saasyto_client import send_text
 from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
@@ -71,11 +73,27 @@ def _load(db: Session, admin: AdminUser, prospect_id: uuid.UUID) -> Prospect:
 
 
 def _enabled(cfg: Settings) -> bool:
-    return bool(cfg.otp_delivery_enabled)
+    return bool(
+        cfg.otp_delivery_enabled or getattr(cfg, "otp_local_pilot_enabled", False)
+    )
 
 
 def _deliver(cfg: Settings, phone: str, code: str) -> None:
-    """Send an approved copy-code authentication template, not a free-text message."""
+    """Deliver only through approved Meta, or one allowlisted local pilot phone."""
+    if getattr(cfg, "otp_local_pilot_enabled", False):
+        allowed = cfg.saasyto_local_test_phone or ""
+        if not allowed or not hmac.compare_digest(phone, allowed):
+            raise ValueError("Local OTP recipient is not the allowlisted test phone")
+        submission = send_text(
+            cfg, phone=phone,
+            message=(
+                f"Your Sponsor a Salah activation code is {code}. "
+                "Valid for 10 minutes. Do not share unless you requested activation."
+            ),
+        )
+        if submission.state != "accepted_unverified":
+            raise ValueError("Local OTP provider did not confirm acceptance")
+        return
     payload = {
         "messaging_product": "whatsapp",
         "to": phone.lstrip("+"),
@@ -147,6 +165,13 @@ def request_otp(
     number = _phone(person)
     if not re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
         raise HTTPException(status_code=422, detail="Prospect needs a valid WhatsApp number")
+    if getattr(cfg, "otp_local_pilot_enabled", False) and not hmac.compare_digest(
+        number, cfg.saasyto_local_test_phone or ""
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Local OTP pilot permits only the configured test phone",
+        )
     now = utc_now()
     phone_digest = _digest(cfg.otp_secret, number)
     # Rate-limit the actual phone across records as well as this sponsor.
