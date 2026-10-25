@@ -57,7 +57,7 @@ jobs:
         run: |
           python -m alembic upgrade head
           python -m alembic check
-          python -m pytest -q tests/test_postgres_integration.py
+          python -m pytest -q tests/test_postgres_integration.py tests/test_postgres_parallel_integrity.py
       - name: Destructive-scope-guarded synthetic PostgreSQL backup and restore
         env:
           APP_ENV: test

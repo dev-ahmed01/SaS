@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.accounting import effective_credits, ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
+from app.collections import _reference_hash
 from app.main import app
 from app.models import (
     AdminUser,
@@ -24,7 +25,7 @@ from app.models import (
     SponsorshipRate,
     VerifiedCredit,
 )
-from app.security import hash_password
+from app.security import hash_password, utc_now
 
 
 @pytest.fixture
@@ -284,3 +285,39 @@ def test_prior_period_reversal_recomputes_current_ist_lifecycle(system,monkeypat
     summary=client.get("/v1/accounting/overview").json()
     assert summary["inactive_sponsors"]==1
     assert summary["period_month"]==month_start(today).isoformat()
+
+
+def test_conflicting_verified_evidence_flush_returns_409_without_partial_collection(system):
+    """Pre-commit uniqueness violations must be HTTP conflicts, not server errors."""
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, phone="+918777990401")
+    reference = "QA-PRECOMMIT-EVIDENCE-0401"
+    today = ist_today()
+    with Session(engine) as db:
+        prospect = db.get(Prospect, uuid.UUID(person["id"]))
+        db.add(VerifiedCredit(
+            organization_id=prospect.organization_id,
+            prospect_id=prospect.id,
+            period_month=month_start(today), amount_paise=25000,
+            source_type="manual_attested",
+            source_key="manual:" + _reference_hash(reference),
+            verified_at=utc_now(),
+        ))
+        db.commit()
+    response = client.post("/v1/collections", headers=csrf, json={
+        "request_id": str(uuid.uuid4()),
+        "prospect_id": person["id"],
+        "period_month": month_start(today).isoformat(),
+        "received_on": today.isoformat(),
+        "amount_paise": 25000,
+        "payment_method": "upi",
+        "receipt_reference": reference,
+        "funds_confirmed": True,
+    })
+    assert response.status_code == 409, response.text
+    assert "duplicate" in response.text.lower()
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(VerifiedCredit)) == 1
+        assert db.scalar(select(func.count()).select_from(ManualCollection)) == 0
+        assert db.scalar(select(func.count()).select_from(MessageOutbox)) == 0

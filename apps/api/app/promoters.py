@@ -384,7 +384,13 @@ def update_promoter(
             assignment.ended_by_admin_id = admin.id
             prospect.version += 1
             prospect.updated_at = now
-        database.flush()
+        try:
+            database.flush()
+        except IntegrityError as exc:
+            database.rollback()
+            raise HTTPException(
+                status_code=409, detail="Assignments changed; reload and retry"
+            ) from exc
         for assignment in assignments:
             destination = destinations[assignment.prospect_id]
             if destination is not None:
@@ -398,7 +404,13 @@ def update_promoter(
             target.version += 1
             target.updated_at = now
         # The current assignments, not stale scheduled summaries, determine recipients.
-        database.flush()
+        try:
+            database.flush()
+        except IntegrityError as exc:
+            database.rollback()
+            raise HTTPException(
+                status_code=409, detail="Assignments changed; reload and retry"
+            ) from exc
     previous = promoter.version
     for key, value in changed.items():
         setattr(promoter, key, value)
@@ -543,9 +555,15 @@ def assign_sponsor(
 ) -> PromoterRead:
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
-    _edit_assignment(database, admin, promoter, prospect_id,
-                     _version_header(version), remove=False)
-    database.commit()
+    try:
+        _edit_assignment(database, admin, promoter, prospect_id,
+                         _version_header(version), remove=False)
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(
+            status_code=409, detail="Assignment changed; refresh and retry"
+        ) from exc
     response.headers["Cache-Control"] = "no-store"
     return _present(database, promoter)
 
@@ -559,9 +577,15 @@ def unassign_sponsor(
 ) -> Response:
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
-    _edit_assignment(database, admin, promoter, prospect_id,
-                     _version_header(version), remove=True)
-    database.commit()
+    try:
+        _edit_assignment(database, admin, promoter, prospect_id,
+                         _version_header(version), remove=True)
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(
+            status_code=409, detail="Assignment changed; refresh and retry"
+        ) from exc
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
