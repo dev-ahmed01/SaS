@@ -183,10 +183,10 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     {error&&<p className="form-error" role="alert">{error}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
     <div className="comm-campaign-table-scroll"><table className="data-table comm-campaign-table">
-      <thead><tr>{["Campaign","Audience","Planned IST","Submitted","Rejected","Not sent","Read","Details"].map(h=>
+      <thead><tr>{["Campaign","Audience","Planned IST","Status","Submitted","Rejected","Not sent","Read","Details"].map(h=>
         <th key={h} scope="col">{h}</th>)}</tr></thead>
-      <tbody>{loading&&items.length===0?<tr><td colSpan={8}>Loading campaigns…</td></tr>:!items.length?
-        <tr><td colSpan={8} className="comm-empty">No campaigns yet. Start in Compose.</td></tr>:
+      <tbody>{loading&&items.length===0?<tr><td colSpan={9}>Loading campaigns…</td></tr>:!items.length?
+        <tr><td colSpan={9} className="comm-empty">No campaigns yet. Start in Compose.</td></tr>:
         items.map(item=><tr key={item.id}>
           <td><div className="comm-campaign-title">
             <strong><Link href={"/communication/campaigns#campaign-"+item.id}>{item.title}</Link></strong>
@@ -194,6 +194,12 @@ export function CommunicationCampaigns({revision}:{revision:number}){
               {" "+item.category.replace("_"," ")}</span></div></td>
           <td>{item.audience} · {item.segment}</td>
           <td>{item.planned_for?istDisplay(item.planned_for):"Awaiting approval"}</td>
+          <td><span className={"status-pill "+(item.status==="cancelled"?"inactive":"scheduled")}>
+            {item.status==="cancelled"?"Cancelled":
+              results[item.id]?.run_status==="completed"?"Completed":
+              results[item.id]?.run_status==="approved"?"Approved":
+              item.status==="scheduled"?"Planned":"Awaiting approval"}
+          </span></td>
           <td>{results[item.id]?.submitted_unverified??0}</td>
           <td>{results[item.id]?.rejected??0}</td>
           <td>{results[item.id]
