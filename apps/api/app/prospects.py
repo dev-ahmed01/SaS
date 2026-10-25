@@ -27,6 +27,7 @@ from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
+    CommunicationConsentEvent,
     ManualCollection,
     ManualCollectionReversal,
     OrganizationSettings,
@@ -718,11 +719,23 @@ def update_prospect(
                 detail="Mobile number already registered as a prospect",
             )
     if "mobile_number" in changed or "whatsapp_number" in changed:
-        # A verified phone cannot remain trusted after its contact number changes.
-        if (changed.get("mobile_number", prospect.mobile_number) != prospect.mobile_number
-                or changed.get("whatsapp_number", prospect.whatsapp_number)
-                != prospect.whatsapp_number):
-            changed["whatsapp_verified_at"] = None
+        # Verification and consent belong to an ADDRESS, not simply an ID.
+        # Swapping the WhatsApp recipient must not inherit the former user's opt-in.
+        old_address = prospect.whatsapp_number or prospect.mobile_number
+        new_address = (
+            changed.get("whatsapp_number", prospect.whatsapp_number)
+            or changed.get("mobile_number", prospect.mobile_number)
+        )
+        changed["whatsapp_verified_at"] = None
+        if new_address != old_address:
+            changed["whatsapp_opt_in"] = False
+            database.add(CommunicationConsentEvent(
+                organization_id=admin.organization_id,
+                recipient_kind="prospect", recipient_id=prospect.id,
+                channel="whatsapp", decision="opted_out",
+                source="contact_address_changed", actor_admin_id=admin.id,
+                recorded_at=utc_now(),
+            ))
     if "monthly_contribution_paise" in changed and not valid_commitment(
         changed["monthly_contribution_paise"]
     ):
