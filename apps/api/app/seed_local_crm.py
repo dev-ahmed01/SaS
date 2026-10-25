@@ -304,6 +304,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Synthetic prospects for local demo only")
     parser.add_argument("--apply", action="store_true", help="Insert synthetic records")
     parser.add_argument(
+        "--allow-bulk-reseed", action="store_true",
+        help="Explicitly re-enable the legacy 100-record local-only demo generator",
+    )
+    parser.add_argument(
         "--confirm-synthetic-only", action="store_true",
         help="Confirm this local database contains no real donor records",
     )
@@ -331,8 +335,11 @@ def main() -> None:
         if not args.apply:
             print("Dry run. No records created. Use --apply --confirm-synthetic-only.")
             return
-        if not args.confirm_synthetic_only:
-            raise SystemExit("Refusing without --confirm-synthetic-only")
+        if not args.confirm_synthetic_only or not args.allow_bulk_reseed:
+            raise SystemExit(
+                "Bulk synthetic reseeding disabled. Both --confirm-synthetic-only "
+                "and --allow-bulk-reseed required after a manual database backup."
+            )
         created = seed_synthetic_crm(
             database, admin.organization_id, admin.id,
         )
