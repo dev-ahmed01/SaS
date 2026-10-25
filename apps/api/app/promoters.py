@@ -17,6 +17,7 @@ from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
+    CommunicationConsentEvent,
     Promoter,
     PromoterAssignment,
     Prospect,
@@ -316,6 +317,21 @@ def update_promoter(
         exclude={"version", "reassign_to_promoter_id", "reassign_individually"},
     )
     changed = {k: v for k, v in data.items() if getattr(promoter, k) != v}
+    old_address = promoter.whatsapp_number or promoter.mobile_number
+    new_address = (
+        changed.get("whatsapp_number", promoter.whatsapp_number)
+        or changed.get("mobile_number", promoter.mobile_number)
+    )
+    if new_address != old_address:
+        # Opt-in proof for a previous number must not authorize a new number.
+        changed["whatsapp_opt_in"] = False
+        database.add(CommunicationConsentEvent(
+            organization_id=admin.organization_id,
+            recipient_kind="promoter", recipient_id=promoter.id,
+            channel="whatsapp", decision="opted_out",
+            source="contact_address_changed", actor_admin_id=admin.id,
+            recorded_at=utc_now(),
+        ))
     if not changed:
         response.headers["Cache-Control"] = "no-store"
         return _present(database, promoter)
