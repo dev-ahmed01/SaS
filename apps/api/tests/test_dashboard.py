@@ -3,12 +3,12 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start
 from app.bootstrap_admin import provision_admin
 from app.main import app
