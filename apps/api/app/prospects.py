@@ -71,7 +71,6 @@ class ProspectFields(BaseModel):
     email: EmailStr | None = None
     occupation: str | None = Field(default=None, max_length=120)
     start_month: date | None = None
-    pipeline_stage_id: uuid.UUID | None = None
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(default="", max_length=120)
@@ -593,28 +592,23 @@ def create_prospect(
     if ids:
         for identifier in ids:
             _upi_digest(identifier)
-    # Every registration starts at New Inquiry regardless of the supplied stage.
-    # The default is established lazily for organizations created after migrations.
-    inquiry = None
-    if payload.pipeline_stage_id is None:
-        inquiry = database.scalars(select(ProspectStageDefinition).where(
-            ProspectStageDefinition.organization_id == admin.organization_id,
-            ProspectStageDefinition.name_key == "new inquiry",
-        )).one_or_none()
-        if inquiry is None:
-            inquiry = ProspectStageDefinition(
-                organization_id=admin.organization_id,
-                name="New Inquiry", name_key="new inquiry",
-                description="Awaiting first documented follow-up",
-                color="#64748b", sort_order=0, version=1,
-            )
-            database.add(inquiry)
-            database.flush()
-    else:
-        _validate_pipeline(database, admin, payload.pipeline_stage_id)
+    # Server-enforced: registration always begins at New Inquiry.
+    # Admin can change it later only through the versioned details PATCH.
+    inquiry = database.scalars(select(ProspectStageDefinition).where(
+        ProspectStageDefinition.organization_id == admin.organization_id,
+        ProspectStageDefinition.name_key == "new inquiry",
+    )).one_or_none()
+    if inquiry is None:
+        inquiry = ProspectStageDefinition(
+            organization_id=admin.organization_id,
+            name="New Inquiry", name_key="new inquiry",
+            description="Awaiting first documented follow-up",
+            color="#64748b", sort_order=0, version=1,
+        )
+        database.add(inquiry)
+        database.flush()
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
-        "pipeline_stage_id",
     })
     prospect = Prospect(
         organization_id=admin.organization_id,
@@ -623,7 +617,7 @@ def create_prospect(
         lifecycle_status="new",
         crm_stage="inactive",
         crm_stage_changed_at=utc_now(),
-        pipeline_stage_id=payload.pipeline_stage_id or inquiry.id,
+        pipeline_stage_id=inquiry.id,
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
