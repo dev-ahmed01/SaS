@@ -4,12 +4,12 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pytest
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from activation_helper import activate_with_test_otp
 from app.accounting import evaluate_status, ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
 from app.main import app
