@@ -77,7 +77,7 @@ def _selection(db: Session, org, *, lock=False):
     blocked_numbers = _revoked_addresses(db, org, "whatsapp", latest)
     eligible = []
     digest = hashlib.sha256()
-    digest.update(f"{org}|whatsapp|active-consent-review-v1\n".encode("utf-8"))
+    digest.update(f"{org}|whatsapp|active-consent-review-v1\n".encode())
     summary = dict(
         active=len(people), already_documented=0,
         needs_confirmation=0, opted_out=0, no_number=0,
