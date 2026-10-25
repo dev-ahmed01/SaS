@@ -25,6 +25,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   const [page,setPage]=useState<ProspectPage|null>(()=>recentSnapshot<ProspectPage>("/api/admin/prospects?"+new URLSearchParams({limit:"20",offset:"0",q:"",...(view!=="all"?{crm_stage:view}:{})})));
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const [activationNotice,setActivationNotice]=useState("");
   const [stageProspect,setStageProspect]=useState<Prospect|null>(null);
   useEffect(()=>{
     const timer=setTimeout(()=>{setQ(search);setOffset(0);},250);
@@ -60,6 +61,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
 
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
+    {activationNotice&&<p role="status" className="form-success">{activationNotice}</p>}
     <div className="table-scroll crm-table-scroll">
       <table className="data-table prospects-table crm-table">
         <thead><tr>
@@ -124,6 +126,6 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
       </div>
     </div>
     {stageProspect&&<StageDialog prospect={stageProspect} onClose={()=>setStageProspect(null)}
-      onChanged={()=>{setStageProspect(null);setRevision(n=>n+1);}}/>}
+      onChanged={message=>{setStageProspect(null);setActivationNotice(message??"");setRevision(n=>n+1);}}/>}
   </section>;
 }
