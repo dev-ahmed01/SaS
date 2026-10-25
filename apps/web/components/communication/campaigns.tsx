@@ -13,14 +13,25 @@ type SaasytoRun={
 };
 type SaasytoStatus={
   provider:string;transport:string;delivery_enabled:boolean;
-  local_test_mode?:boolean;sender_approved:boolean;credentials_configured:boolean;
+  local_test_mode?:boolean;activation_cutoff?:string|null;
+  sender_approved:boolean;credentials_configured:boolean;
   webhook_verified:boolean;connection_tested:boolean;notice:string;
 };
 type RecipientCheck={
   id:string;campaign_id:string;eligible_count:number;suppressed_count:number;
-  evaluated_at:string;delivery_activated:false;
+  evaluated_at:string;exclusion_reasons?:Record<string,number>;
+  delivery_activated:false;
 };
 
+const reasonLabels:Record<string,string>={
+  missing_address:"Missing WhatsApp/mobile number",
+  opted_out:"Recipient opted out",
+  inactive_reminder:"Inactive for reminders",
+  no_email_consent:"No documented email permission",
+  no_whatsapp_consent:"WhatsApp permission checkbox is off",
+  no_general_consent:"No recorded Communication opt-in with evidence",
+  duplicate_address:"Duplicate WhatsApp number in the audience",
+};
 export function CommunicationCampaigns({revision}:{revision:number}){
   const [items,setItems]=useState<Campaign[]>(()=>recentSnapshot<Campaign[]>("/api/admin/communication/campaigns")??[]);
   const [loading,setLoading]=useState(()=>!recentSnapshot<Campaign[]>("/api/admin/communication/campaigns"));
@@ -178,6 +189,23 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             onClick={()=>setReviewId(null)}>Close</button>
         </div>
         {checking&&!check?<p role="status">Checking…</p>:null}
+        {provider?.activation_cutoff&&
+          items.some(item=>item.id===reviewId&&new Date(item.created_at).getTime()<
+            new Date(provider.activation_cutoff as string).getTime())&&
+          <p className="form-error" role="status">
+            This campaign was created before WhatsApp activation. Create a new
+            campaign in Compose after activation; older drafts cannot be approved.
+          </p>}
+        {check?.exclusion_reasons&&Object.keys(check.exclusion_reasons).length>0&&
+          <div className="comm-provider-status" role="status">
+            <strong>Why recipients were excluded</strong>
+            <ul>{Object.entries(check.exclusion_reasons).map(([reason,count])=>
+              <li key={reason}>{reasonLabels[reason]??reason.replaceAll("_"," ")}: {count}</li>
+            )}</ul>
+            <small>To update a contact's permission, open their Prospect or Promoter
+              details and select Communication permissions. Only attest opt-in if
+              the recipient explicitly authorized WhatsApp messages.</small>
+          </div>}
         {check&&<div className="comm-review-counts" aria-label="Previous recipient check">
           <span><strong>{check.eligible_count}</strong> Eligible</span>
           <span><strong>{check.suppressed_count}</strong> Excluded</span>
@@ -211,7 +239,10 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             }}>{runBusy?"Working…":"Stop pending sends"}</button>}
           {!run&&check&&provider?.delivery_enabled&&<button
             className="btn btn-primary" type="button" disabled={
-              checking||runBusy||!check.eligible_count
+              checking||runBusy||!check.eligible_count||
+              Boolean(provider?.activation_cutoff&&items.some(item=>
+                item.id===reviewId&&new Date(item.created_at).getTime()<
+                  new Date(provider.activation_cutoff as string).getTime()))
             } onClick={()=>{
               const item=items.find(row=>row.id===reviewId);
               if(item)void approve(item);
