@@ -154,7 +154,7 @@ def approve_campaign(
         db, admin, row.audience, row.segment, now,
     )
     decisions = evaluate_recipients(
-        db, admin.organization_id, candidates, row.channel, row.category,
+        db, admin.organization_id, candidates, row.channel, row.category, now=now,
     )
     eligible = [(person, kind) for person, kind, state, _ in decisions
                 if state == "eligible"]
@@ -256,7 +256,7 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     if not any(isinstance(p, model) and p.id == person.id for p in candidates):
         return None
     decisions = evaluate_recipients(
-        db, run.organization_id, candidates, "whatsapp", row.category,
+        db, run.organization_id, candidates, "whatsapp", row.category, now=now,
     )
     if not any(
         p.id == person.id and kind == item.recipient_kind and state == "eligible"
