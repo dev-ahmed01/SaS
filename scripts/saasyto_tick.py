@@ -1,12 +1,16 @@
 """Run the private Saasyto due-message tick from an approved scheduler.
 
-Use as the command of a private Render Cron Job or equivalent after deployment:
+Use as a private Render Cron Job or equivalent (one tick):
     python scripts/saasyto_tick.py
+Or run on an always-on VPS with a service supervisor:
+    python scripts/saasyto_tick.py --loop --interval-seconds 60
 Only aggregate results are printed. Secrets are sent solely to the configured
 HTTPS API endpoint, never displayed. Scheduler must not run until signed off.
 """
+import argparse
 import json
 import os
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -18,7 +22,7 @@ class NeverRedirect(HTTPRedirectHandler):
         return None
 
 
-def main() -> int:
+def run_once() -> int:
     origin = os.environ.get("SAS_API_PUBLIC_ORIGIN", "").rstrip("/")
     secret = os.environ.get("SAASYTO_RUNNER_SECRET", "")
     parsed = urlsplit(origin)
@@ -57,6 +61,35 @@ def main() -> int:
     except (HTTPError, URLError, ValueError, OSError):
         print("Saasyto tick unavailable or rejected; no implicit retry")
         return 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Private Saasyto campaign dispatcher")
+    parser.add_argument(
+        "--loop", action="store_true",
+        help="Run a recurring worker; without --loop send a single tick (cron mode)",
+    )
+    parser.add_argument(
+        "--interval-seconds", type=int, default=60,
+        help="Recurring poll cadence, between 60 and 3600 seconds (default 60)",
+    )
+    args = parser.parse_args(argv)
+    if not 60 <= args.interval_seconds <= 3600:
+        parser.error("Poll interval must be between 60 and 3600 seconds")
+    if not args.loop:
+        return run_once()
+
+    print("Saasyto private dispatcher active; stop with Ctrl+C")
+    try:
+        while True:
+            outcome = run_once()
+            if outcome == 2:
+                # Do not keep trying an invalid host or secret.
+                return 2
+            time.sleep(args.interval_seconds)
+    except KeyboardInterrupt:
+        print("Saasyto private dispatcher stopped")
+        return 0
 
 
 if __name__ == "__main__":

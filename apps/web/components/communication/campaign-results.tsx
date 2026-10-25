@@ -146,6 +146,18 @@ export function CampaignResultDetails({id,onBack}:{
       .finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
   },[refresh]);
+  useEffect(()=>{
+    // Approved campaigns are processed by a separate private worker.
+    // Poll read-only status while queued, without ever initiating a send.
+    if(run?.status!=="approved")return;
+    const timer=setInterval(()=>{
+      if(document.visibilityState==="visible"){
+        void refresh().catch(()=>setError("Could not refresh sending results."));
+      }
+    },15000);
+    return ()=>clearInterval(timer);
+  },[run?.status,refresh]);
+
   async function checkRecipients(){
     if(busy)return;
     setBusy(true);setError("");setNotice("");
@@ -281,6 +293,15 @@ export function CampaignResultDetails({id,onBack}:{
             Local test allows one authorized recipient. This campaign has
             multiple eligible contacts.
           </p>}
+        {run?.status==="approved"&&<p className="comm-muted" role="status">
+          {futurePlan
+            ? "Scheduled for later. The private dispatcher submits eligible contacts when due."
+            : "Approved and queued. The private worker submits eligible contacts in batches."}
+          {" "}{s.queued} waiting · {s.claimed} claimed. Results refresh automatically while pending.
+          {provider?.local_test_mode
+            ? " For one-phone local testing, use Send pending WhatsApp now instead."
+            : " Confirm the production worker is running; approval alone does not send."}
+        </p>}
         {run?.status==="completed"&&<p className="comm-muted">
           Sending attempt finished. To send a different message, create a new campaign.
         </p>}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   apiGet, apiWrite, audienceOptions, categoryOptions, istLocalInput, segmentOptions,
 } from "./types";
-import type { Audience, Campaign, Category, Channel, Segment, Template } from "./types";
+import type { Audience, Campaign, Category, Channel, Preview, Segment, Template } from "./types";
 
 export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const router=useRouter();
@@ -16,6 +16,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const [category,setCategory]=useState<Category>("update");
   const [selectedTemplate,setSelectedTemplate]=useState("");
   const [templates,setTemplates]=useState<Template[]>([]);
+  const [audiencePreview,setAudiencePreview]=useState<Preview|null>(null);
   const [subject,setSubject]=useState("");
   const [body,setBody]=useState("");
   const [providerTemplate,setProviderTemplate]=useState("");
@@ -31,6 +32,15 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
       setError("Saved templates could not be loaded.");
     });
   },[]);
+  useEffect(()=>{
+    let active=true;
+    setAudiencePreview(null);
+    const params=new URLSearchParams({audience,segment,channel,category});
+    apiGet<Preview>("/audience?"+params.toString())
+      .then(result=>{if(active)setAudiencePreview(result);})
+      .catch(()=>{if(active)setAudiencePreview(null);});
+    return()=>{active=false;};
+  },[audience,segment,channel,category]);
   function invalidate(){requestId.current=null;setError("");setNotice("");}
   function chooseTemplate(id:string){
     setSelectedTemplate(id);invalidate();
@@ -102,6 +112,20 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
                   <option value={value} key={value}>{label}</option>)}
               </select></label>
           </div>
+          <p className="comm-muted" role="status">
+            {audiencePreview
+              ? audiencePreview.eligible_count+" of "+audiencePreview.candidate_count+
+                " current CRM contacts eligible for "+channel+"."
+              : "Checking eligible contacts in CRM…"}
+            {" "}Only contacts with the applicable documented permission can receive messages.
+          </p>
+          <p className="comm-muted">
+            {segment==="active"
+              ? "Active includes contacts marked Active in the CRM. Newly registered prospects start Inactive until activated."
+              : segment==="all"
+                ? "All contacts includes newly registered prospects, subject to documented messaging permission."
+                : "Contacts are selected from the live CRM, not a pre-seeded phone list."}
+          </p>
         </div>
         <div className="comm-form-section">
           <h3>Message</h3>
@@ -161,7 +185,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         {error&&<p className="form-error" role="alert">{error}</p>}
         {notice&&<p className="form-success" role="status">{notice}</p>}
         <div className="comm-actions">
-          <span className="comm-muted">Sending requires a fresh recipient check and explicit approval.</span>
+          <span className="comm-muted">Sending requires a fresh recipient check and explicit approval. Creating a campaign does not send it; the private production worker processes approved messages.</span>
           <button className="btn btn-primary" type="submit" disabled={saving}>
             {saving?"Saving…":timing==="planned"?"Plan for later":"Continue to recipient review"}
           </button>
