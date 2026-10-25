@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import SponsorOtpChallenge
+from app.models import Prospect, ProspectStageTransition, SponsorOtpChallenge
 
 pytest_plugins = ("test_crm_review_2026_10",)
 SECRET = "test-only-sponsor-otp-secret-that-is-long-enough"
@@ -141,3 +141,136 @@ def test_phone_change_invalidates_issued_code(api, monkeypatch):
         "challenge_id": req.json()["challenge_id"], "code": sent[0][1],
     })
     assert old.status_code == 400
+
+
+def test_valid_otp_activates_new_prospect_only_and_prevents_manual_bypass(
+    api, monkeypatch,
+):
+    client, csrf, engine = api
+    person = _create(client, csrf, "Activation", "+918100000021")
+    phone = person["mobile_number"]
+    out = []
+    settings = SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activates_prospect=True, otp_activation_notice_enabled=True,
+        saasyto_delivery_enabled=True, saasyto_sender_approved=True,
+    )
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: settings)
+    monkeypatch.setattr("app.prospects.get_settings", lambda: SimpleNamespace(
+        upi_match_secret="synthetic-key-for-otp-review-sufficient-length",
+        otp_activates_prospect=True,
+    ))
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, number, code: out.append((number, code)))
+    monkeypatch.setattr("app.sponsor_otp.send_text", lambda *_a, **_k:
+                        (_ for _ in ()).throw(AssertionError("No consent: no message")))
+    denied = client.post("/v1/prospects/" + person["id"] + "/stage",
+                         headers=csrf, json={
+        "version": person["version"], "stage": "active",
+        "note": "Pre-OTP manual change",
+    })
+    assert denied.status_code == 409
+    route = "/v1/prospects/" + person["id"] + "/otp"
+    issued = client.post(route + "/request", headers=csrf)
+    assert issued.status_code == 200
+    assert out[0][0] == phone
+    wrong = client.post(route + "/verify", headers=csrf, json={
+        "challenge_id": issued.json()["challenge_id"],
+        "code": "111111" if out[0][1] != "111111" else "222222",
+    })
+    assert wrong.status_code == 400
+    assert client.get("/v1/prospects/" + person["id"]).json()["crm_stage"] == "inactive"
+    verified = client.post(route + "/verify", headers=csrf, json={
+        "challenge_id": issued.json()["challenge_id"], "code": out[0][1],
+    })
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["crm_stage"] == "active"
+    assert verified.json()["activation_notice"] == "skipped_no_permission"
+    prospect = client.get("/v1/prospects/" + person["id"]).json()
+    assert prospect["crm_stage"] == "active"
+    assert prospect["lifecycle_status"] == "new"
+    assert prospect["whatsapp_opt_in"] is False
+    assert client.post(route + "/verify", headers=csrf, json={
+        "challenge_id": issued.json()["challenge_id"], "code": out[0][1],
+    }).status_code == 400
+    with Session(engine) as db:
+        transitions = db.scalars(select(ProspectStageTransition)).all()
+        assert len(transitions) == 1
+        assert transitions[0].from_stage == "inactive"
+        assert transitions[0].to_stage == "active"
+        saved = db.get(Prospect, uuid.UUID(person["id"]))
+        assert saved.last_verified_payment_at is None
+
+
+def test_activation_notice_sent_once_only_after_documented_optin(api, monkeypatch):
+    client, csrf, _engine = api
+    person = _create(client, csrf, "Activation message", "+918100000022")
+    consent = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": person["id"],
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "recorded onboarding permission",
+        "evidence_reference": "onboarding consent register 22",
+    })
+    assert consent.status_code == 201, consent.text
+    sent_otp = []
+    sent_notice = []
+    settings = SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activates_prospect=True, otp_activation_notice_enabled=True,
+        saasyto_delivery_enabled=True, saasyto_sender_approved=True,
+    )
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: settings)
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, number, code: sent_otp.append(code))
+
+    def fake_text(_cfg, *, phone, message):
+        sent_notice.append((phone, message))
+        return SimpleNamespace(state="accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.send_text", fake_text)
+    route = "/v1/prospects/" + person["id"] + "/otp"
+    issued = client.post(route + "/request", headers=csrf).json()
+    verified = client.post(route + "/verify", headers=csrf, json={
+        "challenge_id": issued["challenge_id"], "code": sent_otp[0],
+    })
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["crm_stage"] == "active"
+    assert verified.json()["activation_notice"] == "accepted_unverified"
+    assert len(sent_notice) == 1
+    assert sent_notice[0][0] == person["mobile_number"]
+    assert "registration" in sent_notice[0][1]
+    assert "payment" in sent_notice[0][1]
+    assert client.post(route + "/verify", headers=csrf, json={
+        "challenge_id": issued["challenge_id"], "code": sent_otp[0],
+    }).status_code == 400
+    assert len(sent_notice) == 1
+
+
+def test_opted_out_activation_notification_is_never_submitted(api, monkeypatch):
+    client, csrf, _engine = api
+    person = _create(client, csrf, "Declined notice", "+918100000023")
+    choice = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": person["id"],
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "documented opt-out",
+    })
+    assert choice.status_code == 201
+    settings = SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activates_prospect=True, otp_activation_notice_enabled=True,
+        saasyto_delivery_enabled=True, saasyto_sender_approved=True,
+    )
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: settings)
+    codes = []
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, _number, code: codes.append(code))
+    monkeypatch.setattr("app.sponsor_otp.send_text", lambda *_a, **_k:
+                        (_ for _ in ()).throw(AssertionError("Opt-out blocks notice")))
+    url = "/v1/prospects/" + person["id"] + "/otp"
+    issued = client.post(url + "/request", headers=csrf).json()
+    confirmation = client.post(url + "/verify", headers=csrf, json={
+        "challenge_id": issued["challenge_id"], "code": codes[0],
+    })
+    assert confirmation.status_code == 200, confirmation.text
+    assert confirmation.json()["crm_stage"] == "active"
+    assert confirmation.json()["activation_notice"] == "skipped_no_permission"
