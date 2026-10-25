@@ -2,7 +2,7 @@
 
 ## Status (24 October 2026)
 
-**OTP security and UI are implemented; outbound delivery remains OFF by default.**
+**OTP-gated activation is implemented; outbound OTP delivery remains OFF by default until an approved provider is configured.**
 
 The supplier named in the meeting as **“Sassito”** (also described as **“Sassy WA”**) has not been conclusively identified. Two separate public products were found: [Saasyto](https://saasyto.com/) and [Sassy Infotech](https://www.sassyinfotech.com/). Do **not** assume they are the same company, treat Saasyto's QR-linked personal-number automation as an official OTP sender, or enter unknown vendor credentials into a Meta API setting.
 
@@ -10,12 +10,14 @@ A documented **direct Meta WhatsApp Cloud API** transport has been prepared as a
 
 ## What works in the code
 
-- Admin-only **Prospect Details → WhatsApp number verification** status, code request, and verification entry.
+- Admin-only **Prospect Details → Mark Active** OTP challenge and verification. First activation requires only a six-digit OTP; reactivation after a previous active period requires both an explanatory note and a NEW OTP.
+- Direct calls to the generic `/stage` endpoint cannot activate a prospect, even if the number had been verified previously. The `/otp/activate` endpoint consumes an unexpired challenge and records activation atomically.
 - Six-digit server-generated random challenge, ten-minute expiry, 60-second resend cooldown and five requests per 24 hours per prospect. Five incorrect attempts lock a challenge.
 - Database-backed, tenant- and prospect-bound challenge and current-phone HMAC digest. OTP plaintext is never stored, logged, added to audit logs or returned to browsers.
 - Explicit CSRF on request and verification; challenge IDs never function as proof without the OTP.
 - One-time successful verification and audited time; editing the phone/WhatsApp number revokes verified state, and old challenges are refused.
-- State is separate from CRM active/inactive, follow-ups, financial collections and WhatsApp marketing/reminder opt-in.
+- The standalone phone-verification endpoint is separate from CRM stage; only `/otp/activate` changes CRM stage. Financial lifecycle/payment status remains separate. OTP never overrides an opt-out or invents communication consent.
+- Prospect registration provides a one-time, explicit Admin attestation checkbox for the sponsor's WhatsApp reminders/updates permission. The backend records its evidence reference in the existing consent ledger; an opted-in, activated sponsor does not need a second consent entry.
 - Meta send call uses a preapproved WhatsApp **AUTHENTICATION** copy-code template with identical OTP in body and button. A valid Meta message ID means only **accepted by provider**, not delivered/read.
 - No queued or historical OTP replay; disabled configurations return HTTP 503 before a challenge is issued.
 - Schema migration: `0019_sponsor_otp`. Applying this migration is required before deploying the new API.
@@ -31,8 +33,8 @@ A documented **direct Meta WhatsApp Cloud API** transport has been prepared as a
    - `OTP_META_TEMPLATE_NAME` — exact approved lowercase template name
    - `OTP_META_TEMPLATE_LANGUAGE` — exact approved language (default `en_US`)
    - `OTP_META_GRAPH_VERSION` — supported/pinned Graph version (default in example `v23.0`)
-4. Apply Alembic migrations (`alembic upgrade head`) on the backend, verify the sender, template, number ownership, costs and opt-in/notification handling, and only then set `OTP_DELIVERY_ENABLED=true` in **production**. This flag is independent of `MESSAGING_DELIVERY_ENABLED` and Pabbly; turning on OTP does not turn on reminders.
-5. In a controlled test, register a **test** prospect, open Prospect Details, request the code, enter the received 6 digits and check the verified timestamp. Change the phone and confirm verification resets.
+4. Apply Alembic migrations (`alembic upgrade head`) on the backend, verify the sender, template, number ownership, costs and opt-in/notification handling, and only then set `OTP_DELIVERY_ENABLED=true` in **production**. This flag is independent of `MESSAGING_DELIVERY_ENABLED`, Saasyto direct messaging and Pabbly. Enabling OTP does not turn on reminders. Local Saasyto pilot credentials alone do NOT enable the official Meta OTP path.
+5. In a controlled test, register a **test** prospect with the sponsor's documented WhatsApp permission (if granted). Open Prospect Details → Mark Active → send OTP → enter the received six digits → Verify OTP & Activate. Mark the person inactive, then repeat and verify that a reactivation reason and a newly issued OTP are both mandatory. Change the phone and confirm verification resets.
 
 Until the flag and all fields are validated the UI intentionally says the provider is not connected and cannot send. Development/staging modes refuse an enabled provider; tests inject a fake delivery adapter and do not call Meta.
 
@@ -51,7 +53,7 @@ Once provided, the remaining work is implementing an approved adapter behind the
 ## Safety boundaries
 
 - No OTP message is sent unless an authorized Admin explicitly clicks the send action and provider configuration is validated.
-- OTP is not proof of payment, communication consent, delivered messages or an active sponsorship.
+- OTP is not proof of payment, communication consent, or delivered messages. Only a successful activation challenge changes the CRM stage; financial sponsorship status remains payment-derived.
 - Request submission is never echoed as a delivered notification. HTTP send response success only indicates provider acceptance.
 - No blind provider retry after a timeout. Confirmation can be uncertain; operation reports that uncertainty.
 - CI uses fake provider delivery and synthetic numbers, not live donor data.
