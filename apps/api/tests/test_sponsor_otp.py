@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CommunicationConsentEvent, ProspectStageTransition, SponsorOtpChallenge
 from app.saasyto_client import Submission
-from app.sponsor_otp import _deliver
+from app.sponsor_otp import OtpDeliveryUnconfirmed, _deliver
 
 pytest_plugins = ("test_crm_review_2026_10",)
 SECRET = "test-only-sponsor-otp-secret-that-is-long-enough"
@@ -271,7 +271,7 @@ def test_local_otp_uses_allowlisted_phone_only_and_does_not_claim_delivery(monke
         "app.sponsor_otp.send_text",
         lambda _cfg, *, phone, message: Submission("unknown", "provider_timeout"),
     )
-    with pytest.raises(ValueError, match="acceptance"):
+    with pytest.raises(OtpDeliveryUnconfirmed, match="outcome unknown"):
         _deliver(config, allowed, "123456")
 
 
