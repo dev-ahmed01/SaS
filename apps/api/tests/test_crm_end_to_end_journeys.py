@@ -11,8 +11,14 @@ from sqlalchemy.orm import Session
 
 from app.accounting import effective_credits, ist_today, month_start
 from app.models import (
-    AuditEvent, ManualCollection, ManualCollectionReversal, MessageOutbox,
-    PayoutPayment, PromoterAssignment, Prospect, ProspectStageDefinition,
+    AuditEvent,
+    ManualCollection,
+    ManualCollectionReversal,
+    MessageOutbox,
+    PayoutPayment,
+    PromoterAssignment,
+    Prospect,
+    ProspectStageDefinition,
 )
 
 pytest_plugins = ("test_crm_review_2026_10",)
