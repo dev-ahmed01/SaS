@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.activation_notice import send_activation_notice
 from app.auth import db_session, get_admin, require_csrf
 from app.config import Settings, get_settings
 from app.models import (
@@ -325,5 +326,21 @@ def activate_after_otp(
                     "challenge_id": str(record.id)},
     ))
     database.commit()
+    # OTP has already been consumed and CRM activation committed; no webhook,
+    # provider error or browser retry can reactivate/replay this challenge.
+    # The optional notice never carries OTP codes or grants consent.
+    notice = send_activation_notice(
+        database, cfg, person, reactivated=previously_active,
+    )
+    if getattr(cfg, "otp_activation_notice_enabled", False):
+        database.add(AuditEvent(
+            organization_id=admin.organization_id, actor_admin_id=admin.id,
+            action="prospect.activation_notice_attempt", entity_type="prospect",
+            entity_id=str(person.id), after_data={"status": notice},
+        ))
+        database.commit()
     response.headers["Cache-Control"] = "no-store"
-    return {"status": "active", "reactivation": previously_active}
+    return {
+        "status": "active", "reactivation": previously_active,
+        "activation_notice": notice,
+    }
