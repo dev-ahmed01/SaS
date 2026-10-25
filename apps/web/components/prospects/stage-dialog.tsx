@@ -4,19 +4,49 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Prospect } from "./prospects-types";
 import { reasonLabel, stageReasons } from "./prospects-types";
 
+type Challenge={challenge_id:string;expires_at:string;status:string};
+type OtpStatus={delivery_enabled:boolean;verified:boolean;verified_at:string|null};
+
+async function csrf():Promise<string>{
+  const response=await fetch("/api/admin/session",{cache:"no-store"});
+  if(!response.ok)throw Error("Admin session expired. Sign in again.");
+  return (await response.json()).csrf_token as string;
+}
+
+async function post<T>(path:string, body?:Record<string,unknown>):Promise<T>{
+  const token=await csrf();
+  const response=await fetch("/api/admin/prospects/"+path,{
+    method:"POST",credentials:"same-origin",
+    headers:{"X-CSRF-Token":token,...(body?{"Content-Type":"application/json"}:{})},
+    ...(body?{body:JSON.stringify(body)}:{}),
+  });
+  if(!response.ok){
+    const problem=await response.json().catch(()=>null) as {detail?:unknown}|null;
+    throw Error(typeof problem?.detail==="string"?problem.detail:
+      response.status===409?"The prospect changed. Reload and retry.":
+      "Could not complete this action.");
+  }
+  return response.json() as Promise<T>;
+}
+
 export function StageDialog({prospect,onClose,onChanged}:{
-  prospect:Prospect;onClose:()=>void;onChanged:(updated:Prospect)=>void;
-}) {
-  const isInactive=prospect.crm_stage==="active";
+  prospect:Prospect;onClose:()=>void;onChanged:()=>void;
+}){
+  const markInactive=prospect.crm_stage==="active";
+  const reactivation=!markInactive&&prospect.stage_history.some(x=>x.to_stage==="active");
   const [reason,setReason]=useState("");
   const [note,setNote]=useState("");
-  const [saving,setSaving]=useState(false);
+  const [code,setCode]=useState("");
+  const [challenge,setChallenge]=useState<Challenge|null>(null);
+  const [otpReady,setOtpReady]=useState<boolean|null>(null);
+  const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const ref=useRef<HTMLSelectElement>(null);
+  const [notice,setNotice]=useState("");
+  const closeButton=useRef<HTMLButtonElement>(null);
 
   useEffect(()=>{
     const previous=document.activeElement as HTMLElement|null;
-    ref.current?.focus();
+    closeButton.current?.focus();
     function onKey(e:KeyboardEvent){
       if(e.key==="Escape"){e.preventDefault();onClose();}
     }
@@ -24,64 +54,114 @@ export function StageDialog({prospect,onClose,onChanged}:{
     return ()=>{window.removeEventListener("keydown",onKey);previous?.focus();};
   },[onClose]);
 
-  async function submit(event:FormEvent){
-    event.preventDefault();
-    if(saving)return;
-    if(isInactive&&!reason){setError("Select why this prospect is becoming inactive.");return;}
-    if(!isInactive&&note.trim().length<3){setError("Record the follow-up and why the prospect is ready.");return;}
-    setSaving(true);setError("");
+  useEffect(()=>{
+    if(markInactive)return;
+    const controller=new AbortController();
+    fetch("/api/admin/prospects/"+prospect.id+"/otp/status",{
+      cache:"no-store",signal:controller.signal,
+    }).then(async response=>{
+      if(!response.ok)throw Error("OTP status could not be checked.");
+      return response.json() as Promise<OtpStatus>;
+    }).then(status=>{if(!controller.signal.aborted)setOtpReady(status.delivery_enabled);})
+      .catch(()=>{if(!controller.signal.aborted)setError("OTP service is unavailable.");});
+    return ()=>controller.abort();
+  },[markInactive,prospect.id]);
+
+  async function requestCode(){
+    if(busy||otpReady!==true)return;
+    setBusy(true);setError("");setNotice("");
     try{
-      const session=await fetch("/api/admin/session",{cache:"no-store"});
-      if(!session.ok)throw Error("Your session has expired. Sign in again.");
-      const {csrf_token}=await session.json();
-      const response=await fetch("/api/admin/prospects/"+prospect.id+"/stage",{
-        method:"POST",credentials:"same-origin",
-        headers:{"Content-Type":"application/json","X-CSRF-Token":csrf_token},
-        body:JSON.stringify({version:prospect.version,stage:isInactive?"inactive":"active",
-          reason:isInactive?reason:null,note:note.trim()||null})
-      });
-      if(!response.ok)throw Error(response.status===409
-        ?"This record changed. Close and reopen it to refresh."
-        :"Could not update the stage. Please try again.");
-      onChanged(await response.json() as Prospect);
-    }catch(e){setError(e instanceof Error?e.message:"Unable to update the prospect.");}
-    finally{setSaving(false);}
+      const response=await post<Challenge>(prospect.id+"/otp/request");
+      setChallenge(response);
+      setNotice("Code requested. Ask the sponsor for the six-digit code sent to their WhatsApp.");
+    }catch(e){setError(e instanceof Error?e.message:"Could not request OTP.");}
+    finally{setBusy(false);}
   }
 
-  return <div className="crm-dialog-scrim" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
+  async function submit(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();
+    if(busy)return;
+    if(markInactive&&!reason){setError("Select a reason for deactivation.");return;}
+    if(!markInactive&&(!challenge||!/^[0-9]{6}$/.test(code))){
+      setError("Request and enter the six-digit OTP first.");return;
+    }
+    if(reactivation&&note.trim().length<3){
+      setError("Explain why this sponsor is being reactivated.");return;
+    }
+    setBusy(true);setError("");setNotice("");
+    try{
+      if(markInactive){
+        await post(prospect.id+"/stage",{
+          version:prospect.version,stage:"inactive",reason,note:note.trim()||null,
+        });
+      }else{
+        await post(prospect.id+"/otp/activate",{
+          version:prospect.version,challenge_id:challenge!.challenge_id,code,
+          reactivation_reason:reactivation?note.trim():null,
+        });
+      }
+      onChanged();
+    }catch(e){setError(e instanceof Error?e.message:"Could not change active status.");}
+    finally{setBusy(false);}
+  }
+
+  return <div className="crm-dialog-scrim" role="presentation"
+    onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
     <section className="crm-dialog" role="dialog" aria-modal="true"
-      aria-label={isInactive?"Mark prospect inactive":"Reactivate prospect"}>
+      aria-label={markInactive?"Mark prospect inactive":reactivation?"Reactivate prospect":"Activate prospect"}>
       <div className="crm-dialog-head">
-        <div><h2>{isInactive?"Mark inactive":"Move to Active"}</h2>
+        <div><h2>{markInactive?"Mark inactive":reactivation?"Reactivate prospect":"Verify and activate"}</h2>
           <p>{prospect.full_name}</p></div>
-        <button type="button" className="text-action" onClick={onClose} aria-label="Close stage dialog">Close</button>
+        <button ref={closeButton} type="button" className="text-action"
+          onClick={onClose} aria-label="Close stage dialog">Close</button>
       </div>
       <form onSubmit={submit}>
-        {isInactive ? <>
+        {markInactive?<>
           <label className="field"><span className="field-label">Reason for leaving *</span>
-            <select ref={ref} required value={reason} onChange={e=>setReason(e.target.value)}>
+            <select required value={reason} onChange={e=>setReason(e.target.value)}>
               <option value="">Choose a reason</option>
               {stageReasons.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
             </select></label>
           <label className="field"><span className="field-label">Additional context (optional)</span>
             <textarea maxLength={500} rows={3} value={note} onChange={e=>setNote(e.target.value)}
               placeholder="Brief context to help understand attrition"/></label>
-          <p className="crm-dialog-help">This pauses reminder eligibility and records the reason. It does not erase payments or alter the accounting ledger.</p>
-        </> : <>
-          <p className="crm-dialog-help">Confirm you have contacted this prospect and record the outcome. Activating CRM contact does not record a payment.</p>
-          <label className="field"><span className="field-label">Previous reason</span>
-            <input value={reasonLabel(prospect.crm_inactive_reason)} readOnly/></label>
-          <label className="field"><span className="field-label">Follow-up outcome / reason for activation *</span>
-            <textarea ref={undefined} required minLength={3} maxLength={500} rows={3}
-              value={note} onChange={e=>setNote(e.target.value)}
-              placeholder="Who was contacted, their response, and agreed next step"/></label>
-          <select ref={ref} className="sr-only" tabIndex={-1} aria-hidden="true"><option>Confirm</option></select>
+          <p className="crm-dialog-help">Reminders pause while inactive. Payments and history remain unchanged.</p>
+        </>:<>
+          {reactivation&&<>
+            <p className="crm-dialog-help">Previous reason: {reasonLabel(prospect.crm_inactive_reason)}</p>
+            <label className="field">
+              <span className="field-label">Why are they returning? *</span>
+              <textarea required minLength={3} maxLength={500} rows={3} value={note}
+                onChange={e=>setNote(e.target.value)}
+                placeholder="Reason for reactivation"/>
+            </label>
+          </>}
+          <p className="crm-dialog-help">A new WhatsApp OTP is required before activation.
+            This verifies the sponsor&apos;s number; existing communication permissions stay unchanged.</p>
+          {otpReady===null?<p className="crm-muted">Checking OTP service…</p>:
+            otpReady===false?
+              <p role="alert" className="form-error">WhatsApp OTP is not configured.
+                Activation is unavailable until an approved OTP provider is connected.</p>:
+              !challenge?
+                <button type="button" className="btn btn-secondary" disabled={busy}
+                  onClick={requestCode}>{busy?"Requesting…":"Send WhatsApp OTP"}</button>:
+                <label className="field">
+                  <span className="field-label">Six-digit WhatsApp OTP *</span>
+                  <input required inputMode="numeric" autoComplete="one-time-code"
+                    pattern="[0-9]{6}" maxLength={6} placeholder="000000"
+                    value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))}/>
+                </label>}
+          {challenge&&<p className="crm-muted">Code valid for 10 minutes. A new code is required for every activation.</p>}
         </>}
+        {notice&&<p role="status" className="crm-muted">{notice}</p>}
         {error&&<p className="form-error" role="alert">{error}</p>}
         <div className="form-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving||(isInactive?!reason:note.trim().length<3)}>
-            {saving?"Saving…":isInactive?"Confirm Inactive":"Mark Active"}
+          <button type="button" className="btn btn-secondary" onClick={onClose}
+            disabled={busy}>Cancel</button>
+          <button type="submit" className="btn btn-primary"
+            disabled={busy||(markInactive?!reason:!challenge||code.length!==6||
+              (reactivation&&note.trim().length<3))}>
+            {busy?"Checking…":markInactive?"Confirm Inactive":"Verify OTP & Activate"}
           </button>
         </div>
       </form>
