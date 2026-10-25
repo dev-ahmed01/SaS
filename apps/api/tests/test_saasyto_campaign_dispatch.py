@@ -360,3 +360,57 @@ def test_production_approval_rejects_same_count_swapped_database_contacts(
         recipients = db.scalars(select(SaasytoCampaignRecipient)).all()
         assert len(recipients) == 1
         assert recipients[0].recipient_id == uuid.UUID(second["id"])
+
+
+def test_newly_registered_nonseeded_contact_can_enter_production_queue(
+    dispatch_system, monkeypatch,
+):
+    """Real registration, not demo seed, supplies the WhatsApp recipient."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    registered = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "New registered supporter",
+        "mobile_number": "+919899002211",
+        "area_city": "Bengaluru",
+        "whatsapp_opt_in": False,
+    })
+    assert registered.status_code == 201, registered.text
+    person = registered.json()
+    assert person["crm_stage"] == "inactive"
+    _consent(client, csrf, person, "opted_in")
+    # Active intentionally excludes brand-new CRM records; All includes them.
+    active = create_campaign(client, csrf, title="Active only", segment="active")
+    assert active.status_code == 201
+    check_active = client.post(
+        "/v1/communication/campaigns/" + active.json()["id"] + "/preparations",
+        headers=csrf, json={"request_id": str(uuid.uuid4()), "simulation_only": True},
+    )
+    assert check_active.status_code == 201
+    assert check_active.json()["eligible_count"] == 0
+    broad = create_campaign(client, csrf, title="Welcome new signup", segment="all")
+    assert broad.status_code == 201, broad.text
+    base = "/v1/communication/campaigns/" + broad.json()["id"]
+    preflight = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert preflight.status_code == 201 and preflight.json()["eligible_count"] == 1
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    approval = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": preflight.json()["id"], "expected_eligible": 1,
+        "confirm_send": True,
+    })
+    assert approval.status_code == 201, approval.text
+    hits = []
+    monkeypatch.setattr("app.saasyto_campaigns.send_text",
+                        lambda cfg, *, phone, message:
+                        (hits.append(phone), Submission("accepted_unverified"))[1])
+    attempt = client.post("/internal/saasyto/dispatch", headers={
+        "X-Saasyto-Runner-Token": RUNNER,
+    })
+    assert attempt.status_code == 200
+    assert attempt.json()["accepted_unverified"] == 1
+    assert hits == ["+919899002211"]
+    with Session(engine) as db:
+        recipient = db.scalars(select(SaasytoCampaignRecipient)).one()
+        assert recipient.recipient_id == uuid.UUID(person["id"])
+        assert recipient.status == "accepted_unverified"
