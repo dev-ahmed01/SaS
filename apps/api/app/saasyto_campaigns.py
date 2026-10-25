@@ -287,26 +287,18 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     return phone, message
 
 
-@internal_router.post("/dispatch")
-def run_due(
-    response: Response,
-    db: Annotated[Session, Depends(db_session)],
-    runner_token: Annotated[str | None, Header(alias="X-Saasyto-Runner-Token")] = None,
-) -> dict[str, int]:
-    cfg = get_settings()
-    secret = (
-        cfg.saasyto_runner_secret.get_secret_value()
-        if cfg.saasyto_runner_secret else ""
-    )
-    if not secret or not runner_token or not hmac.compare_digest(secret, runner_token):
-        raise HTTPException(status_code=401, detail="Unauthorized runner")
-    if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
-        raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
+                  max_attempts: int = MAX_PER_RUN) -> dict[str, int]:
+    """Claim once then submit; used by the private worker and one-phone manual pilot.
+
+    A targeted manual request cannot consume other campaigns' queued recipients.
+    Every claim is committed before network I/O, including uncertain outcomes.
+    """
     counts: Counter[str] = Counter()
-    for _ in range(MAX_PER_RUN):
+    for _ in range(max_attempts):
         now = utc_now()
         # Commit each claim *before* the HTTP request: crashes cannot resend it.
-        candidate = db.execute(select(SaasytoCampaignRecipient, SaasytoCampaignRun,
+        query = select(SaasytoCampaignRecipient, SaasytoCampaignRun,
                                       CommunicationCampaign).join(
             SaasytoCampaignRun,
             SaasytoCampaignRecipient.run_id == SaasytoCampaignRun.id,
@@ -322,7 +314,10 @@ def run_due(
             CommunicationCampaign.status != "cancelled",
         ).order_by(
             SaasytoCampaignRun.due_at, SaasytoCampaignRecipient.id,
-        ).limit(1).with_for_update(skip_locked=True)).first()
+        ).limit(1).with_for_update(skip_locked=True)
+        if target_run_id is not None:
+            query = query.where(SaasytoCampaignRecipient.run_id == target_run_id)
+        candidate = db.execute(query).first()
         if not candidate:
             break
         item, run, campaign = candidate
@@ -370,5 +365,66 @@ def run_due(
         if remaining is None and run.status == "approved":
             run.status = "completed"
             db.commit()
-    response.headers["Cache-Control"] = "no-store"
     return dict(counts)
+
+
+@admin_router.post("/campaigns/{identifier}/saasyto/send-now",
+                   response_model=CampaignRunRead)
+def send_now_local_pilot(
+    identifier: uuid.UUID, response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    db: Annotated[Session, Depends(db_session)],
+) -> CampaignRunRead:
+    """Explicitly dispatch ONE previously approved local pilot recipient.
+
+    This is not available for production, a future scheduled campaign, or bulk
+    sends. The private worker remains the production/scheduled transport.
+    """
+    cfg = get_settings()
+    if not (cfg.saasyto_delivery_enabled and cfg.saasyto_sender_approved):
+        raise HTTPException(status_code=503, detail="Saasyto sending is disabled")
+    if not (getattr(cfg, "app_env", None) == "development"
+            and getattr(cfg, "local_demo_login_enabled", False)
+            and getattr(cfg, "saasyto_local_test_enabled", False)):
+        raise HTTPException(status_code=403, detail="Manual send requires local test mode")
+    admin = context[0]
+    _campaign(db, admin, identifier)
+    run = _existing_run(db, admin.organization_id, identifier)
+    if run is None:
+        raise HTTPException(status_code=409, detail="Approve the campaign before sending")
+    if run.status != "approved" or run.eligible_count != 1:
+        raise HTTPException(status_code=409, detail="Campaign not eligible for one-phone send")
+    if as_utc(run.due_at) > utc_now():
+        raise HTTPException(status_code=409, detail="Scheduled campaign is not yet due")
+    # Checking for exactly one queued recipient prevents this endpoint from
+    # being used as a replay/retry mechanism after a claim or rejection.
+    states = db.scalars(select(SaasytoCampaignRecipient.status).where(
+        SaasytoCampaignRecipient.organization_id == admin.organization_id,
+        SaasytoCampaignRecipient.run_id == run.id,
+    )).all()
+    if states != ["queued"]:
+        raise HTTPException(status_code=409, detail="Already attempted or no pending send")
+    _dispatch_due(db, cfg, target_run_id=run.id, max_attempts=1)
+    db.refresh(run)
+    response.headers["Cache-Control"] = "no-store"
+    return _read(db, run)
+
+
+@internal_router.post("/dispatch")
+def run_due(
+    response: Response,
+    db: Annotated[Session, Depends(db_session)],
+    runner_token: Annotated[str | None, Header(alias="X-Saasyto-Runner-Token")] = None,
+) -> dict[str, int]:
+    cfg = get_settings()
+    secret = (
+        cfg.saasyto_runner_secret.get_secret_value()
+        if cfg.saasyto_runner_secret else ""
+    )
+    if not secret or not runner_token or not hmac.compare_digest(secret, runner_token):
+        raise HTTPException(status_code=401, detail="Unauthorized runner")
+    if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
+        raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    counts = _dispatch_due(db, cfg)
+    response.headers["Cache-Control"] = "no-store"
+    return counts

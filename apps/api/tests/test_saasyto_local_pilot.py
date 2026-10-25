@@ -15,7 +15,7 @@ from test_saasyto_campaign_dispatch import RUNNER, _approved, _cfg, _consent, _p
 from app.bootstrap_admin import provision_admin
 from app.config import Settings
 from app.main import app
-from app.models import Base, SaasytoCampaignRun
+from app.models import Base, SaasytoCampaignRecipient, SaasytoCampaignRun
 from app.saasyto_client import Submission, send_text
 
 LOCAL_DB = "postgresql+psycopg://sas_dev:local-test@127.0.0.1:5432/sas_dev"
@@ -244,3 +244,127 @@ def test_local_worker_uses_only_loopback_private_endpoint(monkeypatch, capsys):
         ("http://127.0.0.1:8001/internal/saasyto/dispatch", RUNNER, 30),
     ]
     assert RUNNER not in capsys.readouterr().out
+
+
+def _manual_pilot(phone=LOCAL_PHONE, *, enabled=True):
+    cfg = _pilot(phone)
+    cfg.app_env = "development"
+    cfg.local_demo_login_enabled = True
+    cfg.saasyto_delivery_enabled = enabled
+    return cfg
+
+
+def test_admin_send_now_submits_scoped_once_without_worker(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "1001")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", _manual_pilot)
+    first, _ = _approved(client, csrf, "First queued campaign")
+    second, _ = _approved(client, csrf, "Second selected campaign")
+    attempts = []
+
+    def fake_send(_cfg, *, phone, message):
+        attempts.append((phone, message))
+        return Submission("accepted_unverified")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", fake_send)
+
+    route = "/v1/communication/campaigns/" + second + "/saasyto/send-now"
+    assert client.post(route, json={}).status_code == 403
+    reply = client.post(route, headers=csrf, json={})
+    assert reply.status_code == 200, reply.text
+    assert reply.json()["status"] == "completed"
+    assert reply.json()["accepted_unverified"] == 1
+    assert reply.json()["queued"] == 0
+    assert len(attempts) == 1
+    assert attempts[0][0] == LOCAL_PHONE
+    # A second click cannot re-submit any already claimed recipient.
+    assert client.post(route, headers=csrf, json={}).status_code == 409
+    assert len(attempts) == 1
+    # Targeted dispatch must never send the unrelated earlier campaign.
+    other = client.get("/v1/communication/campaigns/" + first + "/saasyto").json()
+    assert other["queued"] == 1
+    with Session(engine) as db:
+        statuses = db.scalars(select(SaasytoCampaignRecipient.status).where(
+            SaasytoCampaignRecipient.run_id == uuid.UUID(reply.json()["id"]),
+        )).all()
+        assert statuses == ["accepted_unverified"]
+
+
+def test_local_send_now_requires_approved_one_phone_and_does_not_retry(
+    dispatch_system, monkeypatch,
+):
+    client, _engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "1001")
+    _consent(client, csrf, person, "opted_in")
+    route_id = create_campaign(client, csrf).json()["id"]
+    route = "/v1/communication/campaigns/" + route_id + "/saasyto/send-now"
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", _manual_pilot)
+    assert client.post(route, headers=csrf, json={}).status_code == 409
+    approved_id, _ = _approved(client, csrf, "Unknown transport outcome")
+    route = "/v1/communication/campaigns/" + approved_id + "/saasyto/send-now"
+    called = []
+    def ambiguous(_cfg, *, phone, message):
+        called.append(phone)
+        return Submission("unknown", "provider_timeout")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", ambiguous)
+    result = client.post(route, headers=csrf, json={})
+    assert result.status_code == 200, result.text
+    assert result.json()["unknown"] == 1
+    assert client.post(route, headers=csrf, json={}).status_code == 409
+    assert called == [LOCAL_PHONE]
+
+
+def test_send_now_rechecks_live_consent_and_rejects_production_mode(
+    dispatch_system, monkeypatch,
+):
+    client, _engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "1001")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", _manual_pilot)
+    cid, _ = _approved(client, csrf, "Live STOP protection")
+    route = "/v1/communication/campaigns/" + cid + "/saasyto/send-now"
+    _consent(client, csrf, person, "opted_out")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", lambda *_a, **_k:
+                        (_ for _ in ()).throw(AssertionError("Do not send after STOP")))
+    result = client.post(route, headers=csrf, json={})
+    assert result.status_code == 200
+    assert result.json()["suppressed_after_approval"] == 1
+    assert result.json()["accepted_unverified"] == 0
+
+    _consent(client, csrf, person, "opted_in")
+    second, _ = _approved(client, csrf, "Environment guard")
+    production = _manual_pilot()
+    production.app_env = "production"
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: production)
+    other = "/v1/communication/campaigns/" + second + "/saasyto/send-now"
+    assert client.post(other, headers=csrf, json={}).status_code == 403
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings",
+                        lambda: _manual_pilot(enabled=False))
+    assert client.post(other, headers=csrf, json={}).status_code == 503
+
+
+def test_future_local_campaign_cannot_be_manually_dispatched(
+    dispatch_system, monkeypatch,
+):
+    client, _engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "1001")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", _manual_pilot)
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    campaign = create_campaign(client, csrf, title="Tomorrow's update",
+                               planned_for=future)
+    assert campaign.status_code == 201, campaign.text
+    base = "/v1/communication/campaigns/" + campaign.json()["id"]
+    check = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    }).json()
+    approved = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": check["id"], "expected_eligible": 1,
+        "confirm_send": True,
+    })
+    assert approved.status_code == 201, approved.text
+    assert client.post(base + "/saasyto/send-now", headers=csrf, json={}).status_code == 409
