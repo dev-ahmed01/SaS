@@ -491,3 +491,100 @@ def test_archived_prospect_cannot_be_granted_consent_but_may_opt_out(system):
     assert client.get(route, params={
         "recipient_kind": "prospect", "recipient_id": identifier,
     }).json()[0]["decision"] == "opted_out"
+
+
+def test_documented_whatsapp_opt_in_syncs_legacy_reminder_checkbox(system):
+    """One genuine consent update makes a CRM-active contact reminder eligible.
+
+    Other/general campaigns still require documented consent, and STOP
+    prevents all further sends. Do not silently opt in other active prospects.
+    """
+    client, engine = system
+    csrf = login(client)
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Permission Sync Contact",
+        "mobile_number": "+919876549888",
+        "area_city": "Bengaluru",
+        "monthly_contribution_paise": 25000,
+        "whatsapp_opt_in": False,
+    })
+    assert created.status_code == 201, created.text
+    person = activate_for_communication(client, csrf, created.json())
+    pid = person["id"]
+    reminder = create_campaign(client, csrf, title="Permission sync reminder",
+                               category="reminder").json()
+    url = "/v1/communication/campaigns/"+reminder["id"]+"/preparations"
+    def prepare():
+        result = client.post(url, headers=csrf, json={
+            "request_id": str(uuid.uuid4()), "simulation_only": True,
+        })
+        assert result.status_code == 201, result.text
+        return result.json()
+    assert prepare()["exclusion_reasons"] == {"no_whatsapp_consent": 1}
+    before = client.get("/v1/prospects/"+pid).json()
+    assert before["whatsapp_opt_in"] is False
+    consent = "/v1/communication/consent-events"
+    granted = client.post(consent, headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": pid,
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "signed recipient authorization",
+        "evidence_reference": "consent-artifact-01",
+    })
+    assert granted.status_code == 201, granted.text
+    after = client.get("/v1/prospects/"+pid).json()
+    assert after["whatsapp_opt_in"] is True
+    assert after["version"] == before["version"] + 1
+    assert prepare()["eligible_count"] == 1
+
+    revoked = client.post(consent, headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": pid,
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "recipient asked to stop",
+    })
+    assert revoked.status_code == 201, revoked.text
+    after_revoke = client.get("/v1/prospects/"+pid).json()
+    assert after_revoke["whatsapp_opt_in"] is False
+    assert prepare()["exclusion_reasons"] == {"opted_out": 1}
+    with Session(engine) as db:
+        flags = db.scalars(select(CommunicationConsentEvent).where(
+            CommunicationConsentEvent.recipient_id == uuid.UUID(pid),
+        )).all()
+        assert len(flags) == 2
+        assert [event.decision for event in flags] == ["opted_in", "opted_out"]
+
+
+def test_reminder_active_contacts_are_reviewed_without_auto_opt_in(system):
+    """All Admin-active candidates enter review; only authorized ones pass."""
+    client, _ = system
+    csrf = login(client)
+    people = []
+    for ix, allowed in enumerate((True, False, True), start=1):
+        created = client.post("/v1/prospects", headers=csrf, json={
+            "full_name": f"Active sponsor {ix}",
+            "mobile_number": f"+9198765480{ix:02d}",
+            "area_city": "Bengaluru",
+            "whatsapp_opt_in": allowed,
+        })
+        assert created.status_code == 201, created.text
+        people.append(activate_for_communication(client, csrf, created.json()))
+    reminder = create_campaign(client, csrf, category="reminder",
+                               title="Active monthly reminders").json()
+    assert reminder["candidate_snapshot"] == 3
+    assert reminder["eligible_snapshot"] == 2
+    prepared = client.post(
+        "/v1/communication/campaigns/"+reminder["id"]+"/preparations",
+        headers=csrf, json={
+            "request_id": str(uuid.uuid4()), "simulation_only": True,
+        },
+    )
+    assert prepared.status_code == 201, prepared.text
+    assert prepared.json()["eligible_count"] == 2
+    assert prepared.json()["exclusion_reasons"] == {"no_whatsapp_consent": 1}
+    details = client.get(
+        "/v1/communication/campaigns/"+reminder["id"]+"/results"
+    )
+    assert details.status_code == 200
+    assert len(details.json()["eligible_recipients"]) == 2
+    assert len(details.json()["excluded_recipients"]) == 1
+    assert details.json()["excluded_recipients"][0]["name"] == "Active sponsor 2"
+    assert "987654" not in details.text
