@@ -50,6 +50,10 @@ and **database** layers as appropriate. Reference:
 5. **Browser testing realism:** Generate unique synthetic numbers per create
    journey; cover two identical names with different numbers, a third duplicate
    mobile attempt, and a readable UI error.
+6. **Consent/address binding:** Editing a prospect or promoter to a new WhatsApp
+   recipient address now automatically clears the legacy opt-in and appends an
+   opted-out consent event. A new sender must obtain fresh documented permission
+   for that number before any reminder or general campaign can send.
 
 ## Migration and existing data
 
