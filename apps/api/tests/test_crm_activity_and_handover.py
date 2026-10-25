@@ -85,7 +85,7 @@ def test_prospect_timeline_records_real_followup_and_no_unmade_payments(api):
 
 def test_reassignment_without_deactivation_is_rejected_instead_of_silent_success(api):
     client, csrf, engine = api
-    first, second = [], []
+    first = []
     for i in range(2):
         response = client.post("/v1/promoters", headers=csrf, json={
             "full_name": f"Transfer Guard Promoter {i}",
