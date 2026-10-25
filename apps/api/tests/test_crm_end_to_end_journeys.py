@@ -6,10 +6,10 @@ workflows with FastAPI TestClient, CSRF cookies and fresh per-test databases.
 import uuid
 
 import pytest
+from activation_helper import activate_with_test_otp
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from activation_helper import activate_with_test_otp
 from app.accounting import effective_credits, ist_today, month_start
 from app.models import (
     AuditEvent,
