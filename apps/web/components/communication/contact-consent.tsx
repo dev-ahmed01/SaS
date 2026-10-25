@@ -11,9 +11,10 @@ type ConsentEvent={
 };
 
 export function ContactConsent({
-  recipientKind,recipientId,legacyWhatsAppOptIn=false,allowGrant=true,
+  recipientKind,recipientId,legacyWhatsAppOptIn=false,allowGrant=true,onChanged,
 }:{
   recipientKind:Kind;recipientId:string;legacyWhatsAppOptIn?:boolean;allowGrant?:boolean;
+  onChanged?:()=>void;
 }){
   const [events,setEvents]=useState<ConsentEvent[]>([]);
   const [loading,setLoading]=useState(true);
@@ -60,7 +61,7 @@ export function ContactConsent({
       setNotice(decision==="opted_out"
         ?"Opt-out recorded. This channel will be suppressed."
         :"Documented permission recorded. No message was sent; review recipients in Communication before sending.");
-      setEditing(null);setRevision(v=>v+1);
+      setEditing(null);setRevision(v=>v+1);onChanged?.();
     }catch(e){
       setError(e instanceof Error?e.message:"Could not record consent.");
     }finally{setSaving(false);}
