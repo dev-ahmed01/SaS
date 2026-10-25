@@ -148,12 +148,21 @@ def evaluate_recipients(
         elif channel == "email":
             if not event or event.decision != "opted_in" or not event.evidence_reference:
                 reason = "no_email_consent"
-        elif not person.whatsapp_opt_in:
+        elif not (
+            person.whatsapp_opt_in or (
+                event is not None and event.decision == "opted_in"
+                and bool(event.evidence_reference)
+            )
+        ):
+            # An evidenced affirmative consent event is authoritative even if
+            # the old boolean was left False before the consent-sync fix.
+            # Active status alone never creates consent.
             reason = "no_whatsapp_consent"
         elif category != "reminder" and (
             not event or event.decision != "opted_in" or not event.evidence_reference
         ):
-            # Old checkbox covers reminders, not marketing or general announcements.
+            # The legacy reminder checkbox does not grant permission to send
+            # unrelated updates or announcements.
             reason = "no_general_consent"
         if reason is None and address in seen:
             reason = "duplicate_address"

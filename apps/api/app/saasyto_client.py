@@ -25,6 +25,7 @@ PHONE = re.compile(r"^\+?[1-9][0-9]{7,14}$")
 class Submission:
     state: SendState
     """An unverified submission state, never a delivery receipt."""
+    reason: str | None = None  # Constant diagnostic; never raw provider JSON.
 
 
 def send_text(cfg: Settings, *, phone: str, message: str) -> Submission:
@@ -60,19 +61,31 @@ def send_text(cfg: Settings, *, phone: str, message: str) -> Submission:
             trust_env=False,
         ) as client:
             response = client.post(SEND_ENDPOINT, json=payload)
-    except (httpx.TimeoutException, httpx.TransportError):
-        # Server may have accepted a timed-out request. No blind retry.
-        return Submission("unknown")
+    except httpx.TimeoutException:
+        # Provider may already have accepted the attempt. No blind retry.
+        return Submission("unknown", "provider_timeout")
+    except httpx.TransportError:
+        return Submission("unknown", "network_error")
     if not 200 <= response.status_code < 300:
-        return Submission("rejected")
+        return Submission("rejected", "provider_http_error")
     try:
         receipt = response.json()
     except (ValueError, TypeError):
-        # Provider response format not documented. Never infer delivery.
+        return Submission("unknown", "unverified_provider_reply")
+    if not isinstance(receipt, dict):
+        return Submission("unknown", "unverified_provider_reply")
+    # A 2xx HTML page, a truthy error field, or a soft-fail JSON object must
+    # NEVER be displayed as "successfully submitted" in the CRM.
+    state = str(receipt.get("status", "")).strip().lower()
+    success = receipt.get("success")
+    if (success is False or success == 0 or
+            state in ("error", "failed", "failure", "rejected",
+                      "disconnected", "invalid") or
+            bool(receipt.get("error"))):
+        return Submission("rejected", "provider_rejected")
+    if success is True or state in (
+        "success", "submitted", "accepted", "queued", "pending", "sent",
+    ):
+        # Still no proof of WhatsApp delivery or reads.
         return Submission("accepted_unverified")
-    if isinstance(receipt, dict):
-        if receipt.get("success") is False or receipt.get("status") in (
-            "error", "failed", "rejected",
-        ):
-            return Submission("rejected")
-    return Submission("accepted_unverified")
+    return Submission("unknown", "unverified_provider_reply")

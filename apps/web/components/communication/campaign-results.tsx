@@ -39,8 +39,8 @@ type Provider={
   activation_cutoff?:string|null;
 };
 const reasons:Record<string,string>={
-  no_general_consent:"No documented permission for general updates",
-  no_whatsapp_consent:"WhatsApp permission checkbox is off",
+  no_general_consent:"General-message permission not recorded",
+  no_whatsapp_consent:"WhatsApp permission not recorded",
   no_email_consent:"No documented email permission",
   missing_address:"No contact number",
   opted_out:"Contact opted out",
@@ -49,17 +49,22 @@ const reasons:Record<string,string>={
   campaign_cancelled:"Campaign cancelled before submission",
   consent_or_status_changed:"Consent, status or phone changed before sending",
   rejected:"Saasyto rejected the submission",
-  unknown:"Submission outcome unknown; not safe to retry",
+  unknown:"Sending result unverified",
+  provider_rejected:"Saasyto rejected the request",
+  provider_http_error:"Saasyto returned an HTTP error",
+  unverified_provider_reply:"Saasyto response did not confirm acceptance",
+  network_error:"Could not verify Saasyto response",
+  provider_timeout:"Saasyto did not answer in time",
 };
 const statuses:Record<string,string>={
   queued:"Queued — not submitted",
   claimed:"Claimed — outcome pending/uncertain",
-  accepted_unverified:"Submitted to Saasyto — not verified delivered",
+  accepted_unverified:"Accepted by Saasyto · delivery unconfirmed",
   rejected:"Rejected by Saasyto",
-  unknown:"Unknown — do not retry automatically",
+  unknown:"Outcome unverified",
   suppressed:"Not sent",
   excluded:"Not eligible at recipient check",
-  eligible_in_review:"Eligible at latest check — not yet sent",
+  eligible_in_review:"Eligible · not yet sent",
 };
 function Metric({name,value,help}:{
   name:string;value:number|string;help?:string;
@@ -73,27 +78,26 @@ function Metric({name,value,help}:{
 function RecipientTable({title,rows}:{
   title:string;rows:Recipient[];
 }){
-  return <section className="comm-recipient-review" aria-label={title}>
+  return <section className="comm-recipient-review comm-result-people"
+    role="region" aria-label={title}>
     <div className="comm-review-heading"><h3>{title}</h3>
       <span className="comm-muted">{rows.length} contacts</span></div>
-    {rows.length===0?<p className="comm-muted">No recorded contacts in this section.</p>:
-      <div className="comm-campaign-table-scroll">
-        <table className="data-table comm-campaign-table">
-          <thead><tr>
-            <th scope="col">Contact</th><th scope="col">Phone</th>
-            <th scope="col">Result</th><th scope="col">Reason / time</th>
-          </tr></thead>
-          <tbody>{rows.map(row=><tr key={row.recipient_kind+row.recipient_id}>
-            <td><Link href={row.recipient_kind==="prospect"
+    {rows.length===0?<p className="comm-muted">No contacts yet.</p>:
+      <ul className="comm-result-list">{rows.map(row=>
+        <li key={row.recipient_kind+row.recipient_id} className="comm-result-person">
+          <div className="comm-result-person-main">
+            <Link href={row.recipient_kind==="prospect"
               ?"/prospects/"+row.recipient_id:"/promoters/"+row.recipient_id}>
-              {row.name}</Link></td>
-            <td>{row.phone_masked}</td>
-            <td>{statuses[row.status]??row.status}</td>
-            <td>{row.reason?(reasons[row.reason]??row.reason.replaceAll("_"," ")):
-              row.finished_at?istDisplay(row.finished_at):"—"}</td>
-          </tr>)}</tbody>
-        </table>
-      </div>}
+              {row.name}</Link>
+            <small>{row.phone_masked}</small>
+          </div>
+          <div className="comm-result-person-outcome">
+            <strong>{statuses[row.status]??row.status}</strong>
+            {(row.reason||row.finished_at)&&<small>{
+              row.reason?(reasons[row.reason]??row.reason.replaceAll("_"," ")):
+              row.finished_at?istDisplay(row.finished_at):""}</small>}
+          </div>
+        </li>)}</ul>}
   </section>;
 }
 
@@ -196,42 +200,30 @@ export function CampaignResultDetails({id,onBack}:{
       {notice&&<p role="status" className="form-success">{notice}</p>}
       {details&&s&&<>
         <p className="comm-muted">
-          {details.planned_for?"Planned for "+istDisplay(details.planned_for):
-            "Ready for manual approval (not yet scheduled)"}
-          {" · "}Campaign state: {s.run_status.replaceAll("_"," ")}
+          {details.planned_for?"Planned "+istDisplay(details.planned_for):"Send after approval"}
+          {" · "} {s.run_status==="not_approved"?"Not approved":s.run_status}
         </p>
-        <div className="crm-summary-strip">
-          <Metric name="Approved recipients" value={s.planned}/>
-          <Metric name="Submitted to gateway" value={s.submitted_unverified}
-            help="Delivery unverified"/>
-          <Metric name="Rejected" value={s.rejected}/>
-          <Metric name="Not sent / excluded"
-            value={s.suppressed_after_approval+s.excluded_in_review}
-            help="Latest preflight and later suppression"/>
-          <Metric name="Pending" value={s.queued+s.claimed}/>
-          <Metric name="Unknown" value={s.unknown} help="No automatic retry"/>
-          <Metric name="Delivered" value={s.delivered??"Unavailable"}
-            help="Provider callback not verified"/>
-          <Metric name="Read / seen" value={s.read??"Unavailable"}
-            help="Provider callback not verified"/>
+        <div className="comm-result-stats">
+          <Metric name="Accepted by Saasyto" value={s.submitted_unverified}/>
+          <Metric name="Not sent" value={
+            s.suppressed_after_approval+s.excluded_in_review}/>
+          <Metric name="Failed" value={s.rejected}/>
+          <Metric name="Pending / unknown" value={s.queued+s.claimed+s.unknown}/>
         </div>
-        <div className="comm-provider-status" role="status">
-          <strong>Message delivery evidence</strong>
-          <small>{details.delivery_notice}</small>
-        </div>
+        <p className="comm-muted" role="status">
+          Delivered and read: <strong>Not verified</strong>. Saasyto accepting
+          a message does not mean it reached the recipient.
+        </p>
         {older&&!run&&<p className="form-error" role="status">
           This campaign predates Saasyto activation. Create a new campaign
           to obtain a valid delivery approval.</p>}
         {provider?.local_test_mode&&!run&&details.eligible_in_review>1&&
           <p className="form-error" role="status">
-            All eligible active contacts are included in the review, but
-            localhost sending is restricted to one explicitly allowlisted
-            test number. Approval of multiple recipients remains disabled;
-            this is a provider safety gate, not missing prospect data.
+            Local test allows one authorized recipient. This campaign has
+            multiple eligible contacts.
           </p>}
         {run&&<p className="comm-muted">
-          This campaign already has a delivery attempt record. To send a
-          further message, create a new campaign rather than resending it.
+          Sending attempted. For another message, create a new campaign.
         </p>}
         <div className="comm-recipient-review" role="region" aria-label="Recipient approval">
           <div className="comm-review-heading">
@@ -244,22 +236,14 @@ export function CampaignResultDetails({id,onBack}:{
             <span><strong>{details.eligible_in_review}</strong> Eligible</span>
             <span><strong>{details.excluded_in_review}</strong> Excluded</span>
           </div>
-          <p className="comm-muted">
-            {details.segment==="active"
-              ?"Active means the CRM Active status shown in Prospects, not only a payment-derived status. "
-              :""}
-            {details.category==="reminder"
-              ?"Reminders include CRM-active contacts with WhatsApp permission; inactive or opted-out contacts cannot be messaged."
-              :"Updates and announcements also require a documented general-message opt-in."}
-          </p>
+
           {Object.keys(details.excluded_reasons).length>0&&
-            <div className="comm-provider-status">
-              <strong>Exclusions during latest check</strong>
-              <ul>{Object.entries(details.excluded_reasons).map(([key,count])=>
-                <li key={key}>{reasons[key]??key.replaceAll("_"," ")}: {count}</li>)}</ul>
-            </div>}
+            <p className="comm-muted">Excluded: {Object.entries(
+              details.excluded_reasons).map(([key,count])=>
+                (reasons[key]??key.replaceAll("_"," "))+" ("+count+")"
+              ).join(" · ")}</p>}
           <div className="comm-review-footer">
-            <span className="comm-muted">Checking does not send messages.</span>
+            <span className="comm-muted">Review only; no messages sent yet.</span>
             {!run&&<button type="button" className="btn btn-secondary"
               disabled={busy} onClick={()=>void checkRecipients()}>
               {busy?"Working…":"Check recipients"}</button>}
@@ -272,18 +256,11 @@ export function CampaignResultDetails({id,onBack}:{
               disabled={busy} onClick={()=>void cancel()}>Stop pending sends</button>}
           </div>
         </div>
-        <RecipientTable title="Eligible contacts (latest recipient check)"
-          rows={details.eligible_recipients}/>
         <RecipientTable title="Sending results by contact" rows={details.recipients}/>
+        {!run&&<RecipientTable title="Eligible contacts (latest recipient check)"
+          rows={details.eligible_recipients}/>}
         <RecipientTable title="Excluded before sending (latest review)"
           rows={details.excluded_recipients}/>
-        <p className="comm-muted">
-          Names and masked numbers reflect the latest review snapshot.
-          Eligible at check is not proof of delivery or a queued message.
-          A recipient excluded during the latest check was not submitted by
-          that check. Never interpret submitted-to-gateway as delivered or seen
-          without verified callbacks.
-        </p>
       </>}
   </section>;
 }

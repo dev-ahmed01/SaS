@@ -147,3 +147,41 @@ No uncertain send is automatically retried.
 - QR-linked WhatsApp sessions may not have the same compliance guarantees
   as the official Meta WhatsApp Business Platform. Obtain sender and consent
   approvals before automatic business-initiated messages.
+
+## If the CRM says accepted but the WhatsApp recipient sees nothing
+
+The first local campaign has only confirmed **Saasyto gateway acceptance**.
+That is not a WhatsApp delivery or read receipt. A previous accepted attempt
+must not be repeated automatically; manually verify with the intended
+recipient and the connected sender's WhatsApp chats.
+
+1. Check the intended Saasyto instance is **connected** to the correct sender
+   phone and active. The account must not be expired or disconnected.
+2. Check the exact recipient number (with country code) on the CRM contact and
+   the authorized phone's WhatsApp inbox. The CRM shows only masked numbers.
+3. A bulk-campaign **Sent** report in Saasyto is not evidence about a separate
+   `/api/send` single-message request. Do not confuse those report types.
+4. New connector versions record safe error codes: `provider_rejected`,
+   `provider_http_error`, `provider_timeout`, `network_error` and
+   `unverified_provider_reply`. This does **not** expose the sender's token,
+   phone numbers, or provider response bodies.
+5. If the provider does not return a documented success indication, the CRM
+   now records **unknown** rather than pretending it sent the message.
+   Unknown, claimed, or timed-out attempts are not retried.
+6. If a controlled test is authorized, create **a new campaign** after verifying
+   the sender and a currently opted-in recipient. The local one-phone pilot
+   still limits sending to a single explicitly allowlisted contact.
+
+Historical `accepted_unverified` records are left unchanged. There is
+currently **no authenticated delivery/read webhook** and no provider message-ID
+reconciliation. Read / seen tracking must remain unverified until those
+capabilities are confirmed in the provider's actual API for this sender.
+
+### Existing consent is not hardcoded
+
+Recording a real, evidence-backed WhatsApp opt-in is enough: it takes
+precedence over an old false checkbox in the eligibility evaluator.
+An explicit opt-out always wins. Simply changing someone to CRM Active
+never creates a WhatsApp opt-in event. If the Foundation has a pre-existing
+permission register, record or import its documented authorizations;
+do not silently fabricate opt-in evidence for every active CRM record.

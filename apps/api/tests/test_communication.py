@@ -553,6 +553,54 @@ def test_documented_whatsapp_opt_in_syncs_legacy_reminder_checkbox(system):
         assert [event.decision for event in flags] == ["opted_in", "opted_out"]
 
 
+def test_prior_evidenced_whatsapp_consent_counts_despite_stale_legacy_flag(system):
+    """Existing opt-in is authoritative; an opt-out still blocks sending."""
+    client, engine = system
+    csrf = login(client)
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Previous consent contact",
+        "mobile_number": "+919877771234",
+        "area_city": "Bengaluru",
+        "whatsapp_opt_in": False,
+    })
+    assert created.status_code == 201, created.text
+    prospect = activate_for_communication(client, csrf, created.json())
+    pid = prospect["id"]
+    consent = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": pid,
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "existing signed register", "evidence_reference": "register-07",
+    })
+    assert consent.status_code == 201, consent.text
+    # Simulates a previously saved evidence event with an unsynchronized
+    # legacy checkbox. This state existed before the consent-sync fix.
+    with Session(engine) as db:
+        person = db.get(Prospect, uuid.UUID(pid))
+        person.whatsapp_opt_in = False
+        db.commit()
+    campaign = create_campaign(client, csrf, title="Existing opted-in review").json()
+    check = client.post(
+        "/v1/communication/campaigns/"+campaign["id"]+"/preparations",
+        headers=csrf, json={"request_id": str(uuid.uuid4()), "simulation_only": True},
+    )
+    assert check.status_code == 201, check.text
+    assert check.json()["eligible_count"] == 1
+    assert check.json()["suppressed_count"] == 0
+
+    revocation = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": pid,
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "recipient STOP request",
+    })
+    assert revocation.status_code == 201, revocation.text
+    again = client.post(
+        "/v1/communication/campaigns/"+campaign["id"]+"/preparations",
+        headers=csrf, json={"request_id": str(uuid.uuid4()), "simulation_only": True},
+    )
+    assert again.status_code == 201, again.text
+    assert again.json()["exclusion_reasons"] == {"opted_out": 1}
+
+
 def test_reminder_active_contacts_are_reviewed_without_auto_opt_in(system):
     """All Admin-active candidates enter review; only authorized ones pass."""
     client, _ = system

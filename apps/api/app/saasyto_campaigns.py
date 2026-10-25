@@ -343,10 +343,13 @@ def run_due(
         else:
             phone, message = eligibility
             try:
-                status = send_text(cfg, phone=phone, message=message).state
+                submission = send_text(cfg, phone=phone, message=message)
+                status = submission.state
+                reason = submission.reason or (
+                    None if status == "accepted_unverified" else status
+                )
             except (ValueError, TypeError):
-                status = "unknown"
-            reason = None if status == "accepted_unverified" else status
+                status, reason = "unknown", "invalid_send_request"
         db.refresh(item)
         if item.status == "claimed":
             item.status = status
