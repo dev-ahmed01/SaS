@@ -221,6 +221,14 @@ export function CampaignResultDetails({id}:{id:string}){
             <span><strong>{details.eligible_in_review}</strong> Eligible</span>
             <span><strong>{details.excluded_in_review}</strong> Excluded</span>
           </div>
+          <p className="comm-muted">
+            {details.segment==="active"
+              ?"Active means the CRM Active status shown in Prospects, not only a payment-derived status. "
+              :""}
+            {details.category==="reminder"
+              ?"Reminders include CRM-active contacts with WhatsApp permission; inactive or opted-out contacts cannot be messaged."
+              :"Updates and announcements also require a documented general-message opt-in."}
+          </p>
           {Object.keys(details.excluded_reasons).length>0&&
             <div className="comm-provider-status">
               <strong>Exclusions during latest check</strong>
