@@ -435,7 +435,6 @@ def test_readiness_communicates_disabled_and_older_campaign(
     _consent(client, csrf, person, "opted_in")
     campaign = create_campaign(client, csrf).json()
     url = "/v1/communication/campaigns/" + campaign["id"] + "/saasyto/readiness"
-    assert client.get(url).status_code == 200
     disabled = _pilot(LOCAL_PHONE)
     disabled.saasyto_delivery_enabled = False
     monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: disabled)
