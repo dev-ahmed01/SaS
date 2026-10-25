@@ -17,6 +17,11 @@ function allowed(parts:string[],method:string):string|null{
   if(parts.length===1&&name==="consent-events"&&["GET","POST"].includes(method))return "/consent-events";
   if(parts.length===1&&["templates","campaigns","rules"].includes(name)&&
     ["GET","POST"].includes(method))return "/"+name;
+  if(parts.length===2&&name==="campaigns"&&id==="results"&&method==="GET")
+    return "/campaigns/results";
+  if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
+    action==="results"&&method==="GET")
+    return "/campaigns/"+id+"/results";
   if(parts.length===2&&name==="templates"&&UUID.test(id)&&
     ["PATCH","DELETE"].includes(method))return "/templates/"+id;
   if(parts.length===2&&name==="rules"&&UUID.test(id)&&method==="DELETE")
