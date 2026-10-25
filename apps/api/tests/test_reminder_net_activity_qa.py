@@ -3,7 +3,7 @@
 Synthetic SQLite tenant + FastAPI requests only. No external sender is enabled.
 """
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -120,7 +120,7 @@ def test_ist_midnight_changes_reminder_eligibility_without_manual_status_refresh
     # Fix the historical enrollment for this controlled Sep->Nov transition.
     with Session(engine) as db:
         sponsor = db.scalars(select(Prospect)).one()
-        sponsor.start_month = month_start(ist_today()).replace(month=9)
+        sponsor.start_month = date(2026, 9, 1)
         rate = db.scalars(select(SponsorshipRate)).one()
         rate.effective_month = sponsor.start_month
         db.commit()
