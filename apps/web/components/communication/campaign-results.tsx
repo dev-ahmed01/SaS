@@ -23,7 +23,8 @@ type CampaignDetails={
   summary:Summary;latest_review_at:string|null;
   eligible_in_review:number;excluded_in_review:number;
   excluded_reasons:Record<string,number>;
-  recipients:Recipient[];excluded_recipients:Recipient[];
+  recipients:Recipient[];eligible_recipients:Recipient[];
+  excluded_recipients:Recipient[];
   delivery_notice:string;
 };
 type Review={
@@ -58,6 +59,7 @@ const statuses:Record<string,string>={
   unknown:"Unknown — do not retry automatically",
   suppressed:"Not sent",
   excluded:"Not eligible at recipient check",
+  eligible_in_review:"Eligible at latest check — not yet sent",
 };
 function Metric({name,value,help}:{
   name:string;value:number|string;help?:string;
@@ -239,13 +241,17 @@ export function CampaignResultDetails({id}:{id:string}){
               disabled={busy} onClick={()=>void cancel()}>Stop pending sends</button>}
           </div>
         </div>
+        <RecipientTable title="Eligible contacts (latest recipient check)"
+          rows={details.eligible_recipients}/>
         <RecipientTable title="Sending results by contact" rows={details.recipients}/>
         <RecipientTable title="Excluded before sending (latest review)"
           rows={details.excluded_recipients}/>
         <p className="comm-muted">
-          Numbers are masked. A recipient excluded during the latest check was
-          not submitted by that check. Never interpret submitted-to-gateway as
-          delivered or seen without verified callbacks.
+          Names and masked numbers reflect the latest review snapshot.
+          Eligible at check is not proof of delivery or a queued message.
+          A recipient excluded during the latest check was not submitted by
+          that check. Never interpret submitted-to-gateway as delivered or seen
+          without verified callbacks.
         </p>
       </>}
   </section>;
