@@ -59,7 +59,7 @@ export function ContactConsent({
       });
       setNotice(decision==="opted_out"
         ?"Opt-out recorded. This channel will be suppressed."
-        :"Documented permission recorded. Sending remains disabled.");
+        :"Documented permission recorded. No message was sent; review recipients in Communication before sending.");
       setEditing(null);setRevision(v=>v+1);
     }catch(e){
       setError(e instanceof Error?e.message:"Could not record consent.");
