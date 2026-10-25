@@ -3,9 +3,11 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import Settings
 from app.models import AuditEvent
 from app.saasyto_client import Submission
 from app.security import utc_now
@@ -163,3 +165,38 @@ def test_activation_notice_respects_sender_cutoff(api, monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["activation_notice"] == "before_sender_activation"
     assert messages == []
+
+
+def test_consent_recorded_after_registration_requires_current_prospect_version(
+    api, monkeypatch,
+):
+    client, csrf, _ = api
+    codes, messages = setup(monkeypatch)
+    person = create(client, csrf, "+918100005508", False)
+    grant = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": person["id"],
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "explicit signed permission",
+        "evidence_reference": "registration-consent-log-508",
+    })
+    assert grant.status_code == 201, grant.text
+    issued = request(client, csrf, person)
+    assert issued.status_code == 200, issued.text
+    challenge = issued.json()["challenge_id"]
+    stale = activate(client, csrf, person, codes[0], challenge)
+    assert stale.status_code == 409
+    assert messages == []
+    person = client.get("/v1/prospects/" + person["id"]).json()
+    response = activate(client, csrf, person, codes[0], challenge)
+    assert response.status_code == 200, response.text
+    assert response.json()["activation_notice"] == "accepted_unverified"
+    assert len(messages) == 1
+
+
+def test_notice_setting_fails_closed_without_approved_transports():
+    with pytest.raises(ValidationError, match="Activation notice requires"):
+        Settings(
+            database_url="sqlite+pysqlite:///:memory:", app_env="test",
+            otp_activation_notice_enabled=True, otp_delivery_enabled=False,
+            saasyto_delivery_enabled=False,
+        )
