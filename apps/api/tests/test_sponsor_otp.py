@@ -274,3 +274,41 @@ def test_opted_out_activation_notification_is_never_submitted(api, monkeypatch):
     assert confirmation.status_code == 200, confirmation.text
     assert confirmation.json()["crm_stage"] == "active"
     assert confirmation.json()["activation_notice"] == "skipped_no_permission"
+
+
+def test_verified_new_prospect_reverts_inactive_after_phone_change(api, monkeypatch):
+    client, csrf, _engine = api
+    person = _create(client, csrf, "Changed after activating", "+918100000024")
+    cfg = SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET, otp_activates_prospect=True,
+        otp_activation_notice_enabled=False,
+    )
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.prospects.get_settings", lambda: SimpleNamespace(
+        upi_match_secret="synthetic-upi-hmac-for-otp-change-test-value",
+        otp_activates_prospect=True,
+    ))
+    delivered = []
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, _phone, code: delivered.append(code))
+    endpoint = "/v1/prospects/" + person["id"] + "/otp"
+    issued = client.post(endpoint + "/request", headers=csrf).json()
+    done = client.post(endpoint + "/verify", headers=csrf, json={
+        "challenge_id": issued["challenge_id"], "code": delivered[0],
+    })
+    assert done.status_code == 200 and done.json()["crm_stage"] == "active"
+    current = client.get("/v1/prospects/" + person["id"]).json()
+    changed = client.patch("/v1/prospects/" + person["id"], headers=csrf, json={
+        "version": current["version"], "mobile_number": "+918100000025",
+        "whatsapp_number": "+918100000025",
+    })
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["crm_stage"] == "inactive"
+    assert changed.json()["whatsapp_opt_in"] is False
+    assert client.get(endpoint + "/status").json()["verified"] is False
+    without_code = client.post("/v1/prospects/" + person["id"] + "/stage",
+                               headers=csrf, json={
+        "version": changed.json()["version"], "stage": "active",
+        "note": "Manual override after address change",
+    })
+    assert without_code.status_code == 409
