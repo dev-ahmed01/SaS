@@ -39,6 +39,10 @@ type Provider={
   delivery_enabled:boolean;local_test_mode?:boolean;
   activation_cutoff?:string|null;
 };
+type Readiness={
+  ready:boolean;code:string;message:string;eligible_count:number;
+  local_test_mode:boolean;permitted_phone_masked:string|null;
+};
 const reasons:Record<string,string>={
   no_general_consent:"General-message permission not recorded",
   no_whatsapp_consent:"WhatsApp permission not recorded",
@@ -109,6 +113,7 @@ export function CampaignResultDetails({id,onBack}:{
   const [review,setReview]=useState<Review|null>(null);
   const [run,setRun]=useState<DeliveryRun|null>(null);
   const [provider,setProvider]=useState<Provider|null>(null);
+  const [readiness,setReadiness]=useState<Readiness|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -118,16 +123,18 @@ export function CampaignResultDetails({id,onBack}:{
     // cannot be reached. These read failures never authorize delivery.
     const result=await apiGet<CampaignDetails>("/campaigns/"+id+"/results");
     setDetails(result);
-    const [checks,dispatch,availability]=await Promise.allSettled([
+    const [checks,dispatch,availability,approvalCheck]=await Promise.allSettled([
       apiGet<Review[]>("/campaigns/"+id+"/preparations"),
       apiGet<DeliveryRun|null>("/campaigns/"+id+"/saasyto"),
       apiGet<Provider>("/provider/saasyto"),
+      apiGet<Readiness>("/campaigns/"+id+"/saasyto/readiness"),
     ]);
     setReview(checks.status==="fulfilled"?(checks.value[0]??null):null);
     setRun(dispatch.status==="fulfilled"?dispatch.value:null);
     setProvider(availability.status==="fulfilled"?availability.value:null);
+    setReadiness(approvalCheck.status==="fulfilled"?approvalCheck.value:null);
     if(checks.status==="rejected"||dispatch.status==="rejected"||
-      availability.status==="rejected"){
+      availability.status==="rejected"||approvalCheck.status==="rejected"){
       setNotice("Campaign results loaded, but some delivery settings are unavailable. "+
         "Live approval is disabled until those settings can be verified.");
     }
@@ -154,7 +161,8 @@ export function CampaignResultDetails({id,onBack}:{
   const futurePlan=Boolean(details?.planned_for&&
     new Date(details.planned_for).getTime()>Date.now());
   async function approve(){
-    if(busy||!review||!provider?.delivery_enabled||review.eligible_count<1||run)return;
+    if(busy||!review||!readiness?.ready||!provider?.delivery_enabled||
+      review.eligible_count<1||run)return;
     const immediate=localImmediate;
     if(!window.confirm(immediate
       ? "Send one WhatsApp message now to the authorized test contact? "+
@@ -256,7 +264,7 @@ export function CampaignResultDetails({id,onBack}:{
         </p>
         <div className="comm-result-stats">
           <Metric name="Accepted by Saasyto" value={s.submitted_unverified}/>
-          <Metric name="Not sent" value={
+          <Metric name="Excluded / not sent" value={
             s.suppressed_after_approval+s.excluded_in_review}/>
           <Metric name="Failed" value={s.rejected}/>
           <Metric name="Pending / unknown" value={s.queued+s.claimed+s.unknown}/>
@@ -281,7 +289,18 @@ export function CampaignResultDetails({id,onBack}:{
         </p>}
         {provider?.local_test_mode&&<p className="comm-muted">
           Local testing is limited to one authorized WhatsApp number.
+          {readiness?.permitted_phone_masked
+            ? " Configured test recipient: "+readiness.permitted_phone_masked+"."
+            : ""}
         </p>}
+        {!run&&readiness&&!readiness.ready&&
+          <p className="form-error" role="alert">
+            <strong>Cannot send yet: </strong>{readiness.message}
+          </p>}
+        {!run&&!readiness&&provider?.delivery_enabled&&
+          <p className="form-error" role="alert">
+            Approval requirements could not be checked. Refresh results.
+          </p>}
         <div className="comm-recipient-review" role="region" aria-label="Recipient approval">
           <div className="comm-review-heading">
             <h3>Recipient review</h3>
@@ -312,7 +331,7 @@ export function CampaignResultDetails({id,onBack}:{
               </button>}
             {!run&&provider?.delivery_enabled&&<button type="button"
               className="btn btn-primary" disabled={
-                busy||older||!review||review.eligible_count===0||
+                busy||older||!review||!readiness?.ready||review.eligible_count===0||
                 Boolean(provider.local_test_mode&&review.eligible_count!==1)
               } onClick={()=>void approve()}>
                 {busy?"Working…":localImmediate?"Send WhatsApp now":"Approve WhatsApp delivery"}
