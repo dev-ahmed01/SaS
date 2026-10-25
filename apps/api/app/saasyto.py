@@ -16,6 +16,7 @@ class ProviderStatus(BaseModel):
     transport: str
     delivery_enabled: bool
     local_test_mode: bool = False
+    activation_cutoff: str | None = None
     sender_approved: bool
     credentials_configured: bool
     webhook_verified: bool
@@ -37,6 +38,10 @@ def saasyto_status(
         transport="one_text_per_recipient",
         delivery_enabled=cfg.saasyto_delivery_enabled,
         local_test_mode=getattr(cfg, "saasyto_local_test_enabled", False),
+        activation_cutoff=(
+            cfg.saasyto_enable_after.isoformat()
+            if getattr(cfg, "saasyto_enable_after", None) else None
+        ),
         sender_approved=cfg.saasyto_sender_approved,
         credentials_configured=credentials,
         webhook_verified=False,
