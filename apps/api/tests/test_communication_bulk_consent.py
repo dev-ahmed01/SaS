@@ -75,14 +75,18 @@ def test_bulk_attestation_requires_evidence_skips_optouts_and_does_not_send(test
     preview = client.get(url)
     assert preview.status_code == 200
     assert preview.headers["cache-control"] == "no-store"
-    assert preview.json() == {
+    reviewed = preview.json()
+    assert {key: value for key, value in reviewed.items()
+            if key != "review_fingerprint"} == {
         "active":3, "already_documented":1, "needs_confirmation":1,
         "opted_out":1, "no_number":0,
     }
+    assert len(reviewed["review_fingerprint"]) == 64
 
     data = {
         "confirm":"I_HAVE_VERIFIED_EXISTING_CONSENT",
         "expected_needs_confirmation":1,
+        "expected_review_fingerprint":reviewed["review_fingerprint"],
         "source":"Verified organizational opt-in register",
         "evidence_reference":"signed-register-2026-oct",
     }
@@ -95,10 +99,12 @@ def test_bulk_attestation_requires_evidence_skips_optouts_and_does_not_send(test
     }).status_code == 422
     changed = client.post(url, headers=csrf, json=data)
     assert changed.status_code == 200, changed.text
-    assert changed.json() == {
+    assert {key: value for key, value in changed.json().items()
+            if key != "review_fingerprint"} == {
         "active":3, "already_documented":2, "needs_confirmation":0,
         "opted_out":1, "no_number":0,
     }
+    assert changed.json()["review_fingerprint"] != reviewed["review_fingerprint"]
 
     with Session(engine) as db:
         confirmed = db.scalars(select(CommunicationConsentEvent).where(
@@ -137,3 +143,66 @@ def test_existing_permission_review_is_read_only(test_system):
         assert preview.json()["needs_confirmation"] == 1
     with Session(engine) as db:
         assert db.scalars(select(CommunicationConsentEvent)).all() == []
+
+
+def test_attestation_rejects_swapped_audience_and_changed_phone(test_system):
+    client, engine = test_system
+    csrf = login(client)
+    url = "/v1/communication/active-consent-review"
+    people = []
+    for index in range(2):
+        result = client.post("/v1/prospects", headers=csrf, json={
+            "full_name": "Snapshot contact "+str(index),
+            "mobile_number": "+9198443300"+str(10+index),
+            "area_city": "Bengaluru", "whatsapp_opt_in": False,
+        })
+        assert result.status_code == 201, result.text
+        people.append(result.json())
+    activate_for_communication(client, csrf, people[0])
+    first = client.get(url).json()
+    assert first["active"] == first["needs_confirmation"] == 1
+    data = {
+        "confirm": "I_HAVE_VERIFIED_EXISTING_CONSENT",
+        "expected_needs_confirmation": 1,
+        "expected_review_fingerprint": first["review_fingerprint"],
+        "source": "Verified signed consent register",
+        "evidence_reference": "register-snapshot-2026",
+    }
+
+    # Keep the same total count while replacing the actual recipient.
+    with Session(engine) as db:
+        removed = db.get(Prospect, uuid.UUID(people[0]["id"]))
+        added = db.get(Prospect, uuid.UUID(people[1]["id"]))
+        removed.crm_stage = "inactive"
+        added.crm_stage = "active"
+        removed.version += 1
+        added.version += 1
+        db.commit()
+    swapped = client.get(url).json()
+    assert swapped["needs_confirmation"] == first["needs_confirmation"] == 1
+    assert swapped["review_fingerprint"] != first["review_fingerprint"]
+    assert client.post(url, headers=csrf, json=data).status_code == 409
+
+    # A phone edit also invalidates an otherwise identical preview.
+    with Session(engine) as db:
+        person = db.get(Prospect, uuid.UUID(people[1]["id"]))
+        person.mobile_number = "+919844330099"
+        person.version += 1
+        db.commit()
+    assert client.post(url, headers=csrf, json={
+        **data, "expected_review_fingerprint": swapped["review_fingerprint"],
+    }).status_code == 409
+    with Session(engine) as db:
+        assert db.scalars(select(CommunicationConsentEvent)).all() == []
+
+    fresh = client.get(url).json()
+    assert fresh["review_fingerprint"] != swapped["review_fingerprint"]
+    approved = client.post(url, headers=csrf, json={
+        **data, "expected_review_fingerprint": fresh["review_fingerprint"],
+    })
+    assert approved.status_code == 200, approved.text
+    with Session(engine) as db:
+        events = db.scalars(select(CommunicationConsentEvent)).all()
+        assert len(events) == 1
+        assert str(events[0].recipient_id) == people[1]["id"]
+        assert db.get(Prospect, uuid.UUID(people[0]["id"])).whatsapp_opt_in is False
