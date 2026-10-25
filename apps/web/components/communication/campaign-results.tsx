@@ -10,6 +10,7 @@ type Summary={
   campaign_id:string;run_status:Status;planned:number;
   submitted_unverified:number;rejected:number;unknown:number;
   queued:number;claimed:number;suppressed_after_approval:number;
+  excluded_in_review:number;
   delivered:number|null;read:number|null;
 };
 type Recipient={
@@ -192,8 +193,9 @@ export function CampaignResultDetails({id}:{id:string}){
           <Metric name="Submitted to gateway" value={s.submitted_unverified}
             help="Delivery unverified"/>
           <Metric name="Rejected" value={s.rejected}/>
-          <Metric name="Not submitted" value={s.suppressed_after_approval}
-            help="Stopped after approval"/>
+          <Metric name="Not sent / excluded"
+            value={s.suppressed_after_approval+s.excluded_in_review}
+            help="Latest preflight and later suppression"/>
           <Metric name="Pending" value={s.queued+s.claimed}/>
           <Metric name="Unknown" value={s.unknown} help="No automatic retry"/>
           <Metric name="Delivered" value={s.delivered??"Unavailable"}
