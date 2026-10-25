@@ -726,14 +726,15 @@ def update_prospect(
             changed.get("whatsapp_number", prospect.whatsapp_number)
             or changed.get("mobile_number", prospect.mobile_number)
         )
-        changed["whatsapp_verified_at"] = None
         if new_address != old_address:
+            # Only the effective WhatsApp destination determines verified
+            # ownership; editing a secondary mobile number cannot revoke it.
+            changed["whatsapp_verified_at"] = None
             changed["whatsapp_opt_in"] = False
             if (
                 getattr(get_settings(), "otp_activates_prospect", False)
                 and prospect.crm_stage == "active"
                 and prospect.lifecycle_status == "new"
-                and prospect.whatsapp_verified_at is not None
                 and prospect.last_verified_payment_at is None
             ):
                 # An OTP-activated registration cannot remain verified/active
