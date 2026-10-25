@@ -85,3 +85,35 @@ def test_activation_notice_never_sends_after_optout(api, monkeypatch):
     assert result.status_code == 200, result.text
     assert result.json()["status"] == "active"
     assert result.json()["activation_notice"] == "suppressed_no_general_consent"
+
+
+def test_activation_notice_does_not_infer_consent_from_verified_phone(api, monkeypatch):
+    client, csrf, _ = api
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "No permission sponsor", "mobile_number": "+918100000083",
+        "area_city": "Bengaluru", "whatsapp_opt_in": False,
+    }).json()
+    cfg = SimpleNamespace(
+        otp_delivery_enabled=True,
+        otp_secret="synthetic-otp-test-secret-more-than-thirty-two-characters",
+        otp_activation_notice_enabled=True,
+        saasyto_delivery_enabled=True,
+        saasyto_sender_approved=True,
+    )
+    codes = []
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, _phone, code: codes.append(code))
+    monkeypatch.setattr("app.activation_notice.send_text",
+                        lambda *_args, **_kw:
+                        (_ for _ in ()).throw(AssertionError("No consent")))
+    base = "/v1/prospects/" + person["id"] + "/otp"
+    issue = client.post(base + "/request", headers=csrf)
+    assert issue.status_code == 200, issue.text
+    confirmation = client.post(base + "/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": issue.json()["challenge_id"],
+        "code": codes[0], "reactivation_reason": None,
+    })
+    assert confirmation.status_code == 200, confirmation.text
+    assert confirmation.json()["status"] == "active"
+    assert confirmation.json()["activation_notice"] == "suppressed_no_general_consent"
