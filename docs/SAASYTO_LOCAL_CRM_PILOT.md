@@ -157,12 +157,13 @@ or unrestricted sending to all active contacts.
 3. **Communication → Campaigns → Review → Check recipients**.
    Check `1 Eligible`; if it shows `0`, fix consent/segment. If it shows
    `2+`, restrict the segment (not by disabling other people's consent).
-4. Click **Approve WhatsApp delivery** and confirm. This queues a one-time
-   send, not a separate Saasyto campaign.
-5. With Terminal 3 running, click **Refresh delivery attempts** on the
-   Campaigns review pane. The only accepted status initially available
-   is `accepted_unverified`, not a delivery receipt. Verify actual receipt
-   on the authorized phone and in Saasyto's message history.
+4. For **Review & send**, click **Send WhatsApp now** and confirm.
+   This submits one authorized request immediately without the local worker.
+   For **Plan for later**, click **Approve WhatsApp delivery** to queue it
+   for the separate private worker.
+5. Refresh campaign results. `accepted_unverified` means only that the
+   gateway accepted the submission—not that WhatsApp delivered it. Check
+   actual receipt on the recipient phone and the connected sender's history.
 
 The local pilot checks the phone allowlist on **approval, dispatch
 eligibility, and final HTTP transport**. Changes to consent, opt-out,
