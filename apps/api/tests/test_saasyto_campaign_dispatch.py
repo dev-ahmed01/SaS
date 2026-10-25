@@ -59,12 +59,12 @@ def _cfg(enabled=True, cutoff=None):
     )
 
 
-def _person(client, csrf, suffix):
+def _person(client, csrf, suffix, *, consent=True):
     result = client.post("/v1/prospects", headers=csrf, json={
         "full_name": "Saasyto Test " + suffix,
         "mobile_number": "+91989900" + suffix,
         "area_city": "Bengaluru",
-        "whatsapp_opt_in": True,
+        "whatsapp_opt_in": consent,
     })
     assert result.status_code == 201, result.text
     return activate_for_communication(client, csrf, result.json())
@@ -224,7 +224,7 @@ def test_campaign_results_include_excluded_contacts_and_mask_numbers(dispatch_sy
     client, _ = dispatch_system
     csrf = login(client)
     allowed = _person(client, csrf, "1101")
-    missing_general_consent = _person(client, csrf, "1102")
+    missing_general_consent = _person(client, csrf, "1102", consent=False)
     _consent(client, csrf, allowed, "opted_in")
     campaign = create_campaign(client, csrf, title="Recipient results review")
     assert campaign.status_code == 201
@@ -245,7 +245,7 @@ def test_campaign_results_include_excluded_contacts_and_mask_numbers(dispatch_sy
     assert record["summary"]["submitted_unverified"] == 0
     assert record["summary"]["delivered"] is None
     assert record["summary"]["read"] is None
-    assert record["excluded_reasons"] == {"no_general_consent": 1}
+    assert record["excluded_reasons"] == {"no_whatsapp_consent": 1}
     assert len(record["excluded_recipients"]) == 1
     excluded = record["excluded_recipients"][0]
     assert excluded["recipient_id"] == missing_general_consent["id"]

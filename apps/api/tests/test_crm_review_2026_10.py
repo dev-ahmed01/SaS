@@ -3,6 +3,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -80,12 +81,8 @@ def test_inactive_default_followup_and_active_only_collections(api):
                             headers=csrf, json={
         "version": updated["version"], "stage": "active",
     })
-    assert no_reason.status_code == 422
-    activated = client.post("/v1/prospects/" + sponsor["id"] + "/stage",
-                            headers=csrf, json={
-        "version": updated["version"], "stage": "active",
-        "note": "Promoter confirmed their wish to begin",
-    })
+    assert no_reason.status_code == 409
+    activated = activate_with_test_otp(client, csrf, updated)
     assert activated.status_code == 200, activated.text
     accepted = client.post("/v1/collections", headers=csrf, json=body)
     assert accepted.status_code == 201, accepted.text

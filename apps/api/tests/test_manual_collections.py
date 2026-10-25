@@ -4,6 +4,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -65,10 +66,7 @@ def login(client):
 
 def activate_for_financial_flow(client, csrf, record):
     """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
-    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
-        "version": record["version"], "stage": "active",
-        "note": "Synthetic outreach completed for financial flow test",
-    })
+    response = activate_with_test_otp(client, csrf, record)
     assert response.status_code == 200, response.text
     return response.json()
 

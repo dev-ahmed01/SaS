@@ -5,6 +5,7 @@ All fixtures are synthetic and tenant-scoped; no real payment or message is sent
 import uuid
 from datetime import UTC, date, datetime
 
+from activation_helper import activate_with_test_otp
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -138,11 +139,7 @@ def test_payment_reversal_projection_agrees_across_promoter_and_prospect(api, mo
     _enrol_since(engine, person, date(2026, 9, 1))
     _assigned(client, csrf, promoter, person)
     path = "/v1/prospects/" + person["id"]
-    version = client.get(path).json()["version"]
-    activation = client.post(path + "/stage", headers=csrf, json={
-        "version": version, "stage": "active",
-        "note": "Synthetic sponsor confirmed for payment scenario",
-    })
+    activation = activate_with_test_otp(client, csrf, client.get(path).json())
     assert activation.status_code == 200, activation.text
     simulated = datetime(2026, 10, 31, 18, 33, tzinfo=UTC)
     monkeypatch.setattr("app.prospects.utc_now", lambda: simulated)

@@ -2,10 +2,13 @@
 import uuid
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import SponsorOtpChallenge
+from app.models import CommunicationConsentEvent, ProspectStageTransition, SponsorOtpChallenge
+from app.saasyto_client import Submission
+from app.sponsor_otp import OtpDeliveryUnconfirmed, _deliver
 
 pytest_plugins = ("test_crm_review_2026_10",)
 SECRET = "test-only-sponsor-otp-secret-that-is-long-enough"
@@ -141,3 +144,151 @@ def test_phone_change_invalidates_issued_code(api, monkeypatch):
         "challenge_id": req.json()["challenge_id"], "code": sent[0][1],
     })
     assert old.status_code == 400
+
+
+def test_first_activation_and_reactivation_are_otp_gated(api, monkeypatch):
+    client, csrf, engine = api
+    sent = []
+    _enable(monkeypatch, sent)
+    monkeypatch.setattr("app.sponsor_otp.COOLDOWN_SECONDS", 0)
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "First Activation Sponsor",
+        "mobile_number": "+918100000008", "area_city": "Bengaluru",
+        "whatsapp_opt_in": True,  # Explicit Admin attestation at registration.
+    })
+    assert created.status_code == 201, created.text
+    person = created.json()
+    root = "/v1/prospects/" + person["id"]
+    assert client.post(root + "/stage", headers=csrf, json={
+        "version": person["version"], "stage": "active",
+    }).status_code == 409
+    before = client.get(root).json()
+    assert before["crm_stage"] == "inactive"
+    with Session(engine) as db:
+        consent = db.scalars(select(CommunicationConsentEvent).where(
+            CommunicationConsentEvent.recipient_id == uuid.UUID(person["id"]),
+        )).all()
+        assert len(consent) == 1
+        assert consent[0].decision == "opted_in"
+        assert consent[0].evidence_reference
+
+    request = client.post(root + "/otp/request", headers=csrf)
+    assert request.status_code == 200, request.text
+    challenge = request.json()["challenge_id"]
+    wrong = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": challenge,
+        "code": "000000" if sent[-1][1] != "000000" else "111111",
+    })
+    assert wrong.status_code == 400
+    assert client.get(root).json()["crm_stage"] == "inactive"
+    activated = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": challenge,
+        "code": sent[-1][1],
+    })
+    assert activated.status_code == 200, activated.text
+    assert activated.json() == {"status": "active", "reactivation": False}
+    assert client.get(root).json()["crm_stage"] == "active"
+    assert client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": challenge,
+        "code": sent[-1][1],
+    }).status_code in (400, 409)
+    current = client.get(root).json()
+    inactive = client.post(root + "/stage", headers=csrf, json={
+        "version": current["version"], "stage": "inactive",
+        "reason": "timing",
+    })
+    assert inactive.status_code == 200, inactive.text
+    current = inactive.json()
+    assert current["crm_stage"] == "inactive"
+    assert client.post(root + "/stage", headers=csrf, json={
+        "version": current["version"], "stage": "active",
+        "note": "This must not bypass OTP",
+    }).status_code == 409
+    request_again = client.post(root + "/otp/request", headers=csrf)
+    assert request_again.status_code == 200, request_again.text
+    challenge_again = request_again.json()["challenge_id"]
+    missing_reason = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": current["version"], "challenge_id": challenge_again,
+        "code": sent[-1][1],
+    })
+    assert missing_reason.status_code == 422
+    valid = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": current["version"], "challenge_id": challenge_again,
+        "code": sent[-1][1], "reactivation_reason": "Sponsor wishes to return",
+    })
+    assert valid.status_code == 200, valid.text
+    assert valid.json()["reactivation"] is True
+    after = client.get(root).json()
+    assert after["crm_stage"] == "active"
+    assert len(after["stage_history"]) == 3
+    assert after["stage_history"][-1]["note"] == "Sponsor wishes to return"
+    assert after["whatsapp_opt_in"] is True
+    with Session(engine) as db:
+        assert db.scalars(select(ProspectStageTransition).where(
+            ProspectStageTransition.prospect_id == uuid.UUID(person["id"]),
+        )).all()
+
+
+def test_activation_without_marketing_permission_does_not_invent_consent(api, monkeypatch):
+    client, csrf, engine = api
+    sent = []
+    _enable(monkeypatch, sent)
+    person = _create(client, csrf, "No Auto Optin", "+918100000009")
+    base = "/v1/prospects/" + person["id"]
+    issued = client.post(base + "/otp/request", headers=csrf)
+    assert issued.status_code == 200
+    approved = client.post(base + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": issued.json()["challenge_id"],
+        "code": sent[-1][1],
+    })
+    assert approved.status_code == 200, approved.text
+    after = client.get(base).json()
+    assert after["crm_stage"] == "active"
+    assert after["whatsapp_opt_in"] is False
+    with Session(engine) as db:
+        assert db.scalars(select(CommunicationConsentEvent).where(
+            CommunicationConsentEvent.recipient_id == uuid.UUID(person["id"]),
+        )).all() == []
+
+
+def test_local_otp_uses_allowlisted_phone_only_and_does_not_claim_delivery(monkeypatch):
+    allowed = "+918100000010"
+    config = SimpleNamespace(otp_local_pilot_enabled=True, saasyto_local_test_phone=allowed)
+    sent = []
+
+    def fake_send(_cfg, *, phone, message):
+        sent.append((phone, message))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.send_text", fake_send)
+    _deliver(config, allowed, "123456")
+    assert len(sent) == 1 and sent[0][0] == allowed
+    assert "123456" in sent[0][1]
+    with pytest.raises(ValueError, match="allowlisted"):
+        _deliver(config, "+918100000011", "654321")
+    assert len(sent) == 1
+    monkeypatch.setattr(
+        "app.sponsor_otp.send_text",
+        lambda _cfg, *, phone, message: Submission("unknown", "provider_timeout"),
+    )
+    with pytest.raises(OtpDeliveryUnconfirmed, match="outcome unknown"):
+        _deliver(config, allowed, "123456")
+
+
+def test_local_otp_request_refuses_other_prospect_before_provider_call(api, monkeypatch):
+    client, csrf, engine = api
+    sent = []
+    person = _create(client, csrf, "Other phone", "+918100000012")
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_local_pilot_enabled=True,
+        otp_secret=SECRET, saasyto_local_test_phone="+918100000013",
+    ))
+    monkeypatch.setattr(
+        "app.sponsor_otp._deliver",
+        lambda _cfg, phone, code: sent.append((phone, code)),
+    )
+    response = client.post("/v1/prospects/" + person["id"] + "/otp/request", headers=csrf)
+    assert response.status_code == 403, response.text
+    assert sent == []
+    with Session(engine) as db:
+        assert db.scalars(select(SponsorOtpChallenge)).all() == []

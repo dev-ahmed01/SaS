@@ -1,4 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const API_ROOT=resolve(dirname(fileURLToPath(import.meta.url)),"../../api");
+function seedSyntheticActive(id, kind="initial"){
+  execFileSync("python",["tests/browser_activation_seed.py",id,kind],{
+    cwd:API_ROOT,env:process.env,encoding:"utf8",timeout:15_000,
+  });
+}
 
 const ADMIN_EMAIL = "admin@foundation.org";
 const ADMIN_PASSWORD = "integration-only-long-password-123";
@@ -35,11 +45,15 @@ async function logIn(page) {
 
 async function activateNewProspect(page) {
   await page.getByRole("button",{name:/Mark Active/}).click();
-  const modal=page.getByRole("dialog",{name:"Reactivate prospect"});
-  await modal.getByRole("textbox",{name:/Follow-up outcome/})
-    .fill("Contacted the sponsor and confirmed their intention to proceed.");
-  await modal.getByRole("button",{name:"Mark Active"}).click();
-  await expect(modal).toHaveCount(0);
+  const modal=page.getByRole("dialog",{name:"Activate prospect"});
+  await expect(modal.getByRole("heading",{name:"Verify and activate"})).toBeVisible();
+  await expect(modal.getByRole("textbox",{name:/Why are they returning/})).toHaveCount(0);
+  await expect(modal.getByRole("button",{name:"Verify OTP & Activate"})).toBeDisabled();
+  await modal.getByRole("button",{name:"Close stage dialog"}).click();
+  // Disposable CI-only fixture: production activation never bypasses real OTP.
+  seedSyntheticActive(page.url().split("/").at(-1),"initial");
+  await page.reload();
+  await expect(page.getByRole("button",{name:/Mark Inactive/})).toBeVisible();
 }
 
 async function recordQuickPayout(page,first,last,amount,utr) {
@@ -446,9 +460,14 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
   await row.getByRole("combobox",{name:"Actions for "+name}).selectOption("status");
   const reactivate=page.getByRole("dialog",{name:"Reactivate prospect"});
-  await reactivate.getByRole("textbox",{name:/Follow-up outcome/})
-    .fill("Sponsor contacted and ready to restart sponsorship.");
-  await reactivate.getByRole("button",{name:"Mark Active"}).click();
+  await expect(reactivate.getByRole("textbox",{name:/Why are they returning/})).toBeVisible();
+  await expect(reactivate.getByRole("button",{name:"Verify OTP & Activate"})).toBeDisabled();
+  await reactivate.getByRole("button",{name:"Close stage dialog"}).click();
+  const detailsHref=await row.getByRole("link",{name}).getAttribute("href");
+  const detailsId=detailsHref?.split("/").at(-1);
+  if(!detailsId)throw Error("Synthetic reactivation fixture missing");
+  seedSyntheticActive(detailsId,"return");
+  await page.reload();
   await expect(row).toHaveCount(0);
   await page.goto("/prospects/active");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
@@ -715,7 +734,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9826"+id);
-  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
+  await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await activateNewProspect(page);
@@ -795,7 +814,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9847"+id);
-  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
+  await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
 
@@ -1052,7 +1071,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
   await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9851"+suffix);
-  await page.getByRole("checkbox",{name:/WhatsApp reminder consent/}).check();
+  await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("region",{name:"Communication consent"})).toHaveCount(0);
@@ -1126,6 +1145,17 @@ test("mobile collection form stays clickable with populated recent history",asyn
   test.skip(!isMobile,"mobile layout regression");
   await page.goto("/collections");
   const suffix=String(Date.now()%1000000).padStart(6,"0");
+  // Stub ONLY this browser fixture's deprecated setup POST. The real API
+  // rejects stage activation without OTP; no application code is bypassed.
+  await page.route("**/api/admin/prospects/*/stage",async route=>{
+    const url=new URL(route.request().url());
+    const id=url.pathname.split("/").at(-2);
+    seedSyntheticActive(id,"initial");
+    const fresh=await page.request.get("/api/admin/prospects/"+id);
+    await route.fulfill({
+      status:fresh.status(),contentType:"application/json",body:await fresh.text(),
+    });
+  });
   const data=await page.evaluate(async suffix=>{
     const session=await (await fetch("/api/admin/session",{cache:"no-store"})).json();
     const csrf=session.csrf_token;

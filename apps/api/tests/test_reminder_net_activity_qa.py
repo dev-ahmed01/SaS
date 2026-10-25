@@ -5,6 +5,7 @@ Synthetic SQLite tenant + FastAPI requests only. No external sender is enabled.
 import uuid
 from datetime import UTC, date, datetime
 
+from activation_helper import activate_with_test_otp
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,11 +25,7 @@ def _registered_active(client, csrf, engine, phone, start_month):
     })
     assert created.status_code == 201, created.text
     person = created.json()
-    stage = client.post("/v1/prospects/" + person["id"] + "/stage", headers=csrf, json={
-        "version": person["version"],
-        "stage": "active",
-        "note": "Synthetic sponsor activated for reminder eligibility regression",
-    })
+    stage = activate_with_test_otp(client, csrf, person)
     assert stage.status_code == 200, stage.text
     with Session(engine) as db:
         sponsor = db.get(Prospect, uuid.UUID(person["id"]))

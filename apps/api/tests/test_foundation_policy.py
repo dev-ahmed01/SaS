@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pytest
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -157,10 +158,7 @@ def test_250_receipt_reactivates_and_full_reversal_deactivates(policy_api):
     })
     assert person.status_code == 201, person.text
     profile = person.json()
-    started = client.post("/v1/prospects/" + profile["id"] + "/stage", headers=csrf, json={
-        "version": profile["version"], "stage": "active",
-        "note": "Synthetic sponsor consented to activation",
-    })
+    started = activate_with_test_otp(client, csrf, profile)
     assert started.status_code == 200, started.text
     profile = started.json()
     assert profile["monthly_contribution_paise"] == 25000

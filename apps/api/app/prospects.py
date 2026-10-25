@@ -200,8 +200,6 @@ class StageDecision(BaseModel):
     def require_inactive_reason(self) -> "StageDecision":
         if self.stage == "inactive" and not self.reason:
             raise ValueError("An inactive reason is required")
-        if self.stage == "active" and not self.note:
-            raise ValueError("A follow-up note is required before activation")
         if self.stage == "active" and self.reason:
             raise ValueError("Use a follow-up note instead of an inactivity reason")
         if self.note is not None:
@@ -651,6 +649,17 @@ def create_prospect(
         _audit(database, admin, prospect, "prospect.created", after={
             "version": 1, "upi_count": len(ids), "status": "new",
         })
+        if prospect.whatsapp_opt_in:
+            # The Admin explicitly attested the sponsor's permission in the
+            # registration form. Keep durable consent evidence once, here.
+            database.add(CommunicationConsentEvent(
+                organization_id=admin.organization_id,
+                recipient_kind="prospect", recipient_id=prospect.id,
+                channel="whatsapp", decision="opted_in",
+                source="prospect_registration_attestation",
+                evidence_reference=f"registration:{prospect.id}",
+                actor_admin_id=admin.id, recorded_at=utc_now(),
+            ))
         database.commit()
     except IntegrityError as exc:
         database.rollback()
@@ -771,6 +780,21 @@ def update_prospect(
         _audit(database, admin, prospect, "prospect.updated",
                before={"version": previous},
                after={"version": prospect.version, "changed_fields": sorted(changed)})
+        if ("whatsapp_opt_in" in changed and
+                "mobile_number" not in changed and
+                "whatsapp_number" not in changed):
+            # Changing the form checkbox is a new Admin attestation or
+            # revocation. Never infer consent from status or OTP verification.
+            database.add(CommunicationConsentEvent(
+                organization_id=admin.organization_id,
+                recipient_kind="prospect", recipient_id=prospect.id,
+                channel="whatsapp",
+                decision="opted_in" if prospect.whatsapp_opt_in else "opted_out",
+                source="prospect_edit_attestation",
+                evidence_reference=(f"prospect_edit:{prospect.id}:{prospect.version}"
+                                    if prospect.whatsapp_opt_in else None),
+                actor_admin_id=admin.id, recorded_at=utc_now(),
+            ))
         try:
             database.commit()
         except IntegrityError as exc:
@@ -918,6 +942,13 @@ def change_crm_stage(
     admin = context[0]
     prospect = _get(database, admin, prospect_id, lock=True)
     _check_version(prospect, payload.version)
+    if payload.stage == "active":
+        # All activations (including reactivations) require a NEW challenge.
+        # Never permit a direct API or legacy UI call to bypass OTP.
+        raise HTTPException(
+            status_code=409,
+            detail="Activate through WhatsApp OTP verification",
+        )
     if prospect.crm_stage == payload.stage:
         raise HTTPException(status_code=409, detail="Prospect is already in that CRM stage")
     previous = prospect.crm_stage

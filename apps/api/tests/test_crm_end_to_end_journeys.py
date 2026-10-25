@@ -6,6 +6,7 @@ workflows with FastAPI TestClient, CSRF cookies and fresh per-test databases.
 import uuid
 
 import pytest
+from activation_helper import activate_with_test_otp
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -32,10 +33,7 @@ def _create(client, csrf, *, name="Same Person", phone="+918701001111", **change
 
 
 def _activate(client, csrf, person):
-    result = client.post("/v1/prospects/"+person["id"]+"/stage", headers=csrf, json={
-        "version": person["version"], "stage": "active",
-        "note": "Synthetic contact confirmed sponsor wants to participate",
-    })
+    result = activate_with_test_otp(client, csrf, person)
     assert result.status_code == 200, result.text
     return result.json()
 
@@ -163,7 +161,7 @@ def test_new_contact_number_revokes_whatsapp_permission_for_both_roles(api):
             )).all()
             assert len(revoked)==1
     with Session(engine) as db:
-        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 4
+        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 5
 
 
 def test_registration_stage_is_always_new_inquiry_then_editable(api):

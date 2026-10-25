@@ -9,7 +9,6 @@ import { ContactConsent } from "../communication/contact-consent";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
 import { ProspectStageControl } from "./prospect-stage-control";
-import { ProspectWhatsappOtp } from "./prospect-whatsapp-otp";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
 
@@ -104,7 +103,6 @@ export function ProspectDetails({id}:{id:string}){
             <Tile label="Last contribution">{formatCRMDate(record.last_verified_payment_at)}</Tile>
           </div>
           <ProspectStageControl prospect={record} onChanged={refresh}/>
-          <ProspectWhatsappOtp prospect={record} onChanged={refresh}/>
         </section>
         <section className="crm-detail-card">
           <div className="crm-panel-heading"><h2>Activity timeline</h2>
