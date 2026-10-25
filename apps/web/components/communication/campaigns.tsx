@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CampaignResultDetails } from "./campaign-results";
 import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
@@ -42,6 +43,7 @@ const reasonLabels:Record<string,string>={
 };
 export function CommunicationCampaigns({revision}:{revision:number}){
   const [items,setItems]=useState<Campaign[]>(()=>recentSnapshot<Campaign[]>("/api/admin/communication/campaigns")??[]);
+  const [selectedId,setSelectedId]=useState<string|null>(null);
   const [loading,setLoading]=useState(()=>!recentSnapshot<Campaign[]>("/api/admin/communication/campaigns"));
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -55,6 +57,17 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [check,setCheck]=useState<RecipientCheck|null>(null);
   const [checking,setChecking]=useState(false);
   const [reviewError,setReviewError]=useState("");
+  useEffect(()=>{
+    // A fragment is never forwarded to the server. Deep-link to a detailed
+    // campaign view without conflicting with the existing dynamic module route.
+    const sync=()=>{
+      const match=/^#campaign-([0-9a-f-]{36})$/i.exec(window.location.hash);
+      setSelectedId(match?match[1]:null);
+    };
+    sync();
+    window.addEventListener("hashchange",sync);
+    return ()=>window.removeEventListener("hashchange",sync);
+  },[]);
   useEffect(()=>{
     const cached=recentSnapshot<Campaign[]>("/api/admin/communication/campaigns");
     if(cached)setItems(cached);
@@ -147,6 +160,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     }catch(e){setError(e instanceof Error?e.message:"Could not cancel.");}
     finally{setBusy("");}
   }
+  if(selectedId)return <CampaignResultDetails id={selectedId}/>;
   return <section className="comm-panel" aria-label="Communication campaigns">
     <div className="comm-panel-header"><div><h2>Campaigns</h2>
       <p>Open any campaign to see its recipient checks, failed submissions and
