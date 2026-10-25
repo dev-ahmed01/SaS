@@ -1024,7 +1024,7 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await page.getByRole("combobox",{name:"Use template"}).selectOption({label:name});
   await expect(page.getByRole("textbox",{name:"Message body"})).toContainText("Assalamu Alaikum");
   await page.getByRole("button",{name:"Continue to recipient review"}).click();
-  await expect(page).toHaveURL(/\/communication\/campaigns\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/communication\/campaigns\?campaign=[0-9a-f-]{36}$/);
   await page.waitForTimeout(1200);
   await expect(page.getByRole("heading",{name:"Update "+key}),
     "Campaign detail rendered: "+(await page.locator("body").innerText()).slice(-1500)
@@ -1062,7 +1062,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await page.getByRole("textbox",{name:"Campaign name"}).fill("Consent update "+suffix);
   await page.getByRole("textbox",{name:"Message body"}).fill("Assalamu Alaikum, a Foundation update.");
   await page.getByRole("button",{name:"Continue to recipient review"}).click();
-  await expect(page).toHaveURL(/\/communication\/campaigns\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/communication\/campaigns\?campaign=[0-9a-f-]{36}$/);
   await page.waitForTimeout(1200);
   await expect(page.getByRole("heading",{name:"Consent update "+suffix}),
     "Campaign detail rendered: "+(await page.locator("body").innerText()).slice(-1500)
