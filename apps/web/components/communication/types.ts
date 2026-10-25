@@ -92,14 +92,16 @@ export async function apiWrite<T>(
         "Campaign cannot use Saasyto":
           "This campaign cannot be sent through Saasyto.",
       };
-      try {
-        const body=await response.json() as {detail?:unknown};
-        if(typeof body.detail==="string"&&safeReasons[body.detail]){
-          throw Error(safeReasons[body.detail]);
-        }
-      }catch(error){if(error instanceof Error&&error.message!==""){
-        if(Object.values(safeReasons).includes(error.message))throw error;
-      }}
+      let detail:unknown=null;
+      try{
+        detail=(await response.json() as {detail?:unknown}).detail;
+      }catch{
+        // Unknown, invalid or non-JSON provider errors remain generic.
+      }
+      if(typeof detail==="string"&&
+        Object.prototype.hasOwnProperty.call(safeReasons,detail)){
+        throw Error(safeReasons[detail]);
+      }
     }
     if(response.status===409)throw Error("This record was changed or already exists. Refresh and retry.");
     if(response.status===422)throw Error("Please review the message, audience and schedule.");
