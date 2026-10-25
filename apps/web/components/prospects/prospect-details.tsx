@@ -24,6 +24,7 @@ export function ProspectDetails({id}:{id:string}){
   const [filter,setFilter]=useState("all");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const [activationNotice,setActivationNotice]=useState("");
   const [editing,setEditing]=useState(false);
   const [consentOpen,setConsentOpen]=useState(false);
   const [stageOpen,setStageOpen]=useState(false);
@@ -70,6 +71,7 @@ export function ProspectDetails({id}:{id:string}){
   return <AppShell><div className="crm-details crm-redesign">
     <Link href="/prospects" className="back-link"><Icon name="arrow-left" size={17}/> All prospects</Link>
     {error&&<p role="alert" className="form-error">{error}</p>}
+    {activationNotice&&<p role="status" className="form-success">{activationNotice}</p>}
     {loading?<p role="status">Loading prospect…</p>:record&&<>
       <div className="crm-details-header">
         <div><div className="crm-title-line">
@@ -144,7 +146,7 @@ export function ProspectDetails({id}:{id:string}){
         legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={!record.archived_at} onChanged={refresh}/>}
     </>}
     {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}
-      onChanged={()=>{setStageOpen(false);refresh();}}/>}
+      onChanged={message=>{setStageOpen(false);setActivationNotice(message??"");refresh();}}/>}
     {archiveOpen&&record&&<div className="crm-dialog-scrim">
       <section className="crm-dialog" role="dialog" aria-modal="true" aria-label="Confirm prospect archive">
         <h2>{record.archived_at?"Restore prospect?":"Archive this prospect?"}</h2>
