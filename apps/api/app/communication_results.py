@@ -206,7 +206,7 @@ def campaign_detail(
     queue = db.scalars(select(SaasytoCampaignRecipient).where(
         SaasytoCampaignRecipient.organization_id == org,
         SaasytoCampaignRecipient.run_id == run.id,
-    ).order_by(SaasytoCampaignRecipient.id)).limit(MAX_RECIPIENTS)).all() if run else []
+    ).order_by(SaasytoCampaignRecipient.id).limit(MAX_RECIPIENTS)).all() if run else []
     preflight = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == org,
         CommunicationPreparation.campaign_id == campaign.id,
