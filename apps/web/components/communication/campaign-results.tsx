@@ -221,7 +221,7 @@ export function CampaignResultDetails({id}:{id:string}){
           This campaign already has a delivery attempt record. To send a
           further message, create a new campaign rather than resending it.
         </p>}
-        <div className="comm-recipient-review" aria-label="Recipient approval">
+        <div className="comm-recipient-review" role="region" aria-label="Recipient approval">
           <div className="comm-review-heading">
             <h3>Recipient review</h3>
             <span className="comm-muted">
