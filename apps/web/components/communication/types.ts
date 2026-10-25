@@ -60,6 +60,47 @@ export async function apiWrite<T>(
     body:payload===undefined?undefined:JSON.stringify(payload),
   });
   if(!response.ok){
+    // The API uses fixed, safe error descriptions for Saasyto approval.
+    // Only surface this narrow allowlist; never display provider replies,
+    // API tokens, contact numbers, or arbitrary backend error strings.
+    if(path.includes("/saasyto")&&[409,503].includes(response.status)){
+      const safeReasons:Record<string,string>={
+        "Local pilot requires one consented, allowlisted recipient":
+          "The eligible contact is not the one permitted in local WhatsApp test settings. Check SAASYTO_LOCAL_TEST_PHONE and the contact's WhatsApp number.",
+        "Older campaigns require new approval plans":
+          "This campaign was created before WhatsApp sending was enabled. Create a new campaign.",
+        "Refresh recipient check before approval":
+          "Your recipient check is missing or expired. Click Check recipients again.",
+        "Audience changed; review again":
+          "The eligible audience changed. Click Check recipients again.",
+        "Campaign already approved or completed":
+          "This campaign already has a send approval or attempt. Check results before doing anything else.",
+        "Saasyto dispatch is disabled":
+          "WhatsApp sending is disabled in the API configuration.",
+        "Saasyto sending is disabled":
+          "WhatsApp sending is disabled in the API configuration.",
+        "Manual send requires local test mode":
+          "Manual sending is only available in the guarded local WhatsApp test.",
+        "Campaign not eligible for one-phone send":
+          "Only one approved, pending local test contact can be sent immediately.",
+        "Already attempted or no pending send":
+          "The message was already attempted, or there is nothing pending. Check results instead of resending.",
+        "Scheduled campaign is not yet due":
+          "This campaign is scheduled for later and cannot be sent now.",
+        "Approve the campaign before sending":
+          "Check recipients and approve this campaign before submitting it.",
+        "Campaign cannot use Saasyto":
+          "This campaign cannot be sent through Saasyto.",
+      };
+      try {
+        const body=await response.json() as {detail?:unknown};
+        if(typeof body.detail==="string"&&safeReasons[body.detail]){
+          throw Error(safeReasons[body.detail]);
+        }
+      }catch(error){if(error instanceof Error&&error.message!==""){
+        if(Object.values(safeReasons).includes(error.message))throw error;
+      }}
+    }
     if(response.status===409)throw Error("This record was changed or already exists. Refresh and retry.");
     if(response.status===422)throw Error("Please review the message, audience and schedule.");
     throw Error("The action could not be confirmed.");
