@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import type { Prospect } from "./prospects-types";
 
-type OtpStatus={delivery_enabled:boolean;verified:boolean;verified_at:string|null};
+type OtpStatus={delivery_enabled:boolean;verified:boolean;verified_at:string|null;activation_enabled:boolean};
+type Verified={status:string;verified_at:string;crm_stage:string;activation_notice:string};
 type Issued={challenge_id:string;expires_at:string;status:string};
 
 export function ProspectWhatsappOtp({prospect,onChanged}:{
@@ -58,8 +59,22 @@ export function ProspectWhatsappOtp({prospect,onChanged}:{
         body:JSON.stringify({challenge_id:challenge.challenge_id,code}),
       });
       if(!response.ok)throw Error("Invalid, expired, or exhausted verification code.");
+      const result=await response.json() as Verified;
       setChallenge(null);setCode("");
-      setStatus({delivery_enabled:true,verified:true,verified_at:(await response.json()).verified_at});
+      setStatus(previous=>({
+        delivery_enabled:true,verified:true,verified_at:result.verified_at,
+        activation_enabled:previous?.activation_enabled??false,
+      }));
+      setNotice(result.crm_stage==="active"
+        ? "WhatsApp verified. This prospect is now CRM-Active. "+
+          (result.activation_notice==="accepted_unverified"
+            ? "Saasyto accepted the activation message; WhatsApp delivery is unverified."
+            : result.activation_notice==="skipped_no_permission"
+              ? "No activation message was sent because communication permission is missing."
+              : result.activation_notice==="disabled"
+                ? "The activation message feature is disabled."
+                : "Activation message was not confirmed.")
+        : "WhatsApp verified. CRM status remains unchanged; OTP activation is not enabled or this is not a new registration.");
       onChanged();
     }catch(e){setError(e instanceof Error?e.message:"Verification failed.");}
     finally{setBusy(false);}
@@ -72,7 +87,7 @@ export function ProspectWhatsappOtp({prospect,onChanged}:{
       !status.delivery_enabled?
         <p className="crm-muted">Verification will be available when the approved provider is connected. No code will be sent yet.</p>:
         <>
-          <p className="crm-muted">Verify the sponsor&apos;s WhatsApp number. This does not grant reminder consent or change their sponsorship status.</p>
+          <p className="crm-muted">Verify the sponsor&apos;s WhatsApp number. This never counts as payment or WhatsApp marketing consent. If onboarding activation is enabled, a verified code makes an eligible new prospect CRM-Active.</p>
           {!challenge?<button type="button" className="btn btn-secondary" disabled={busy}
             onClick={request}>{busy?"Requesting…":"Send verification code"}</button>:
             <div className="crm-otp-verify-form">
