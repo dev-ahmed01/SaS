@@ -257,7 +257,7 @@ def test_preflight_requires_explicit_consent_and_never_dispatches(system):
         "mobile_number": "+919876540111",
         "email": "consented@example.org",
         "area_city": "Bengaluru",
-        "whatsapp_opt_in": True,
+        "whatsapp_opt_in": False,
         "monthly_contribution_paise": 25000,
     })
     assert person.status_code == 201, person.text
@@ -278,7 +278,7 @@ def test_preflight_requires_explicit_consent_and_never_dispatches(system):
     assert first.status_code == 201, first.text
     assert first.json()["eligible_count"] == 0
     assert first.json()["suppressed_count"] == 1
-    assert first.json()["exclusion_reasons"] == {"no_general_consent": 1}
+    assert first.json()["exclusion_reasons"] == {"no_whatsapp_consent": 1}
     assert first.json()["delivery_activated"] is False
     assert client.post(url, headers=csrf, json=request).status_code == 200
 
@@ -324,7 +324,7 @@ def test_preflight_requires_explicit_consent_and_never_dispatches(system):
     # Saved snapshots retain the reason for earlier checks, not today's consent.
     history = client.get(url).json()
     assert [entry["exclusion_reasons"] for entry in history][:3] == [
-        {"opted_out": 1}, {}, {"no_general_consent": 1},
+        {"opted_out": 1}, {}, {"no_whatsapp_consent": 1},
     ]
     with Session(engine) as db:
         assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 2
@@ -403,7 +403,7 @@ def test_contact_consent_read_is_minimal_latest_and_tenant_scoped(system):
         "email": "private@example.org",
         "area_city": "Bengaluru",
         "monthly_contribution_paise": 25000,
-        "whatsapp_opt_in": True,
+        "whatsapp_opt_in": False,
     })
     assert created.status_code == 201, created.text
     identifier = created.json()["id"]
