@@ -75,7 +75,10 @@ test("Communication is compose-first and combines templates with automation", ()
   assert.match(routes,/communication:\["compose","campaigns","templates","automations"\]/);
   assert.match(modules,/CommunicationWorkspace/);
   assert.doesNotMatch(composer,/Message review|Audience preview|Message preview/);
-  assert.match(composer,/Saving does not send messages/);
+  assert.match(composer,/Sending requires a fresh recipient check/);
+  assert.match(composer,/Continue to recipient review/);
+  assert.match(composer,/Plan for later/);
+  assert.doesNotMatch(composer,/Save draft/);
   assert.doesNotMatch(communication,/Preparation history/);
   assert.doesNotMatch(communication,/New campaigns require channel activation/);
   assert.match(shell,/IstClock/);
@@ -104,6 +107,10 @@ test("Consent and campaign review never send before explicit approval", () => {
   assert.match(prospect,/Communication permissions/);
   assert.match(promoter,/Communication permissions/);
   assert.match(campaigns,/Why recipients were excluded/);
+  assert.match(campaigns,/View results/);
+  assert.match(campaigns,/Submitted/);
+  assert.match(campaigns,/Rejected/);
+  assert.match(campaigns,/Read/);
   assert.match(promoter,/PromoterNotes/);
   assert.match(promoter,/PromoterSponsors/);
   assert.doesNotMatch(campaigns,/\/send|\/dispatch/);
