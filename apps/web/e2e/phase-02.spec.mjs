@@ -1073,7 +1073,8 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await campaign.getByRole("link",{name:"View results"}).click();
   await expect(page).toHaveURL(/#campaign-[0-9a-f-]{36}$/);
   const review=page.getByRole("region",{name:"Recipient approval"});
-  await expect(review.getByText("Not checked yet")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Consent update "+suffix})).toBeVisible();
+  await expect(review.getByRole("button",{name:"Check recipients"})).toBeVisible();
   await review.getByRole("button",{name:"Check recipients"}).click();
   await expect(page.getByText("Recipient check updated. No messages were sent.")).toBeVisible();
   await expect(review.locator(".comm-review-counts strong").first()).toBeVisible();
