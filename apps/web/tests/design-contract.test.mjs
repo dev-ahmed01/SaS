@@ -83,7 +83,7 @@ test("Communication is compose-first and combines templates with automation", ()
   assert.match(clock,/setInterval/);
 });
 
-test("Consent and Campaign review keep the no-send CRM boundary", () => {
+test("Consent and campaign review never send before explicit approval", () => {
   const consent=read("../components/communication/contact-consent.tsx");
   const campaigns=read("../components/communication/campaigns.tsx");
   const proxy=read("../app/api/admin/communication/[[...segments]]/route.ts");
@@ -93,7 +93,9 @@ test("Consent and Campaign review keep the no-send CRM boundary", () => {
   assert.match(consent,/Record opt-out/);
   assert.match(consent,/checked the recipient/);
   assert.match(campaigns,/simulation_only:true/);
-  assert.match(campaigns,/Simulation only/);
+  assert.match(campaigns,/Recipient check is a preview; no messages sent/);
+  assert.match(campaigns,/Local test/);
+  assert.match(campaigns,/Refresh delivery attempts/);
   assert.match(campaigns,/Approve WhatsApp delivery/);
   assert.match(campaigns,/Check recipients/);
   assert.match(proxy,/name==="consent-events"/);
