@@ -1,5 +1,4 @@
 """Only marked synthetic local-demo records are eligible for removal."""
-import uuid
 from datetime import UTC, date, datetime
 
 import pytest
