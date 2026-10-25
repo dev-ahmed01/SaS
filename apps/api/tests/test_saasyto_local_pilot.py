@@ -10,12 +10,17 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.models import SaasytoCampaignRun
-from app.saasyto_client import send_text, Submission
-from app.security import utc_now
+from app.saasyto_client import Submission, send_text
 from test_saasyto_campaign_dispatch import (
-    RUNNER, _approved, _cfg, _consent, _person, dispatch_system,
+    RUNNER,
+    _approved,
+    _cfg,
+    _consent,
+    _person,
 )
 from test_communication import create_campaign, login
+
+pytest_plugins = ("test_saasyto_campaign_dispatch",)
 
 LOCAL_DB = "postgresql+psycopg://sas_dev:local-test@127.0.0.1:5432/sas_dev"
 LOCAL_PHONE = "+919899001001"
