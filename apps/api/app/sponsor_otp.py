@@ -19,7 +19,12 @@ from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
 from app.config import Settings, get_settings
-from app.models import AdminSession, AdminUser, AuditEvent, Prospect, SponsorOtpChallenge
+from app.communication_consent import evaluate_recipients
+from app.models import (
+    AdminSession, AdminUser, AuditEvent, Prospect, ProspectStageTransition,
+    SponsorOtpChallenge,
+)
+from app.saasyto_client import send_text
 from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
@@ -60,6 +65,42 @@ def _load(db: Session, admin: AdminUser, prospect_id: uuid.UUID) -> Prospect:
 
 def _enabled(cfg: Settings) -> bool:
     return bool(cfg.otp_delivery_enabled)
+
+
+def _activation_notice(cfg: Settings, db: Session, prospect: Prospect) -> str:
+    """Best-effort one-time post-verification notice, never an OTP transport.
+
+    Receipt status is never reported as WhatsApp delivered. The successful OTP
+    challenge is already consumed before this helper runs, so HTTP retries
+    cannot trigger duplicate notifications.
+    """
+    if not getattr(cfg, "otp_activation_notice_enabled", False):
+        return "disabled"
+    decisions = evaluate_recipients(
+        db, prospect.organization_id, [prospect], "whatsapp", "update",
+    )
+    if not decisions or decisions[0][2] != "eligible":
+        return "skipped_no_permission"
+    if not (
+        getattr(cfg, "saasyto_delivery_enabled", False)
+        and getattr(cfg, "saasyto_sender_approved", False)
+    ):
+        return "disabled"
+    phone = _phone(prospect)
+    try:
+        outcome = send_text(
+            cfg,
+            phone=phone,
+            message=(
+                "Assalamu alaikum, " + prospect.full_name
+                + ". Your Sponsor a Salah registration with Emlen Foundation "
+                "has been verified and your CRM account is now Active. "
+                "This confirms registration, not a received payment."
+            ),
+        )
+        return outcome.state
+    except (ValueError, TypeError):
+        return "unknown"
 
 
 def _deliver(cfg: Settings, phone: str, code: str) -> None:
@@ -115,6 +156,7 @@ def status(
     return {
         "delivery_enabled": _enabled(cfg),
         "verified": person.whatsapp_verified_at is not None,
+        "activation_enabled": bool(getattr(cfg, "otp_activates_prospect", False)),
         "verified_at": person.whatsapp_verified_at.isoformat()
         if person.whatsapp_verified_at else None,
     }
@@ -223,13 +265,57 @@ def verify_otp(
     record.consumed_at = now
     record.status = "verified"
     person.whatsapp_verified_at = now
+    # CRM activity is separate from payment status. Only initial onboarding of
+    # never-paid, currently Inactive sponsors changes automatically; do not
+    # silently reactivate a sponsor who later became Inactive due to missed dues.
+    activated = bool(
+        getattr(cfg, "otp_activates_prospect", False)
+        and person.crm_stage == "inactive"
+        and person.lifecycle_status == "new"
+        and person.last_verified_payment_at is None
+    )
+    if activated:
+        database.add(ProspectStageTransition(
+            organization_id=admin.organization_id,
+            prospect_id=person.id,
+            from_stage="inactive", to_stage="active",
+            reason=None, note="WhatsApp ownership verified by OTP",
+            changed_at=now, actor_admin_id=admin.id,
+        ))
+        person.crm_stage = "active"
+        person.crm_stage_changed_at = now
+        person.crm_inactive_reason = None
+        person.crm_inactive_note = None
     person.updated_at = now
     person.version += 1
     database.add(AuditEvent(
         organization_id=admin.organization_id, actor_admin_id=admin.id,
         action="prospect.whatsapp_verified", entity_type="prospect",
-        entity_id=str(prospect_id), after_data={"challenge_id": str(record.id)},
+        entity_id=str(prospect_id), after_data={
+            "challenge_id": str(record.id), "crm_activated": activated,
+        },
     ))
+    if activated:
+        database.add(AuditEvent(
+            organization_id=admin.organization_id, actor_admin_id=admin.id,
+            action="prospect.crm_stage_changed", entity_type="prospect",
+            entity_id=str(prospect_id),
+            before_data={"stage": "inactive"},
+            after_data={"stage": "active", "reason_code": "otp_verified"},
+        ))
     database.commit()
+    # The verified challenge is irreversibly consumed before any external call.
+    # Failure of the optional notification cannot roll back phone verification.
+    notice = _activation_notice(cfg, database, person) if activated else "not_activated"
+    if activated:
+        database.add(AuditEvent(
+            organization_id=admin.organization_id, actor_admin_id=admin.id,
+            action="prospect.activation_notice_attempt", entity_type="prospect",
+            entity_id=str(prospect_id), after_data={"status": notice},
+        ))
+        database.commit()
     response.headers["Cache-Control"] = "no-store"
-    return {"status": "verified", "verified_at": now.isoformat()}
+    return {
+        "status": "verified", "verified_at": now.isoformat(),
+        "crm_stage": person.crm_stage, "activation_notice": notice,
+    }
