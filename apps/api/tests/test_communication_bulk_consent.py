@@ -3,7 +3,6 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from test_communication import activate_for_communication, create_campaign, login
 
 from app.models import CommunicationConsentEvent, Prospect
