@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.accounting import effective_credits, ist_today, month_start
 from app.models import (
     AuditEvent, ManualCollection, ManualCollectionReversal, MessageOutbox,
-    Prospect, ProspectStageDefinition, PromoterAssignment, PayoutPayment,
+    PayoutPayment, PromoterAssignment, Prospect, ProspectStageDefinition,
 )
 
 pytest_plugins = ("test_crm_review_2026_10",)
@@ -176,8 +176,9 @@ def test_collection_positive_negative_replay_reversal_and_no_delivery(api):
         assert db.scalar(select(func.count(ManualCollection.id))) == 1
         outbox = db.scalars(select(MessageOutbox)).one()
         assert outbox.status == "suppressed"
+        tenant_id = db.get(Prospect, uuid.UUID(person["id"])).organization_id
         assert sum(c.amount_paise for c in effective_credits(
-            db, active["organization_id"], sponsor_id=uuid.UUID(person["id"]),
+            db, tenant_id, sponsor_id=uuid.UUID(person["id"]),
         )) == 25000
     reversal = {
         "request_id":str(uuid.uuid4()),"reason_code":"wrong_amount",
@@ -193,7 +194,8 @@ def test_collection_positive_negative_replay_reversal_and_no_delivery(api):
     with Session(engine) as db:
         assert db.scalar(select(func.count(ManualCollectionReversal.id))) == 1
         assert not effective_credits(
-            db, active["organization_id"], sponsor_id=uuid.UUID(person["id"]),
+            db, db.get(Prospect, uuid.UUID(person["id"])).organization_id,
+            sponsor_id=uuid.UUID(person["id"]),
         )
 
 
