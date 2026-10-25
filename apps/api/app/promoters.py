@@ -22,7 +22,7 @@ from app.models import (
     PromoterAssignment,
     Prospect,
 )
-from app.prospects import ProspectFields, _clean_text
+from app.prospects import ProspectFields, _clean_text, _project_statuses
 from app.security import utc_now
 
 router = APIRouter(prefix="/v1/promoters", tags=["Admin promoters"])
@@ -437,20 +437,31 @@ def assigned_sponsors(
         PromoterAssignment.promoter_id == promoter.id,
         PromoterAssignment.ended_at.is_(None),
     ]
-    if kind == "prospects":
-        filters.append(Prospect.lifecycle_status == "new")
-    elif kind == "sponsors":
-        filters.append(Prospect.lifecycle_status != "new")
-    total = database.scalar(select(func.count(PromoterAssignment.id))
-                            .join(Prospect, Prospect.id == PromoterAssignment.prospect_id)
-                            .where(*filters)) or 0
+    # Lifecycle is derived from IST month and net (non-reversed) receipt
+    # activity. Filtering by the stored lifecycle_status can put an assigned
+    # sponsor in the wrong tab until someone manually refreshes statuses.
+    # Project all assigned rows before pagination so totals and pages agree.
     assignments = database.execute(
         select(PromoterAssignment, Prospect)
-        .join(Prospect, Prospect.id == PromoterAssignment.prospect_id)
+        .join(
+            Prospect,
+            (Prospect.id == PromoterAssignment.prospect_id)
+            & (Prospect.organization_id == PromoterAssignment.organization_id),
+        )
         .where(*filters)
         .order_by(Prospect.full_name, Prospect.id)
-        .limit(limit).offset(offset)
     ).all()
+    fresh = _project_statuses(
+        database, context[0], [prospect for _, prospect in assignments],
+    )
+    visible = [
+        (assignment, prospect)
+        for assignment, prospect in assignments
+        if kind is None or (
+            (fresh.get(prospect.id, prospect.lifecycle_status) == "new")
+            == (kind == "prospects")
+        )
+    ]
     response.headers["Cache-Control"] = "no-store"
     return SponsorPage(
         items=[SponsorAssignment(
@@ -458,9 +469,11 @@ def assigned_sponsors(
             mobile_number=p.mobile_number, area_city=p.area_city,
             start_month=p.start_month,
             monthly_contribution_paise=p.monthly_contribution_paise,
-            crm_stage=p.crm_stage, lifecycle_status=p.lifecycle_status,
+            crm_stage=p.crm_stage,
+            lifecycle_status=fresh.get(p.id, p.lifecycle_status),
             prospect_version=p.version,
-        ) for a, p in assignments], total=total, limit=limit, offset=offset,
+        ) for a, p in visible[offset:offset + limit]],
+        total=len(visible), limit=limit, offset=offset,
     )
 
 
