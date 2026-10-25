@@ -414,3 +414,42 @@ def test_newly_registered_nonseeded_contact_can_enter_production_queue(
         recipient = db.scalars(select(SaasytoCampaignRecipient)).one()
         assert recipient.recipient_id == uuid.UUID(person["id"])
         assert recipient.status == "accepted_unverified"
+
+
+def test_production_batch_uses_multiple_registered_contacts_and_honors_late_optout(
+    dispatch_system, monkeypatch,
+):
+    """Approving a multi-contact batch never bypasses last-minute STOP."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    people = [_person(client, csrf, suffix) for suffix in ("2201", "2202", "2203")]
+    for person in people:
+        _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "Approved real CRM group")
+    assert approved["eligible_count"] == approved["queued"] == 3
+    _consent(client, csrf, people[1], "opted_out")
+
+    hits = []
+
+    def fake_send(_settings, *, phone, message):
+        hits.append((phone, message))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", fake_send)
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    result = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert result.status_code == 200, result.text
+    assert result.json()["accepted_unverified"] == 2
+    assert result.json()["suppressed"] == 1
+    assert sorted(phone for phone, _message in hits) == [
+        "+919899002201", "+919899002203",
+    ]
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+    summary = client.get("/v1/communication/campaigns/" + cid + "/saasyto")
+    assert summary.status_code == 200
+    assert summary.json()["status"] == "completed"
+    assert summary.json()["accepted_unverified"] == 2
+    assert summary.json()["suppressed_after_approval"] == 1
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(SaasytoCampaignRecipient.id))) == 3
