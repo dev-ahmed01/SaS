@@ -1090,6 +1090,10 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
     return await latest.json();
   },"Consent update "+suffix);
   expect(data[0].delivery_activated).toBe(false);
+  await page.getByRole("link",{name:"All campaigns"}).click();
+  await expect(page.getByRole("heading",{name:"Campaigns"})).toBeVisible();
+  await expect(page.getByRole("row",{name:new RegExp("Consent update "+suffix)}))
+    .toBeVisible();
 });
 
 test("Communication proxy blocks forged-origin writes and has no unapproved send endpoint",async ({page})=>{
