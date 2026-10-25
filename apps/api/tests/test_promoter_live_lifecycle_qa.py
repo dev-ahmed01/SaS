@@ -147,7 +147,7 @@ def test_payment_reversal_projection_agrees_across_promoter_and_prospect(api, mo
     simulated = datetime(2026, 10, 31, 18, 33, tzinfo=UTC)
     monkeypatch.setattr("app.prospects.utc_now", lambda: simulated)
     monkeypatch.setattr("app.collections.utc_now", lambda: simulated)
-    monkeypatch.setattr("app.collections.ist_today", lambda: date(2026, 11, 1))
+    monkeypatch.setattr("app.collections.ist_today", lambda now=None: date(2026, 11, 1))
     assert _view(client, promoter, "sponsors")["items"][0]["lifecycle_status"] == "inactive"
 
     recorded = client.post("/v1/collections", headers=csrf, json={
