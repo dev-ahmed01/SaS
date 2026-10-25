@@ -36,7 +36,23 @@ A documented **direct Meta WhatsApp Cloud API** transport has been prepared as a
 4. Apply Alembic migrations (`alembic upgrade head`) on the backend, verify the sender, template, number ownership, costs and opt-in/notification handling, and only then set `OTP_DELIVERY_ENABLED=true` in **production**. This flag is independent of `MESSAGING_DELIVERY_ENABLED`, Saasyto direct messaging and Pabbly. Enabling OTP does not turn on reminders. Local Saasyto pilot credentials alone do NOT enable the official Meta OTP path.
 5. In a controlled test, register a **test** prospect with the sponsor's documented WhatsApp permission (if granted). Open Prospect Details → Mark Active → send OTP → enter the received six digits → Verify OTP & Activate. Mark the person inactive, then repeat and verify that a reactivation reason and a newly issued OTP are both mandatory. Change the phone and confirm verification resets.
 
-Until the flag and all fields are validated the UI intentionally says the provider is not connected and cannot send. Development/staging modes refuse an enabled provider; tests inject a fake delivery adapter and do not call Meta.
+Until the flag and all fields are validated the UI intentionally says the provider is not connected and cannot send. Development/staging modes refuse enabled *Meta* OTP delivery; tests inject a fake delivery adapter.
+
+### One-number localhost OTP pilot with Saasyto
+
+The existing localhost Saasyto setup may be used to test OTP delivery ONLY to the single authorized `SAASYTO_LOCAL_TEST_PHONE`. This is free-text OTP for developer testing, **not** an approved production authentication template or proof of delivered messages. Set the following in the existing `apps/api/.env`, without changing the sender instance/access token:
+
+```dotenv
+SAASYTO_LOCAL_TEST_ENABLED=true
+SAASYTO_LOCAL_TEST_PHONE=+91YOUR_AUTHORIZED_NUMBER
+SAASYTO_SENDER_APPROVED=true
+SAASYTO_DELIVERY_ENABLED=true
+OTP_LOCAL_PILOT_ENABLED=true
+OTP_SECRET=YOUR_DIFFERENT_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
+OTP_DELIVERY_ENABLED=false
+```
+
+Preserve the existing Saasyto credentials, runner secret and timezone-aware enable-after cutoff. Restart the API. The pilot refuses a non-allowlisted number, public/staging/production mode, absent authorization, or a missing OTP secret. The OTP code is never returned by the API. The sponsor must actually receive it on their own WhatsApp to activate. Turning on this local pilot does not enable production Meta OTP.
 
 ## If the agreed supplier is Saasyto or Sassy Infotech
 
@@ -52,7 +68,7 @@ Once provided, the remaining work is implementing an approved adapter behind the
 
 ## Safety boundaries
 
-- No OTP message is sent unless an authorized Admin explicitly clicks the send action and provider configuration is validated.
+- No OTP message is sent unless an authorized Admin explicitly clicks the send action and provider configuration is validated. The Saasyto path works only for the configured single authorized local number.
 - OTP is not proof of payment, communication consent, or delivered messages. Only a successful activation challenge changes the CRM stage; financial sponsorship status remains payment-derived.
 - Request submission is never echoed as a delivered notification. HTTP send response success only indicates provider acceptance.
 - No blind provider retry after a timeout. Confirmation can be uncertain; operation reports that uncertainty.
