@@ -332,7 +332,8 @@ def test_plain_registration_without_upi_secret_still_works(system, monkeypatch):
     retried = create(client, csrf, request_id=payload["request_id"])
     assert retried.status_code == 200, retried.text
     assert retried.json()["id"] == first.json()["id"]
-    assert create(client, csrf, upi_ids=["sponsor@upi"]).status_code == 503
+    assert create(client, csrf, mobile_number="+919876543211",
+                  upi_ids=["sponsor@upi"]).status_code == 503
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Prospect)) == 1
 
