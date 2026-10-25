@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { AppShell } from "../app-shell";
 import { apiGet, apiWrite, istDisplay } from "./types";
 
 type Status="not_approved"|"approved"|"cancelled"|"completed";
@@ -165,8 +164,7 @@ export function CampaignResultDetails({id}:{id:string}){
     new Date(details.created_at).getTime()<new Date(provider.activation_cutoff).getTime()
   );
   const s=details?.summary;
-  return <AppShell><div className="communication-workspace">
-    <section className="comm-panel" aria-label="Campaign results detail">
+  return <section className="comm-panel" aria-label="Campaign results detail">
       <div className="comm-panel-header">
         <div><Link href="/communication/campaigns" className="back-link">
           All campaigns</Link>
@@ -250,6 +248,5 @@ export function CampaignResultDetails({id}:{id:string}){
           delivered or seen without verified callbacks.
         </p>
       </>}
-    </section>
-  </div></AppShell>;
+  </section>;
 }
