@@ -46,6 +46,8 @@ class Settings(BaseSettings):
 
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
+    # Single allowlisted WhatsApp pilot, never a production OTP sender.
+    otp_local_pilot_enabled: bool = False
     otp_secret: str | None = None
     otp_meta_access_token: str | None = None
     otp_meta_phone_number_id: str | None = None
@@ -128,6 +130,18 @@ class Settings(BaseSettings):
             )
             if len(token) < 12 or any(ch.isspace() for ch in token):
                 raise ValueError("Valid Saasyto access token required")
+        if self.otp_local_pilot_enabled:
+            if not (
+                self.app_env == "development"
+                and self.local_demo_login_enabled
+                and self.saasyto_local_test_enabled
+                and self.saasyto_delivery_enabled
+                and self.saasyto_sender_approved
+                and not self.otp_delivery_enabled
+            ):
+                raise ValueError("Local OTP requires approved one-number Saasyto pilot only")
+            if not self.otp_secret or len(self.otp_secret) < 32:
+                raise ValueError("OTP_SECRET of 32+ characters is required")
         if self.otp_delivery_enabled:
             import re
 
