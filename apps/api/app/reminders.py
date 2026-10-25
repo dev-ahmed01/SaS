@@ -190,7 +190,7 @@ def _build_preview(
             if sponsor_id not in eligible_ids:
                 continue
             recipients.append(ReminderRecipient(
-                recipient_id=sponsor_id, recipient_name=sponsor.full_name,
+                recipient_id=sponsor_id, recipient_name=person.full_name,
                 sponsor_count=1, outstanding_paise=person.outstanding_paise,
                 unpaid_sponsors=[person],
             ))
