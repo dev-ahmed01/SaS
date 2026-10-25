@@ -14,7 +14,7 @@ database is accepted by the CLI. No messages are sent by this utility.
 import argparse
 import uuid
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
