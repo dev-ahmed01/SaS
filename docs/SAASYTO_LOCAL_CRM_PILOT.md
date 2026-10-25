@@ -107,6 +107,43 @@ of continuous polling, use
 `python -m app.saasyto_local_worker --port 8001 --once`.
 Stop the worker with Ctrl+C.
 
+## Immediate send from Communication — no local worker required
+
+On the latest code, an unscheduled **Review & send** WhatsApp campaign can be
+submitted directly from **Communication → Campaigns → Campaign results**.
+
+1. Keep the selected sender's `SAASYTO_INSTANCE_ID` and `SAASYTO_ACCESS_TOKEN`
+   in the backend-only `.env`. The connected sender must actually be online
+   in Saasyto and authorized to send from the intended WhatsApp account.
+2. For an owner-authorized, consented single-phone pilot, set
+   `SAASYTO_LOCAL_TEST_ENABLED=true` and the exact
+   `SAASYTO_LOCAL_TEST_PHONE=+countrycode...`, plus
+   `SAASYTO_SENDER_APPROVED=true`, `SAASYTO_DELIVERY_ENABLED=true`,
+   and an activation cutoff before **the new campaign**. Restart the API.
+3. In Compose, choose **WhatsApp**, an audience that produces exactly **one**
+   eligible recipient, and **Review & send** (not Plan for later). Enter the
+   message. Continue to recipient review, then **Check recipients**.
+4. When 1 eligible recipient is shown, click **Send WhatsApp now** and confirm.
+   The Admin action stores a one-attempt approval, claims the recipient,
+   submits the text to `POST /api/send`, and refreshes the CRM result.
+   No separate worker is necessary for this case.
+5. **Accepted by Saasyto** means *gateway submission only*. Open the intended
+   recipient's WhatsApp chat and sender's WhatsApp history to verify receipt.
+   If Rejected, Unknown, or Not sent, inspect the reason without blind retry.
+
+Previously approved, queued, due-now local tests have a separate
+**Send pending WhatsApp now** action. Attempts already claimed, unknown,
+rejected, or submitted cannot be invoked again. No replays.
+
+The protected manual endpoint `POST
+/v1/communication/campaigns/{campaign_id}/saasyto/send-now` requires Admin
+session, CSRF, development-mode localhost safeguards, explicit prior
+campaign approval, exactly one queued recipient, and a due-now campaign.
+
+**Scheduled campaigns and production batches still require the private
+worker.** This change does not activate background scheduling, webhooks,
+or unrestricted sending to all active contacts.
+
 ## Step 3: send from CRM (not Saasyto dashboard)
 
 1. In the selected test person's CRM detail, ensure the correct
