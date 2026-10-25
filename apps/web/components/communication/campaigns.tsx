@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
+type CampaignSummary={
+  campaign_id:string;run_status:"not_approved"|"approved"|"cancelled"|"completed";
+  planned:number;submitted_unverified:number;rejected:number;unknown:number;
+  queued:number;claimed:number;suppressed_after_approval:number;
+  delivered:number|null;read:number|null;
+};
 type SaasytoRun={
   id:string;campaign_id:string;status:"approved"|"cancelled"|"completed";
   due_at:string;eligible_count:number;suppressed_count:number;
@@ -40,6 +47,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [busy,setBusy]=useState("");
   const [reload,setReload]=useState(0);
   const [provider,setProvider]=useState<SaasytoStatus|null>(null);
+  const [results,setResults]=useState<Record<string,CampaignSummary>>({});
   const [run,setRun]=useState<SaasytoRun|null>(null);
   const [runBusy,setRunBusy]=useState(false);
   const [reviewId,setReviewId]=useState<string|null>(null);
@@ -50,10 +58,12 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     const cached=recentSnapshot<Campaign[]>("/api/admin/communication/campaigns");
     if(cached)setItems(cached);
     setLoading(!cached);
-    apiGet<Campaign[]>("/campaigns").then(rows=>{
+    Promise.all([
+      apiGet<Campaign[]>("/campaigns"),apiGet<CampaignSummary[]>("/campaigns/results"),
+    ]).then(([rows,summaries])=>{
       rememberSnapshot("/api/admin/communication/campaigns",rows);setItems(rows);
-    })
-      .catch(()=>setError("Could not load saved campaigns."))
+      setResults(Object.fromEntries(summaries.map(item=>[item.campaign_id,item])));
+    }).catch(()=>setError("Could not load current campaign results."))
       .finally(()=>setLoading(false));
   },[revision,reload]);
   useEffect(()=>{
@@ -107,6 +117,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         }
       );
       setRun(result);
+      setReload(x=>x+1);
       setNotice(provider?.local_test_mode
         ? "Approved for local sending. The localhost worker must be running to submit the message."
         : "Campaign approved for the private delivery runner; messages are not automatically sent from this browser.");
@@ -137,7 +148,8 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   }
   return <section className="comm-panel" aria-label="Communication campaigns">
     <div className="comm-panel-header"><div><h2>Campaigns</h2>
-      <p>Drafts and plans across all audiences.</p></div>
+      <p>Open any campaign to see its recipient checks, failed submissions and
+        sending outcomes.</p></div>
       <button type="button" className="btn btn-secondary" onClick={()=>setReload(x=>x+1)}>
         Refresh</button>
     </div>
@@ -156,25 +168,28 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     {error&&<p className="form-error" role="alert">{error}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
     <div className="comm-campaign-table-scroll"><table className="data-table comm-campaign-table">
-      <thead><tr>{["Campaign","Channel","Audience","At draft","Planned IST","Status","Action"].map(h=>
+      <thead><tr>{["Campaign","Audience","Planned IST","Submitted","Rejected","Not sent","Read","Details"].map(h=>
         <th key={h} scope="col">{h}</th>)}</tr></thead>
-      <tbody>{loading&&items.length===0?<tr><td colSpan={7}>Loading campaigns…</td></tr>:!items.length?
-        <tr><td colSpan={7} className="comm-empty">No saved campaigns yet. Start in Compose.</td></tr>:
+      <tbody>{loading&&items.length===0?<tr><td colSpan={8}>Loading campaigns…</td></tr>:!items.length?
+        <tr><td colSpan={8} className="comm-empty">No campaigns yet. Start in Compose.</td></tr>:
         items.map(item=><tr key={item.id}>
-          <td><div className="comm-campaign-title"><strong>{item.title}</strong>
-            <span>{item.category.replace("_"," ")}</span></div></td>
-          <td>{item.channel==="whatsapp"?"WhatsApp":"Email"}</td>
+          <td><div className="comm-campaign-title">
+            <strong><Link href={"/communication/campaigns/"+item.id}>{item.title}</Link></strong>
+            <span>{item.channel==="whatsapp"?"WhatsApp":"Email"} ·
+              {" "+item.category.replace("_"," ")}</span></div></td>
           <td>{item.audience} · {item.segment}</td>
-          <td>{item.eligible_snapshot}/{item.candidate_snapshot}</td>
-          <td>{item.planned_for?istDisplay(item.planned_for):"—"}</td>
-          <td><span className={"status-pill "+(item.status==="cancelled"?"inactive":"scheduled")}>
-            {item.status==="scheduled"?"Planned":item.status==="cancelled"?"Cancelled":"Draft"}
-          </span></td>
+          <td>{item.planned_for?istDisplay(item.planned_for):"Awaiting approval"}</td>
+          <td>{results[item.id]?.submitted_unverified??0}</td>
+          <td>{results[item.id]?.rejected??0}</td>
+          <td>{results[item.id]?.suppressed_after_approval??0}</td>
+          <td>{results[item.id]?.read??"Unavailable"}</td>
           <td><div className="comm-review-actions">
-            {item.status==="cancelled"?"—":<>
+            <Link className="comm-text-button" href={"/communication/campaigns/"+item.id}>
+              View results</Link>
+            {item.status!=="cancelled"&&<>
               <button type="button" className="comm-text-button"
                 aria-expanded={reviewId===item.id}
-                onClick={()=>openReview(item)}>{reviewId===item.id?"Close review":"Review"}</button>
+                onClick={()=>openReview(item)}>{reviewId===item.id?"Close review":"Quick review"}</button>
               <button type="button" className="comm-text-button"
                 disabled={busy===item.id} onClick={()=>cancel(item)}>Cancel</button>
             </>}
@@ -255,7 +270,10 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         </div>
       </section>}
     <p className="comm-muted comm-history-footnote">
-      Planned dates use IST. Saving a plan never sends WhatsApp messages.
+      Submitted means accepted by Saasyto, not delivered or read. "Not sent" above
+      counts suppressed recipients after approval; contacts excluded during the
+      pre-send review appear in each campaign's detailed results. Planned dates use IST.
+      Creating a campaign never sends WhatsApp messages.
       An approved campaign requires the private dispatch worker. Local pilots
       can send only to the number explicitly permitted in API settings.
     </p>
