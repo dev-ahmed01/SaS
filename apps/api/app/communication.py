@@ -5,7 +5,7 @@ payment/reminder Pabbly transport is separately approved, gated and audited.
 Saved plans cannot bypass that transport or manufacture delivery evidence.
 """
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
@@ -372,14 +372,26 @@ class PreparationRead(BaseModel):
     eligible_count: int
     suppressed_count: int
     evaluated_at: datetime
+    # Admin-only aggregate diagnostics; never expose individual phone numbers,
+    # evidence references, or donor identities in campaign checks.
+    exclusion_reasons: dict[str, int] = Field(default_factory=dict)
     delivery_activated: Literal[False] = False
 
 
-def _preparation_read(row: CommunicationPreparation) -> PreparationRead:
+def _preparation_read(db: Session, row: CommunicationPreparation) -> PreparationRead:
+    reasons = Counter(db.scalars(
+        select(CommunicationRecipientSnapshot.suppression_reason).where(
+            CommunicationRecipientSnapshot.organization_id == row.organization_id,
+            CommunicationRecipientSnapshot.preparation_id == row.id,
+            CommunicationRecipientSnapshot.status == "suppressed",
+        )
+    ).all())
+    reasons.pop(None, None)
     return PreparationRead(
         id=row.id, campaign_id=row.campaign_id,
         eligible_count=row.eligible_count, suppressed_count=row.suppressed_count,
-        evaluated_at=row.evaluated_at, delivery_activated=False,
+        evaluated_at=row.evaluated_at, exclusion_reasons=dict(reasons),
+        delivery_activated=False,
     )
 
 
@@ -504,7 +516,7 @@ def simulate_preparation(
             raise HTTPException(status_code=409, detail="Request ID already used")
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
-        return _preparation_read(prior)
+        return _preparation_read(database, prior)
     count = database.scalar(select(func.count(CommunicationPreparation.id)).where(
         CommunicationPreparation.organization_id == admin.organization_id,
         CommunicationPreparation.campaign_id == campaign.id,
@@ -543,7 +555,7 @@ def simulate_preparation(
         database.rollback()
         raise HTTPException(status_code=409, detail="Preparation already recorded") from exc
     response.headers["Cache-Control"] = "no-store"
-    return _preparation_read(prep)
+    return _preparation_read(database, prep)
 
 
 @router.get("/campaigns/{identifier}/preparations", response_model=list[PreparationRead])
@@ -560,7 +572,7 @@ def list_preparations(
     if exists is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
     response.headers["Cache-Control"] = "no-store"
-    return [_preparation_read(row) for row in database.scalars(
+    return [_preparation_read(database, row) for row in database.scalars(
         select(CommunicationPreparation).where(
             CommunicationPreparation.organization_id == organization_id,
             CommunicationPreparation.campaign_id == identifier,
