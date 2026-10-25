@@ -122,6 +122,98 @@ def campaign_run(
     return _read(db, run) if run else None
 
 
+class CampaignApprovalReadiness(BaseModel):
+    ready: bool
+    code: str
+    message: str
+    eligible_count: int
+    local_test_mode: bool
+    permitted_phone_masked: str | None = None
+
+
+@admin_router.get("/campaigns/{identifier}/saasyto/readiness",
+                  response_model=CampaignApprovalReadiness)
+def campaign_approval_readiness(
+    identifier: uuid.UUID, response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    db: Annotated[Session, Depends(db_session)],
+) -> CampaignApprovalReadiness:
+    """Read-only eligibility check with actionable blockers, never a send.
+
+    Checks are advisory and are re-evaluated at approval and actual dispatch.
+    Keep complete recipient numbers and backend credentials out of replies.
+    """
+    cfg = get_settings()
+    admin = context[0]
+    row = _campaign(db, admin, identifier)
+    now = utc_now()
+    local = bool(getattr(cfg, "saasyto_local_test_enabled", False))
+    allowlisted = (getattr(cfg, "saasyto_local_test_phone", None) or "").lstrip("+")
+    masked = "•••• " + allowlisted[-4:] if local and len(allowlisted) >= 4 else None
+    preparation = db.scalars(select(CommunicationPreparation).where(
+        CommunicationPreparation.organization_id == admin.organization_id,
+        CommunicationPreparation.campaign_id == row.id,
+    ).order_by(CommunicationPreparation.evaluated_at.desc()).limit(1)).first()
+    candidates = _audience_rows(db, admin, row.audience, row.segment, now)
+    decisions = evaluate_recipients(
+        db, admin.organization_id, candidates, row.channel, row.category, now=now,
+    )
+    eligible = [(person, kind) for person, kind, state, _ in decisions
+                if state == "eligible"]
+    count = len(eligible)
+
+    def result(code: str, message: str) -> CampaignApprovalReadiness:
+        return CampaignApprovalReadiness(
+            ready=code == "ready", code=code, message=message,
+            eligible_count=count, local_test_mode=local,
+            permitted_phone_masked=masked,
+        )
+
+    response.headers["Cache-Control"] = "no-store"
+    if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
+        return result("sending_disabled",
+                      "WhatsApp sending is disabled in API settings. "
+                      "Enable it only after sender and recipient permissions are verified.")
+    if row.status == "cancelled" or row.channel != "whatsapp":
+        return result("invalid_campaign", "Only an active WhatsApp campaign can be sent.")
+    if _existing_run(db, admin.organization_id, identifier):
+        return result("already_approved",
+                      "This campaign already has a delivery attempt or approval. "
+                      "Check its results; do not create a duplicate send.")
+    cutoff = getattr(cfg, "saasyto_enable_after", None)
+    if cutoff is None or as_utc(row.created_at) < as_utc(cutoff):
+        return result("before_activation",
+                      "This campaign predates Saasyto activation. "
+                      "Create a new campaign after activation.")
+    if UNKNOWN_TOKEN.search(VALID_TEMPLATE.sub("", row.body)):
+        return result("invalid_template",
+                      "Message contains an unsupported {{placeholder}}.")
+    if preparation is None:
+        return result("no_recipient_check", "Click Check recipients before sending.")
+    if as_utc(preparation.evaluated_at) < now - timedelta(minutes=15):
+        return result("stale_recipient_check",
+                      "Recipient check expired. Click Check recipients again.")
+    if count == 0:
+        return result("no_eligible_contacts",
+                      "No eligible contacts. Review consent, opt-outs and active status.")
+    if count > MAX_APPROVAL_RECIPIENTS or count != preparation.eligible_count:
+        return result("audience_changed",
+                      "Eligible contacts changed since the last check. "
+                      "Click Check recipients again.")
+    if local:
+        if count != 1:
+            return result("local_requires_one",
+                          "Local pilot requires exactly one eligible recipient.")
+        actual = contact_address(eligible[0][0], "whatsapp").lstrip("+")
+        if not allowlisted or not hmac.compare_digest(actual, allowlisted):
+            return result("local_number_mismatch",
+                          "The one eligible contact does not match the permitted "
+                          "local test number. Check the contact's WhatsApp number "
+                          "against SAASYTO_LOCAL_TEST_PHONE in the API .env, "
+                          "then restart the API and run Check recipients again.")
+    return result("ready", "Recipient check passed. Sending still requires your approval.")
+
+
 @admin_router.post("/campaigns/{identifier}/saasyto", response_model=CampaignRunRead,
                    status_code=201)
 def approve_campaign(
