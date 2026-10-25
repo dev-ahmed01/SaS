@@ -122,6 +122,38 @@ sponsor opts out; the consolidated reminder must no longer count that promoter
 or include their sponsor in a dispatchable summary. These cases run in
 `test_reminders.py` using synthetic addresses, no actual messages.
 
+## Continued QA: Promoter assignment classification across IST rollover (PR #50)
+
+**Confirmed source mismatch:** the Promoters `/{promoter_id}/sponsors` endpoint
+filtered `kind=prospects`/`kind=sponsors` by the stored
+`Prospect.lifecycle_status` column and exposed that same stored value. The
+Dashboard, Accounting and Prospect Details endpoints already recomputed
+lifecycle from current IST date and *net* credit history. When stored lifecycle
+had not been refreshed, the same prospect could appear in an incorrect
+promoter tab with an incorrect status, even though reminders were properly
+suppressed by the live accounting policy.
+
+**Correction:** Preserve the approved two-table UI and the existing
+`new` versus non-`new` grouping, but use the shared tenant-scoped,
+read-only `_project_statuses` path before filtering. Apply pagination **after**
+the projected filter, so `total`, pages and displayed statuses agree.
+Join each sponsor with the assignment's organization ID to retain
+tenant isolation. GET is strictly read-only: no version increment,
+materialized state mutation or fabricated audit event.
+
+**Synthetic regression** `test_promoter_live_lifecycle_qa.py`: same sponsor
+at 31 Oct 23:59 IST versus 1 Nov 00:00 IST; a second sponsor with a
+legitimate October payment despite a stale `new` cache; paginated
+`kind=sponsors` count versus rows; no mutations during reads; and a
+partial contribution followed by append-only reversal reflecting immediately
+in the Promoters and Prospect Details views.
+
+**Open architectural gate:** materialized `lifecycle_status` still requires
+an authenticated status refresh endpoint; this PR fixes the outward-facing
+Promoter list without silently scheduling an unapproved worker. Production
+automation of materialization requires a private authenticated scheduler and
+isolated staging validation. No provider sends or real donor data are touched.
+
 ## Migration and existing data
 
 `0021_unique_prospect_mobile` runs a **read-only preflight** against all
