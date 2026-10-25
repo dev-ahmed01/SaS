@@ -143,7 +143,7 @@ export function PromoterDetails({id}:{id:string}){
         </div>
       </div>
       {consentOpen&&<ContactConsent recipientKind="promoter" recipientId={record.id}
-        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={record.is_active}/>}
+        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={record.is_active} onChanged={refresh}/>}
     </>}
     {confirm&&record&&<PromoterStatusDialog promoter={record} onClose={()=>setConfirm(false)}
       onChanged={()=>{setConfirm(false);refresh();}}/>}
