@@ -107,14 +107,23 @@ export function CampaignResultDetails({id}:{id:string}){
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const refresh=useCallback(async()=>{
-    const [result,checks,dispatch,availability]=await Promise.all([
-      apiGet<CampaignDetails>("/campaigns/"+id+"/results"),
+    // Results must remain visible even if optional provider/readiness APIs
+    // cannot be reached. These read failures never authorize delivery.
+    const result=await apiGet<CampaignDetails>("/campaigns/"+id+"/results");
+    setDetails(result);
+    const [checks,dispatch,availability]=await Promise.allSettled([
       apiGet<Review[]>("/campaigns/"+id+"/preparations"),
       apiGet<DeliveryRun|null>("/campaigns/"+id+"/saasyto"),
       apiGet<Provider>("/provider/saasyto"),
     ]);
-    setDetails(result);setReview(checks[0]??null);
-    setRun(dispatch);setProvider(availability);
+    setReview(checks.status==="fulfilled"?(checks.value[0]??null):null);
+    setRun(dispatch.status==="fulfilled"?dispatch.value:null);
+    setProvider(availability.status==="fulfilled"?availability.value:null);
+    if(checks.status==="rejected"||dispatch.status==="rejected"||
+      availability.status==="rejected"){
+      setNotice("Campaign results loaded, but some delivery settings are unavailable. "+
+        "Live approval is disabled until those settings can be verified.");
+    }
   },[id]);
   useEffect(()=>{
     let active=true;
