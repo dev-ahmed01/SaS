@@ -13,7 +13,7 @@ type SaasytoRun={
 };
 type SaasytoStatus={
   provider:string;transport:string;delivery_enabled:boolean;
-  sender_approved:boolean;credentials_configured:boolean;
+  local_test_mode?:boolean;sender_approved:boolean;credentials_configured:boolean;
   webhook_verified:boolean;connection_tested:boolean;notice:string;
 };
 type RecipientCheck={
@@ -96,7 +96,9 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         }
       );
       setRun(result);
-      setNotice("Campaign approved for the private delivery runner; messages are not automatically sent from this browser.");
+      setNotice(provider?.local_test_mode
+        ? "Approved for local sending. The localhost worker must be running to submit the message."
+        : "Campaign approved for the private delivery runner; messages are not automatically sent from this browser.");
     }catch(e){setReviewError(e instanceof Error?e.message:"Approval was not confirmed.");}
     finally{setRunBusy(false);}
   }
@@ -132,7 +134,9 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       <strong>WhatsApp delivery · Saasyto</strong>
       <span>{provider
         ? provider.delivery_enabled
-          ? "Provider configuration enabled · actual delivery and callbacks unverified"
+          ? provider.local_test_mode
+            ? "Local test · one permitted recipient · delivery callbacks unverified"
+            : "Provider configuration enabled · delivery callbacks unverified"
           : "Not connected for sending · campaigns remain drafts or plans"
         : "Provider configuration not verified"}
       </span>
@@ -186,11 +190,20 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             Excluded {run.suppressed_after_approval}</span>
           <small>Scheduled {istDisplay(run.due_at)}. {run.notice}</small>
         </div>}
+        {run&&<button className="btn btn-secondary" type="button"
+          disabled={runBusy} onClick={()=>{
+            void apiGet<SaasytoRun>(
+              "/campaigns/"+run.campaign_id+"/saasyto"
+            ).then(result=>setRun(result))
+              .catch(()=>setReviewError("Unable to refresh the attempt status."));
+          }}>Refresh delivery attempts</button>}
         {reviewError&&<p className="form-error" role="alert">{reviewError}</p>}
         {!check&&!checking&&!reviewError&&<p className="comm-muted">
           Not checked yet.</p>}
         <div className="comm-review-footer">
-          <span className="comm-muted">Simulation only · no messages sent.</span>
+          <span className="comm-muted">{run
+            ? "Messages are queued only after approval."
+            : "Recipient check is a preview; no messages sent."}</span>
           {run?.status==="approved"&&<button className="btn btn-secondary"
             type="button" disabled={runBusy} onClick={()=>{
               const item=items.find(row=>row.id===reviewId);
@@ -211,8 +224,9 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         </div>
       </section>}
     <p className="comm-muted comm-history-footnote">
-      Planned dates are saved in IST, but plans are not automatically sent.
-      Provider delivery must be configured and explicitly activated separately.
+      Planned dates use IST. Saving a plan never sends WhatsApp messages.
+      An approved campaign requires the private dispatch worker. Local pilots
+      can send only to the number explicitly permitted in API settings.
     </p>
   </section>;
 }

@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     saasyto_access_token: SecretStr | None = None
     saasyto_enable_after: datetime | None = None
     saasyto_runner_secret: SecretStr | None = None
+    # One-recipient, opt-in local pilot. This is deliberately NOT a generic
+    # development-mode bypass of the normal production sending restriction.
+    saasyto_local_test_enabled: bool = False
+    saasyto_local_test_phone: str | None = None
 
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
@@ -91,11 +95,21 @@ class Settings(BaseSettings):
                     "Staging and production DATABASE_URL must enable PostgreSQL TLS "
                     "with sslmode=require, verify-ca or verify-full"
                 )
+        if self.saasyto_local_test_enabled:
+            import re
+
+            if not (self.app_env == "development" and self.local_demo_login_enabled):
+                raise ValueError("Saasyto local test requires protected loopback demo mode")
+            # The local-demo validator above already enforces exactly
+            # sas_dev@127.0.0.1:5432/sas_dev, no extra query parameters.
+            if not re.fullmatch(r"\+[1-9][0-9]{7,14}", self.saasyto_local_test_phone or ""):
+                raise ValueError("Saasyto local test requires one E.164 +country-code phone")
         if self.saasyto_delivery_enabled:
             import re
 
-            if self.app_env not in ("production", "test"):
-                raise ValueError("Saasyto campaign delivery requires approved production")
+            local_pilot = self.app_env == "development" and self.saasyto_local_test_enabled
+            if self.app_env not in ("production", "test") and not local_pilot:
+                raise ValueError("Saasyto delivery requires approved production or local pilot")
             if not self.saasyto_enable_after or not self.saasyto_enable_after.tzinfo:
                 raise ValueError("Saasyto enable-after cutoff must include a timezone")
             runner = (

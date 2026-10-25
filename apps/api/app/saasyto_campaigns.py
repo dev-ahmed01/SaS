@@ -162,6 +162,16 @@ def approve_campaign(
             or len(eligible) != payload.expected_eligible
             or len(eligible) != prep.eligible_count):
         raise HTTPException(status_code=409, detail="Audience changed; review again")
+    if getattr(cfg, "saasyto_local_test_enabled", False):
+        allowed = (cfg.saasyto_local_test_phone or "").lstrip("+")
+        if len(eligible) != 1 or any(
+            contact_address(person, "whatsapp").lstrip("+") != allowed
+            for person, _kind in eligible
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Local pilot requires one consented, allowlisted recipient",
+            )
     run = SaasytoCampaignRun(
         organization_id=admin.organization_id, campaign_id=row.id,
         approved_by_admin_id=admin.id, approved_at=now,
@@ -264,8 +274,13 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     ):
         return None
     phone = contact_address(person, "whatsapp")
+    cfg = get_settings()
+    if getattr(cfg, "saasyto_local_test_enabled", False) and not hmac.compare_digest(
+        phone.lstrip("+"), (cfg.saasyto_local_test_phone or "").lstrip("+")
+    ):
+        return None
     if not hmac.compare_digest(
-        item.approved_phone_digest, _phone_digest(get_settings(), phone)
+        item.approved_phone_digest, _phone_digest(cfg, phone)
     ):
         return None
     message = _render(row.body, person, now)

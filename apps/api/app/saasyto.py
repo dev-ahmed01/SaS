@@ -15,6 +15,7 @@ class ProviderStatus(BaseModel):
     provider: str
     transport: str
     delivery_enabled: bool
+    local_test_mode: bool = False
     sender_approved: bool
     credentials_configured: bool
     webhook_verified: bool
@@ -35,11 +36,16 @@ def saasyto_status(
         provider="Saasyto",
         transport="one_text_per_recipient",
         delivery_enabled=cfg.saasyto_delivery_enabled,
+        local_test_mode=getattr(cfg, "saasyto_local_test_enabled", False),
         sender_approved=cfg.saasyto_sender_approved,
         credentials_configured=credentials,
         webhook_verified=False,
         connection_tested=False,
         notice=(
+            "Local pilot is active for one allowlisted recipient; WhatsApp delivery "
+            "and webhooks are still unverified."
+            if cfg.saasyto_delivery_enabled and
+            getattr(cfg, "saasyto_local_test_enabled", False) else
             "Saasyto transport enabled by the administrator, but message delivery "
             "and webhook confirmations have not been verified."
             if cfg.saasyto_delivery_enabled else
