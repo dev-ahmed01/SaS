@@ -33,6 +33,7 @@ type Review={
 };
 type DeliveryRun={
   id:string;status:Status;queued:number;eligible_count:number;
+  accepted_unverified:number;rejected:number;unknown:number;suppressed_after_approval:number;
 };
 type Provider={
   delivery_enabled:boolean;local_test_mode?:boolean;
@@ -149,21 +150,71 @@ export function CampaignResultDetails({id,onBack}:{
     }catch(e){setError(e instanceof Error?e.message:"Could not check recipients.");}
     finally{setBusy(false);}
   }
+  const localImmediate=Boolean(provider?.local_test_mode&&!details?.planned_for);
+  const futurePlan=Boolean(details?.planned_for&&
+    new Date(details.planned_for).getTime()>Date.now());
   async function approve(){
     if(busy||!review||!provider?.delivery_enabled||review.eligible_count<1||run)return;
-    if(!window.confirm("Approve "+review.eligible_count+
-      " eligible recipient(s)? This queues a single attempt per contact. "+
-      "Gateway acceptance does not confirm delivery."))return;
+    const immediate=localImmediate;
+    if(!window.confirm(immediate
+      ? "Send one WhatsApp message now to the authorized test contact? "+
+        "The request will reach Saasyto immediately. Gateway acceptance is not delivery."
+      : "Approve "+review.eligible_count+
+        " eligible recipient(s)? Messages will be queued for the private sender. "+
+        "Gateway acceptance does not confirm delivery."))return;
     setBusy(true);setError("");setNotice("");
     try{
       await apiWrite("/campaigns/"+id+"/saasyto","POST",{
         preparation_id:review.id,expected_eligible:review.eligible_count,
         confirm_send:true,
       });
-      await refresh();
-      setNotice("Approved. The private sending worker will process the campaign when due.");
+      if(immediate){
+        try{
+          const attempt=await apiWrite<DeliveryRun>(
+            "/campaigns/"+id+"/saasyto/send-now","POST",{}
+          );
+          await refresh();
+          setNotice(attempt.accepted_unverified===1
+            ? "Saasyto accepted the message. Check the recipient's WhatsApp; delivery is not confirmed."
+            : attempt.rejected===1
+              ? "Saasyto rejected the message. Review the sending result and sender connection."
+              : attempt.unknown===1
+                ? "Saasyto result is unknown. Verify on WhatsApp before considering another campaign."
+                : attempt.suppressed_after_approval===1
+                  ? "Not sent: the recipient no longer meets sending requirements."
+                  : "Message attempt recorded. See the result below.");
+        }catch{
+          await refresh();
+          setError("Approved, but immediate submission could not be verified. "+
+            "Review results before taking another action. Do not resend this campaign.");
+        }
+      }else{
+        await refresh();
+        setNotice("Approved and queued. The private sending worker must be running "+
+          "for the message to reach Saasyto when due.");
+      }
     }catch(e){setError(e instanceof Error?e.message:"Unable to approve campaign.");}
     finally{setBusy(false);}
+  }
+  async function sendPendingLocal(){
+    if(busy||!provider?.local_test_mode||!provider.delivery_enabled||
+      !run||run.status!=="approved"||run.queued!==1||futurePlan)return;
+    if(!window.confirm("Submit this single pending WhatsApp message now? "+
+      "This cannot be undone and will never be automatically retried."))return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const attempt=await apiWrite<DeliveryRun>(
+        "/campaigns/"+id+"/saasyto/send-now","POST",{}
+      );
+      await refresh();
+      setNotice(attempt.accepted_unverified===1
+        ? "Saasyto accepted the message; check WhatsApp for actual receipt."
+        : "Sending attempt recorded. See the recipient outcome below.");
+    }catch{
+      await refresh();
+      setError("Could not verify submission. Check the recipient attempt status; "+
+        "do not automatically send again.");
+    }finally{setBusy(false);}
   }
   async function cancel(){
     if(busy||!run||run.status!=="approved"||
@@ -222,8 +273,14 @@ export function CampaignResultDetails({id,onBack}:{
             Local test allows one authorized recipient. This campaign has
             multiple eligible contacts.
           </p>}
-        {run&&<p className="comm-muted">
-          Sending attempted. For another message, create a new campaign.
+        {run?.status==="completed"&&<p className="comm-muted">
+          Sending attempt finished. To send a different message, create a new campaign.
+        </p>}
+        {!provider?.delivery_enabled&&<p className="comm-muted">
+          WhatsApp sending is disabled in backend settings. Creating a plan does not send a message.
+        </p>}
+        {provider?.local_test_mode&&<p className="comm-muted">
+          Local testing is limited to one authorized WhatsApp number.
         </p>}
         <div className="comm-recipient-review" role="region" aria-label="Recipient approval">
           <div className="comm-review-heading">
@@ -247,11 +304,19 @@ export function CampaignResultDetails({id,onBack}:{
             {!run&&<button type="button" className="btn btn-secondary"
               disabled={busy} onClick={()=>void checkRecipients()}>
               {busy?"Working…":"Check recipients"}</button>}
+            {run?.status==="approved"&&run.queued===1&&provider?.local_test_mode&&
+              provider.delivery_enabled&&!futurePlan&&<button type="button"
+              className="btn btn-primary" disabled={busy}
+              onClick={()=>void sendPendingLocal()}>
+                {busy?"Sending…":"Send pending WhatsApp now"}
+              </button>}
             {!run&&provider?.delivery_enabled&&<button type="button"
               className="btn btn-primary" disabled={
                 busy||older||!review||review.eligible_count===0||
                 Boolean(provider.local_test_mode&&review.eligible_count!==1)
-              } onClick={()=>void approve()}>Approve WhatsApp delivery</button>}
+              } onClick={()=>void approve()}>
+                {busy?"Working…":localImmediate?"Send WhatsApp now":"Approve WhatsApp delivery"}
+              </button>}
             {run?.status==="approved"&&<button type="button" className="btn btn-secondary"
               disabled={busy} onClick={()=>void cancel()}>Stop pending sends</button>}
           </div>
