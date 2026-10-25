@@ -3,6 +3,9 @@
 Never infer opt-in from Active status, override STOP, or invoke a sender.
 One evidence source/reference is required for the selected Active prospect set.
 """
+import hashlib
+import hmac
+import json
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -35,12 +38,16 @@ class ConsentPreview(BaseModel):
     needs_confirmation: int
     opted_out: int
     no_number: int
+    review_fingerprint: str
 
 
 class ConsentConfirmInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirm: Literal["I_HAVE_VERIFIED_EXISTING_CONSENT"]
     expected_needs_confirmation: int = Field(ge=1, le=MAX_BULK_CONSENTS)
+    expected_review_fingerprint: str = Field(
+        min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$",
+    )
     source: str = Field(min_length=3, max_length=80)
     evidence_reference: str = Field(min_length=3, max_length=160)
 
@@ -69,6 +76,8 @@ def _selection(db: Session, org, *, lock=False):
     latest = _latest_events(db, org, "whatsapp")
     blocked_numbers = _revoked_addresses(db, org, "whatsapp", latest)
     eligible = []
+    digest = hashlib.sha256()
+    digest.update(f"{org}|whatsapp|active-consent-review-v1\n".encode("utf-8"))
     summary = dict(
         active=len(people), already_documented=0,
         needs_confirmation=0, opted_out=0, no_number=0,
@@ -76,6 +85,15 @@ def _selection(db: Session, org, *, lock=False):
     for person in people:
         address = contact_address(person, "whatsapp")
         event = latest.get(("prospect", person.id))
+        # The count alone is insufficient: a reviewed person may be swapped
+        # for a different Active person without changing that count.
+        # Bind consent confirmation to recipient identity, current address,
+        # entity version, latest consent event, and shared-address STOP state.
+        digest.update(json.dumps([
+            str(person.id), person.version, address,
+            str(event.id) if event else "", address in blocked_numbers,
+        ], separators=(",", ":")).encode("utf-8"))
+        digest.update(b"\n")
         if not address:
             summary["no_number"] += 1
         elif address in blocked_numbers or (
@@ -87,6 +105,7 @@ def _selection(db: Session, org, *, lock=False):
         else:
             summary["needs_confirmation"] += 1
             eligible.append(person)
+    summary["review_fingerprint"] = digest.hexdigest()
     return ConsentPreview(**summary), eligible
 
 
@@ -115,7 +134,10 @@ def confirm_existing_whatsapp_consent(
     """
     admin = context[0]
     summary, chosen = _selection(db, admin.organization_id, lock=True)
-    if summary.needs_confirmation != payload.expected_needs_confirmation:
+    if (summary.needs_confirmation != payload.expected_needs_confirmation
+            or not hmac.compare_digest(
+                summary.review_fingerprint, payload.expected_review_fingerprint,
+            )):
         raise HTTPException(status_code=409, detail="Audience changed; review again")
     now = utc_now()
     for person in chosen:
