@@ -97,7 +97,9 @@ function RecipientTable({title,rows}:{
   </section>;
 }
 
-export function CampaignResultDetails({id}:{id:string}){
+export function CampaignResultDetails({id,onBack}:{
+  id:string;onBack?:()=>void;
+}){
   const [details,setDetails]=useState<CampaignDetails|null>(null);
   const [review,setReview]=useState<Review|null>(null);
   const [run,setRun]=useState<DeliveryRun|null>(null);
@@ -177,7 +179,8 @@ export function CampaignResultDetails({id}:{id:string}){
   const s=details?.summary;
   return <section className="comm-panel" aria-label="Campaign results detail">
       <div className="comm-panel-header">
-        <div><Link href="/communication/campaigns" className="back-link">
+        <div><Link href="/communication/campaigns" className="back-link"
+          onClick={onBack}>
           All campaigns</Link>
           <h2>{details?.title??"Campaign results"}</h2>
           {details&&<p>{details.channel==="whatsapp"?"WhatsApp":"Email"} ·
