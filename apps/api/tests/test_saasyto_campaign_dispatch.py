@@ -218,3 +218,85 @@ def test_approval_requires_fresh_review_and_new_campaign(dispatch_system, monkey
         "confirm_send": True,
     })
     assert response.status_code == 409
+
+
+def test_campaign_results_include_excluded_contacts_and_mask_numbers(dispatch_system):
+    client, _ = dispatch_system
+    csrf = login(client)
+    allowed = _person(client, csrf, "1101")
+    missing_general_consent = _person(client, csrf, "1102")
+    _consent(client, csrf, allowed, "opted_in")
+    campaign = create_campaign(client, csrf, title="Recipient results review")
+    assert campaign.status_code == 201
+    cid = campaign.json()["id"]
+    base = "/v1/communication/campaigns/" + cid
+    check = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert check.status_code == 201
+    assert check.json()["eligible_count"] == 1
+    assert check.json()["suppressed_count"] == 1
+
+    detail = client.get(base + "/results")
+    assert detail.status_code == 200, detail.text
+    assert detail.headers["cache-control"] == "no-store"
+    record = detail.json()
+    assert record["summary"]["run_status"] == "not_approved"
+    assert record["summary"]["submitted_unverified"] == 0
+    assert record["summary"]["delivered"] is None
+    assert record["summary"]["read"] is None
+    assert record["excluded_reasons"] == {"no_general_consent": 1}
+    assert len(record["excluded_recipients"]) == 1
+    excluded = record["excluded_recipients"][0]
+    assert excluded["recipient_id"] == missing_general_consent["id"]
+    assert excluded["name"] == missing_general_consent["full_name"]
+    assert excluded["phone_masked"] == "•••• 1102"
+    assert excluded["status"] == "excluded"
+    assert "+919899001102" not in detail.text
+    all_summaries = client.get("/v1/communication/campaigns/results").json()
+    assert all_summaries[0]["run_status"] == "not_approved"
+    assert all_summaries[0]["excluded_in_review"] == 1
+    assert client.get("/v1/communication/campaigns/"+str(uuid.uuid4())+
+                      "/results").status_code == 404
+
+
+def test_campaign_results_distinguish_submission_rejection_unknown_and_no_webhook(
+    dispatch_system, monkeypatch,
+):
+    client, _ = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "1103")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, _ = _approved(client, csrf, "Provider rejected test")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text",
+                        lambda *_a, **_k: Submission("rejected"))
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json()[
+        "rejected"
+    ] == 1
+    detail = client.get("/v1/communication/campaigns/"+cid+"/results").json()
+    assert detail["summary"]["rejected"] == 1
+    assert detail["summary"]["submitted_unverified"] == 0
+    assert detail["summary"]["delivered"] is None
+    assert detail["summary"]["read"] is None
+    assert detail["recipients"][0]["status"] == "rejected"
+    assert detail["recipients"][0]["phone_masked"] == "•••• 1103"
+    assert "test-consent-reference" not in str(detail)
+    row = next(x for x in client.get("/v1/communication/campaigns/results").json()
+               if x["campaign_id"] == cid)
+    assert row["rejected"] == 1 and row["read"] is None
+
+    cid2, _ = _approved(client, csrf, "Provider unknown test")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text",
+                        lambda *_a, **_k: Submission("unknown"))
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json()[
+        "unknown"
+    ] == 1
+    unknown = client.get("/v1/communication/campaigns/"+cid2+"/results").json()
+    assert unknown["summary"]["unknown"] == 1
+    assert unknown["summary"]["rejected"] == 0
+    assert unknown["summary"]["delivered"] is None
+    assert unknown["recipients"][0]["status"] == "unknown"
+    # The read-only results endpoint never resets the queue or retries.
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
