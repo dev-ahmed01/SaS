@@ -149,7 +149,9 @@ test("Communication replaces Reminders with a safe compose-first workspace",asyn
   await expect(tabs.getByRole("link").allTextContents()).resolves.toEqual([
     "Compose","Campaigns","Templates & Automations"
   ]);
-  await expect(page.getByRole("button",{name:"Save draft"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Continue to recipient review"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Plan for later"})).toHaveCount(0);
+  await expect(page.getByText("Plan for later",{exact:true})).toBeVisible();
   await expect(page.getByRole("button",{name:/^Send now/})).toHaveCount(0);
   await expect(page.getByRole("region",{name:"Reminder preparation history"})).toHaveCount(0);
   const clock=page.locator(".topbar-ist-clock");
@@ -1023,7 +1025,10 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await expect(page.getByRole("textbox",{name:"Message body"})).toContainText("Assalamu Alaikum");
   await page.getByRole("button",{name:"Continue to recipient review"}).click();
   await expect(page).toHaveURL(/\/communication\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Update "+key})).toBeVisible();
+  await page.waitForTimeout(1200);
+  await expect(page.getByRole("heading",{name:"Update "+key}),
+    "Campaign detail rendered: "+(await page.locator("body").innerText()).slice(-1500)
+  ).toBeVisible();
   await page.goto("/communication/campaigns");
   const row=page.getByRole("row",{name:new RegExp("Update "+key)});
   await expect(row).toBeVisible();
@@ -1058,7 +1063,10 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await page.getByRole("textbox",{name:"Message body"}).fill("Assalamu Alaikum, a Foundation update.");
   await page.getByRole("button",{name:"Continue to recipient review"}).click();
   await expect(page).toHaveURL(/\/communication\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Consent update "+suffix})).toBeVisible();
+  await page.waitForTimeout(1200);
+  await expect(page.getByRole("heading",{name:"Consent update "+suffix}),
+    "Campaign detail rendered: "+(await page.locator("body").innerText()).slice(-1500)
+  ).toBeVisible();
   await page.goto("/communication/campaigns");
   const campaign=page.getByRole("row",{name:new RegExp("Consent update "+suffix)});
   await expect(campaign).toBeVisible();
