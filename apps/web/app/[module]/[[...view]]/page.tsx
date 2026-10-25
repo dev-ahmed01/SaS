@@ -15,19 +15,25 @@ export async function generateMetadata({params}:{params:Promise<{module:string;v
   return {title:module[0]?.toUpperCase()+module.slice(1)+" | Sponsor a Salah",robots:{index:false,follow:false}};
 }
 
-export default async function ModuleRoute({params}:{params:Promise<{module:string;view?:string[]}>}) {
+export default async function ModuleRoute({params,searchParams}:{
+  params:Promise<{module:string;view?:string[]}>;
+  searchParams:Promise<{campaign?:string}>;
+}) {
   const {module,view}=await params;
   const target=view?.[0]??(module==="communication"?"compose":
     ["prospects","promoters"].includes(module)?"all":"add");
-  // Keep campaign details within the established authenticated module
-  // route; the legacy catch-all otherwise rejects two-segment views as 404.
-  if(module==="communication" && target==="campaigns" && view?.length===2){
-    if(!UUID.test(view[1]))notFound();
-    await requireAdminSession();
-    return <CampaignResultDetails id={view[1]}/>;
-  }
   if(!valid[module]?.includes(target) || (view && view.length!==1))notFound();
   await requireAdminSession();
+  // The existing /communication/campaigns module route is already reliable
+  // across Next production builds. Keep a directly linkable full-page result
+  // view using its campaign query rather than a conflicting dynamic sub-route.
+  if(module==="communication" && target==="campaigns"){
+    const {campaign}=await searchParams;
+    if(campaign!==undefined){
+      if(!UUID.test(campaign))notFound();
+      return <CampaignResultDetails id={campaign}/>;
+    }
+  }
   if(module==="reminders") redirect("/communication");
   if(module==="communication"&&target==="automations") redirect("/communication/templates");
   return <ModuleWorkspace module={module} view={target}/>;
