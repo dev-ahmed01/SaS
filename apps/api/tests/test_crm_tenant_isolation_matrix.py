@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start
 from app.main import app
 from app.models import (
@@ -58,12 +59,7 @@ def test_two_admins_cannot_read_or_mutate_each_others_records(api):
     )
     assert assignment.status_code == 200, assignment.text
     details_a = first.get("/v1/prospects/" + sponsor_a["id"]).json()
-    activation = first.post(
-        "/v1/prospects/" + sponsor_a["id"] + "/stage",
-        headers=first_csrf,
-        json={"version": details_a["version"], "stage": "active",
-              "note": "Synthetic permission-boundary sponsor"},
-    )
+    activation = activate_with_test_otp(first, first_csrf, details_a)
     assert activation.status_code == 200, activation.text
     today = ist_today()
     receipt_a = first.post("/v1/collections", headers=first_csrf, json={
