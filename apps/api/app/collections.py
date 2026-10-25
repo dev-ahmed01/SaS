@@ -224,7 +224,15 @@ def add_collection(
         source_type="manual_attested", source_key="manual:"+digest, verified_at=now,
     )
     db.add(credit)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        # Flush happens before commit so the ordinary commit exception guard
+        # cannot catch a concurrent duplicate evidence/source key.
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Duplicate request or transaction. Refresh before retrying"
+        ) from exc
     row = ManualCollection(
         organization_id=admin.organization_id, prospect_id=sponsor.id,
         verified_credit_id=credit.id, request_id=payload.request_id,
@@ -236,7 +244,13 @@ def add_collection(
         recorded_by_admin_id=admin.id,
     )
     db.add(row)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Duplicate request or transaction. Refresh before retrying"
+        ) from exc
     can_message = sponsor.whatsapp_opt_in and bool(
         sponsor.whatsapp_number or sponsor.mobile_number
     )
@@ -431,7 +445,13 @@ def reverse_collection(
         actor_admin_id=admin.id,
     )
     db.add(reversal)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Collection was reversed by another request. Refresh and retry"
+        ) from exc
     rates = list(db.scalars(select(SponsorshipRate).where(
         SponsorshipRate.organization_id == admin.organization_id,
         SponsorshipRate.prospect_id == receipt.prospect_id,
