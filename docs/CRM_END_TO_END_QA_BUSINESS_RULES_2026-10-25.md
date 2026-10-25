@@ -209,6 +209,33 @@ end-to-end concurrent HTTP load test. The API's effective transaction
 serialization and tenant access permissions still require staging review
 before production launch. No real bank records or outbound messages are used.
 
+## Two-admin cross-tenant authorization matrix (PR #53)
+
+**Boundary:** Two independently authenticated TestClients use distinct Admin
+sessions and separate organizations on a disposable synthetic database.
+Cross-tenant endpoint access must return 404 for owned resources, not expose
+record existence or allow Admin B to modify Admin A's sponsors, promoters,
+collections, consents or communication planning records. A CSRF token from
+Admin A must not authorize writes in Admin B's session.
+
+**Positive cases:** Both organizations can register identical synthetic
+names, sponsor mobile numbers and promoter mobile numbers. Each can own a
+separate legitimate promoter assignment without altering the other's
+assignment rows, collections, communication campaign or consent state.
+
+**Negative cases:** Admin B must be unable to read A's Prospect Details,
+follow-ups, activity, promoter details, assigned sponsors and promoter
+activity; edit A's prospect, toggle its outreach stage, deactivate A's
+promoter, create or reverse A's collection, edit A's template, cancel A's
+campaign, change A's communication consent or assign A's sponsor to B's
+promoter (and vice versa). B's list and financial views must exclude A's
+data.
+
+**Limit:** This verifies authenticated API isolation and rejection paths
+with simulated sessions, but does not establish infrastructure/network
+segmentation or exhaustive authorization of every future endpoint.
+No real data, real transfers or messages are involved.
+
 ## Migration and existing data
 
 `0021_unique_prospect_mobile` runs a **read-only preflight** against all
