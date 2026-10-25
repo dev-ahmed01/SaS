@@ -1,4 +1,3 @@
-from activation_helper import activate_with_test_otp
 """Promoter assignment lists must agree with read-only IST financial status.
 
 All fixtures are synthetic and tenant-scoped; no real payment or message is sent.
@@ -6,10 +5,11 @@ All fixtures are synthetic and tenant-scoped; no real payment or message is sent
 import uuid
 from datetime import UTC, date, datetime
 
+from activation_helper import activate_with_test_otp
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-models import AuditEvent, Prospect, SponsorshipRate, VerifiedCredit
+from app.models import AuditEvent, Prospect, SponsorshipRate, VerifiedCredit
 
 pytest_plugins = ("test_crm_review_2026_10",)
 
