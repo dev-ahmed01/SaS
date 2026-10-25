@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
 import { FollowUpLog } from "./followup-log";
+import { ContactConsent } from "../communication/contact-consent";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
 import { ProspectStageControl } from "./prospect-stage-control";
@@ -25,6 +26,7 @@ export function ProspectDetails({id}:{id:string}){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [editing,setEditing]=useState(false);
+  const [consentOpen,setConsentOpen]=useState(false);
   const [stageOpen,setStageOpen]=useState(false);
   const [archiveOpen,setArchiveOpen]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -129,6 +131,10 @@ export function ProspectDetails({id}:{id:string}){
         <FollowUpLog prospect={record} onSaved={refresh}/>
       </section>
       <div className="crm-redesign-actions" aria-label="Prospect actions">
+        <button type="button" className="btn btn-secondary"
+          aria-expanded={consentOpen} onClick={()=>setConsentOpen(open=>!open)}>
+          Communication permissions
+        </button>
         <button type="button" className="btn btn-secondary" disabled={Boolean(record.archived_at)}
           onClick={()=>setEditing(v=>!v)}><Icon name="file" size={17}/> Edit</button>
         <button type="button" className="btn btn-secondary crm-danger-btn" onClick={()=>setArchiveOpen(true)}>
@@ -136,6 +142,8 @@ export function ProspectDetails({id}:{id:string}){
         <button type="button" className="btn btn-primary" disabled={Boolean(record.archived_at)}
           onClick={()=>setStageOpen(true)}>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</button>
       </div>
+      {consentOpen&&<ContactConsent recipientKind="prospect" recipientId={record.id}
+        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={!record.archived_at}/>}
     </>}
     {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}
       onChanged={()=>{setStageOpen(false);refresh();}}/>}
