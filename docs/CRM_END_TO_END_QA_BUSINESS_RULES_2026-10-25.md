@@ -174,6 +174,41 @@ empty individual and unchanged-active transfer requests toward B. All must be
 rejected without changes to either promoter or historical assignment count.
 Test remains entirely synthetic and does not send any notifications.
 
+## Parallel PostgreSQL invariants and early-flush conflict handling (PR #52)
+
+The existing `test_postgres_integration.py` covered mostly **sequential**
+duplicate attempts. These are not evidence of two concurrent database
+connections competing over the same unique keys. New isolated PostgreSQL
+tests use two threads with separate SQLAlchemy sessions and a start barrier,
+plus a bounded PostgreSQL lock timeout. SQLite deliberately skips them.
+
+**Scenarios** (all synthetic, disposable CI tenants):
+- Simultaneous manual-attested credit, receipt and outbox writes using the
+  same tenant/request/source reference: one atomic ledger entry wins, one
+  transaction rolls back; no orphan verified credit or outbox intent.
+- Simultaneous reversals of a single receipt using separate request IDs:
+  exactly one immutable reversal exists, the original receipt remains and
+  the net credit is zero.
+- Simultaneous assignments of one sponsor to two promoters: exactly one
+  active assignment survives the PostgreSQL partial unique index.
+- Simultaneous *different-tenant* writes reusing the same synthetic request
+  and receipt reference: both succeed independently, demonstrating that
+  tenant-scoped uniqueness is not a globally shared restriction.
+
+**API hardening:** Some collection and reassignment flows flushed ledger
+rows before the final `commit()` exception handler. A unique-key collision
+at those earlier flushes could therefore surface as an unhandled server
+error instead of an explicit conflict. Early collection credit, receipt,
+reversal and promoter assignment flushes now roll back and return HTTP 409.
+One HTTP regression seeds an existing source-key conflict and asserts no
+partial credit, collection or outbox records from the rejected request.
+
+**Limit:** These exercises verify database uniqueness under simultaneous
+transactions; they do not constitute a performance benchmark or an
+end-to-end concurrent HTTP load test. The API's effective transaction
+serialization and tenant access permissions still require staging review
+before production launch. No real bank records or outbound messages are used.
+
 ## Migration and existing data
 
 `0021_unique_prospect_mobile` runs a **read-only preflight** against all
