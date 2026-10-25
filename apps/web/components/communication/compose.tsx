@@ -65,7 +65,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
       requestId.current=null;
       setNotice("Campaign created. No message has been sent or queued for delivery.");
       onSaved();
-      router.push("/communication/campaigns?campaign="+campaign.id);
+      router.push("/communication/campaigns#campaign-"+campaign.id);
     }catch(e){setError(e instanceof Error?e.message:"Unable to save message.");}
     finally{setSaving(false);}
   }
