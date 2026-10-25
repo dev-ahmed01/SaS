@@ -55,6 +55,50 @@ and **database** layers as appropriate. Reference:
    opted-out consent event. A new sender must obtain fresh documented permission
    for that number before any reminder or general campaign can send.
 
+## Continued audit: live reminder eligibility across month boundaries (PR #48)
+
+**Reproducible defect:** The general Communication audience, its Saasyto
+approval/dispatch path and the unpaid promoter segment considered the CRM
+`active` stage but did not consistently apply the **two completed IST months
+without positive net credits** inactivity rule. With a stale materialized
+lifecycle status, the same sponsor could be excluded by the dedicated Reminders
+module yet remain eligible for a Communication reminder. Reversing the sole
+payment could recreate that mismatch.
+
+**Enforced invariant:** At Communication recipient review and Saasyto send
+eligibility, recompute inactivity from tenant-scoped effective credits,
+excluding reversed manual entries. Direct unpaid sponsor and consolidated
+promoter audiences exclude inactive sponsors. An active but never-paid sponsor
+is allowed only before two complete overdue months; an eligible partial
+contribution reactivates promptly, while an append-only reversal removes that
+activity. Recipient-address consent checks remain in force independently of
+financial eligibility. No messaging transport is enabled by these changes.
+
+**Synthetic regression** in `test_reminder_net_activity_qa.py`:
+
+| Journey | Check | Expected |
+| --- | --- | --- |
+| No credit in two completed IST months | `/v1/communication/audience` reminder `all` and `unpaid` | Suppressed; cached lifecycle status cannot override the ledger |
+| Active promoter assigned only that unpaid sponsor | Consolidated unpaid promoter preview | Zero eligible promoter recipients |
+| Partial ₹250 credit against ₹500 commitment | Sponsor/promoter previews and native reminder module | Reactivated sponsor; eligible remainder of ₹250 |
+| Reverse that credit | Same endpoints | Sponsor and promoter previews become ineligible again |
+| 31 Oct 23:59 to 1 Nov 00:00 IST | Communication unpaid preview, no refresh operation | Turns ineligible exactly when the second missed month completes |
+
+**CI skip/warning triage (from post-merge PR #47 evidence):** The 24
+`test_postgres_integration.py` cases are skipped in the SQLite primary suite
+only because their `DATABASE_URL` guard requires PostgreSQL; they execute in
+the dedicated PostgreSQL CI step (24 passed). The browser suite's one skip is
+the desktop half of a deliberately mobile-only layout case
+(`test.skip(!isMobile)`), which runs on mobile. Ten backend warnings are
+dependency / Alembic deprecations: one Starlette TestClient warning and nine
+Alembic `path_separator` warnings, not failing assertions. Track these during
+dependency upgrades rather than treating the skips as unrun database cases.
+
+**Release boundary:** Verify the new PR's own backend/PostgreSQL/browser checks,
+not just an earlier successful main run. Tests use disposable databases and
+mock/no-send transport; real Saasyto approval and production rollout still
+require the existing sender, webhook, privacy and staging sign-off gates.
+
 ## Migration and existing data
 
 `0021_unique_prospect_mobile` runs a **read-only preflight** against all
