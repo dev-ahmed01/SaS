@@ -18,10 +18,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
-from app.config import Settings, get_settings
 from app.communication_consent import evaluate_recipients
+from app.config import Settings, get_settings
 from app.models import (
-    AdminSession, AdminUser, AuditEvent, Prospect, ProspectStageTransition,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    Prospect,
+    ProspectStageTransition,
     SponsorOtpChallenge,
 )
 from app.saasyto_client import send_text
