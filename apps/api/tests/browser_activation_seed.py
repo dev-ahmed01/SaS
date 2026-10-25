@@ -3,6 +3,7 @@
 This is a *test data seeder*, not an authentication or OTP bypass endpoint.
 It refuses to run outside the exact disposable GitHub Actions test database.
 """
+# ruff: noqa: E402
 import os
 import sys
 import uuid
