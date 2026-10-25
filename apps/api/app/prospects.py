@@ -729,6 +729,27 @@ def update_prospect(
         changed["whatsapp_verified_at"] = None
         if new_address != old_address:
             changed["whatsapp_opt_in"] = False
+            if (
+                getattr(get_settings(), "otp_activates_prospect", False)
+                and prospect.crm_stage == "active"
+                and prospect.lifecycle_status == "new"
+                and prospect.whatsapp_verified_at is not None
+                and prospect.last_verified_payment_at is None
+            ):
+                # An OTP-activated registration cannot remain verified/active
+                # on a newly substituted WhatsApp phone.
+                now = utc_now()
+                database.add(ProspectStageTransition(
+                    organization_id=admin.organization_id,
+                    prospect_id=prospect.id, from_stage="active",
+                    to_stage="inactive", reason="number_changed",
+                    note="Reverify new WhatsApp number",
+                    changed_at=now, actor_admin_id=admin.id,
+                ))
+                changed["crm_stage"] = "inactive"
+                changed["crm_stage_changed_at"] = now
+                changed["crm_inactive_reason"] = "number_changed"
+                changed["crm_inactive_note"] = "Reverify new WhatsApp number"
             database.add(CommunicationConsentEvent(
                 organization_id=admin.organization_id,
                 recipient_kind="prospect", recipient_id=prospect.id,
