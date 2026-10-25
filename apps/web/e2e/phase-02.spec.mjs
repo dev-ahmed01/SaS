@@ -1064,7 +1064,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   const review=page.getByRole("region",{name:"Recipient review"});
   await expect(review.getByText("Not checked yet.")).toBeVisible();
   await review.getByRole("button",{name:"Check recipients"}).click();
-  await expect(review.getByText("Simulation only · no messages sent.")).toBeVisible();
+  await expect(review.getByText("Recipient check is a preview; no messages sent.")).toBeVisible();
   await expect(review.locator(".comm-review-counts strong").first()).toBeVisible();
   const numbers=await review.locator(".comm-review-counts strong").allTextContents();
   expect(Number(numbers[0])).toBeGreaterThanOrEqual(0);
