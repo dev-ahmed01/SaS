@@ -7,6 +7,18 @@ import { reasonLabel, stageReasons } from "./prospects-types";
 type Challenge={challenge_id:string;expires_at:string;status:string};
 type OtpStatus={delivery_enabled:boolean;verified:boolean;verified_at:string|null};
 
+function confirmationStatus(value:string):string {
+  switch(value){
+    case "accepted_unverified":return "Activation confirmed. WhatsApp acknowledgement accepted by Saasyto; delivery is not verified.";
+    case "suppressed_no_general_consent":return "Activated. No WhatsApp acknowledgement: communication permission is missing or withdrawn.";
+    case "suppressed_local_test_number":return "Activated. No WhatsApp acknowledgement: number is outside the authorized local test.";
+    case "before_sender_activation":return "Activated. WhatsApp acknowledgement is not enabled before the sender activation date.";
+    case "rejected":return "Activated. WhatsApp acknowledgement was rejected by Saasyto.";
+    case "unknown":return "Activated. WhatsApp acknowledgement outcome is unknown; no automatic retry will occur.";
+    default:return "Activated. WhatsApp acknowledgement is disabled.";
+  }
+}
+
 async function csrf():Promise<string>{
   const response=await fetch("/api/admin/session",{cache:"no-store"});
   if(!response.ok)throw Error("Admin session expired. Sign in again.");
@@ -30,7 +42,7 @@ async function post<T>(path:string, body?:Record<string,unknown>):Promise<T>{
 }
 
 export function StageDialog({prospect,onClose,onChanged}:{
-  prospect:Prospect;onClose:()=>void;onChanged:()=>void;
+  prospect:Prospect;onClose:()=>void;onChanged:(notice?:string)=>void;
 }){
   const markInactive=prospect.crm_stage==="active";
   const reactivation=!markInactive&&prospect.stage_history.some(x=>x.to_stage==="active");
@@ -90,17 +102,19 @@ export function StageDialog({prospect,onClose,onChanged}:{
     }
     setBusy(true);setError("");setNotice("");
     try{
+      let confirmation:string|undefined;
       if(markInactive){
         await post(prospect.id+"/stage",{
           version:prospect.version,stage:"inactive",reason,note:note.trim()||null,
         });
       }else{
-        await post(prospect.id+"/otp/activate",{
+        const result=await post<{activation_notice:string}>(prospect.id+"/otp/activate",{
           version:prospect.version,challenge_id:challenge!.challenge_id,code,
           reactivation_reason:reactivation?note.trim():null,
         });
+        confirmation=confirmationStatus(result.activation_notice);
       }
-      onChanged();
+      onChanged(confirmation);
     }catch(e){setError(e instanceof Error?e.message:"Could not change active status.");}
     finally{setBusy(false);}
   }

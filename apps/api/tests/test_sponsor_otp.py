@@ -186,7 +186,8 @@ def test_first_activation_and_reactivation_are_otp_gated(api, monkeypatch):
         "code": sent[-1][1],
     })
     assert activated.status_code == 200, activated.text
-    assert activated.json() == {"status": "active", "reactivation": False}
+    assert activated.json() == {"status": "active", "reactivation": False,
+                                "activation_notice": "disabled"}
     assert client.get(root).json()["crm_stage"] == "active"
     assert client.post(root + "/otp/activate", headers=csrf, json={
         "version": person["version"], "challenge_id": challenge,
