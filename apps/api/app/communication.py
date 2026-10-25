@@ -16,7 +16,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.accounting import effective_credits, ist_today, month_start, period_balance
+from app.accounting import (
+    effective_credits,
+    evaluate_status,
+    ist_today,
+    month_start,
+    period_balance,
+)
 from app.auth import db_session, get_admin, require_csrf
 from app.communication_consent import evaluate_recipients
 from app.models import (
@@ -255,6 +261,14 @@ def _audience_rows(
         for row in effective_credits(db, org, as_of=now):
             credits[row.prospect_id].append(row)
         for person in relevant:
+            # The active CRM stage alone does not guarantee reminder eligibility.
+            # Recompute two completed missed months from net credit activity,
+            # including manual reversals, without relying on a stale status cache.
+            if evaluate_status(
+                person, by_sponsor[person.id], credits[person.id],
+                ist_today(now), now,
+            ) == "inactive":
+                continue
             due, paid, unpaid, _ = period_balance(
                 person, by_sponsor[person.id], credits[person.id], month, now,
             )
@@ -295,7 +309,7 @@ def _audience_preview(
 ) -> AudiencePreview:
     candidates = _audience_rows(db, admin, audience, segment, now)
     decisions = evaluate_recipients(
-        db, admin.organization_id, candidates, channel, category
+        db, admin.organization_id, candidates, channel, category, now=now,
     )
     eligible = [person.full_name for person, _, state, _ in decisions if state == "eligible"]
     return AudiencePreview(
@@ -502,7 +516,8 @@ def simulate_preparation(
         database, admin, campaign.audience, campaign.segment, now
     )
     decisions = evaluate_recipients(
-        database, admin.organization_id, candidates, campaign.channel, campaign.category
+        database, admin.organization_id, candidates, campaign.channel,
+        campaign.category, now=now,
     )
     eligible = sum(state == "eligible" for _, _, state, _ in decisions)
     prep = CommunicationPreparation(
