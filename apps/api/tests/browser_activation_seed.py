@@ -49,6 +49,8 @@ def main() -> None:
         if (person.crm_stage != "inactive" or not person.full_name.startswith((
                 "Stage Candidate ", "Collection Candidate ", "Seeded History Sponsor ",
                 "Browser Sponsor ", "Fresh Sponsor ", "Prospect Test ",
+                "Manual Pay Sponsor ", "Receipt Retry Sponsor ",
+                "Reversal Browser Sponsor ", "Consent Campaign ",
         ))):
             raise SystemExit("Not a permitted synthetic fixture")
         was_active = db.scalar(select(ProspectStageTransition.id).where(
