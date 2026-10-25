@@ -74,3 +74,31 @@ Once provided, the remaining work is implementing an approved adapter behind the
 - No blind provider retry after a timeout. Confirmation can be uncertain; operation reports that uncertainty.
 - CI uses fake provider delivery and synthetic numbers, not live donor data.
 - Authentication template docs: [Meta developer hub](https://whatsappbusiness.com/developers/developer-hub/), [Meta Cloud API](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started), [AWS reference payload](https://aws.amazon.com/blogs/messaging-and-targeting/send-whatsapp-business-messages-with-aws-end-user-messaging-social/).
+
+
+## Activation acknowledgement after OTP (optional)
+
+The application can submit a separate WhatsApp confirmation **after** the
+atomic OTP activation succeeds, using the existing Saasyto account. Set
+`OTP_ACTIVATION_NOTICE_ENABLED=true` only with an approved enabled Saasyto
+sender and either the Meta OTP sender or the single-number localhost OTP pilot.
+This flag defaults to false. The old Pabbly and reminder flags do not apply.
+
+The confirmation is a registration/CRM status acknowledgement, **not**
+an OTP, proof of payment, or a delivery receipt. The server checks the latest
+documented general WhatsApp consent, any opt-out/STOP on a shared number,
+the sender's timezone-aware enable-after cutoff and local allowlist. It sends
+at most once for each successful OTP activation. Rejected/unknown provider
+responses never roll back an activated sponsor and are **not retried**.
+
+One-number local proof-of-concept uses the working
+`SAASYTO_LOCAL_TEST_PHONE` alongside `OTP_LOCAL_PILOT_ENABLED=true`,
+`OTP_SECRET` and the approved `SAASYTO_*` credentials; keep
+`OTP_DELIVERY_ENABLED=false` there. Production OTP uses the separately
+approved Meta authentication template.
+
+No separate communication permission popup appears at activation. The intake
+checkbox is an explicit Admin attestation of existing permission and is
+recorded once in the communication consent ledger; a prior opt-out takes
+precedence. Without existing evidence, activation still succeeds, but the
+confirmation and later campaigns are suppressed.
