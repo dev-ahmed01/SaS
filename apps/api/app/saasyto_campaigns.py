@@ -274,8 +274,13 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     ):
         return None
     phone = contact_address(person, "whatsapp")
+    cfg = get_settings()
+    if getattr(cfg, "saasyto_local_test_enabled", False) and not hmac.compare_digest(
+        phone.lstrip("+"), (cfg.saasyto_local_test_phone or "").lstrip("+")
+    ):
+        return None
     if not hmac.compare_digest(
-        item.approved_phone_digest, _phone_digest(get_settings(), phone)
+        item.approved_phone_digest, _phone_digest(cfg, phone)
     ):
         return None
     message = _render(row.body, person, now)
