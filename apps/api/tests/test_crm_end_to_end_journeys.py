@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.accounting import effective_credits, ist_today, month_start
 from app.models import (
     AuditEvent,
+    CommunicationConsentEvent,
     ManualCollection,
     ManualCollectionReversal,
     MessageOutbox,
@@ -118,6 +119,51 @@ def test_sponsorship_amounts_outside_250_tiers_rejected(api, amount):
     client, csrf, _ = api
     result = _create(client, csrf, monthly_contribution_paise=amount)
     assert result.status_code == 422, result.text
+
+
+def test_new_contact_number_revokes_whatsapp_permission_for_both_roles(api):
+    client, csrf, engine = api
+    prospect = _create(
+        client, csrf, phone="+918701001123", whatsapp_number="+918701001123",
+        whatsapp_opt_in=True,
+    ).json()
+    promoter_response = client.post("/v1/promoters", headers=csrf, json={
+        "full_name":"Consent Owner", "mobile_number":"+918701002123",
+        "whatsapp_number":"+918701002123", "whatsapp_opt_in":True,
+    })
+    assert promoter_response.status_code == 201, promoter_response.text
+    promoter = promoter_response.json()
+    for kind, person in (("prospect",prospect),("promoter",promoter)):
+        opt_in = client.post("/v1/communication/consent-events", headers=csrf, json={
+            "recipient_kind":kind, "recipient_id":person["id"],
+            "channel":"whatsapp", "decision":"opted_in",
+            "source":"synthetic evidence recorded", "evidence_reference":"consent-test-01",
+        })
+        assert opt_in.status_code == 201, opt_in.text
+        url = "/v1/"+("prospects" if kind=="prospect" else "promoters")+"/"+person["id"]
+        updated = client.patch(url, headers=csrf, json={
+            "version":person["version"],
+            "mobile_number":"+9187010091"+("23" if kind=="prospect" else "24"),
+            "whatsapp_number":"+9187010091"+("23" if kind=="prospect" else "24"),
+            "whatsapp_opt_in":True,
+        })
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["whatsapp_opt_in"] is False
+        history = client.get("/v1/communication/consent-events", params={
+            "recipient_kind":kind, "recipient_id":person["id"],
+        })
+        assert history.status_code == 200, history.text
+        with Session(engine) as db:
+            revoked = db.scalars(select(CommunicationConsentEvent).where(
+                CommunicationConsentEvent.recipient_kind==kind,
+                CommunicationConsentEvent.recipient_id==uuid.UUID(person["id"]),
+                CommunicationConsentEvent.channel=="whatsapp",
+                CommunicationConsentEvent.decision=="opted_out",
+                CommunicationConsentEvent.source=="contact_address_changed",
+            )).all()
+            assert len(revoked)==1
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 4
 
 
 def test_registration_stage_is_always_new_inquiry_then_editable(api):
