@@ -19,7 +19,14 @@ from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
 from app.config import Settings, get_settings
-from app.models import (AdminSession, AdminUser, AuditEvent, Prospect, ProspectStageTransition, SponsorOtpChallenge)
+from app.models import (
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    Prospect,
+    ProspectStageTransition,
+    SponsorOtpChallenge,
+)
 from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
