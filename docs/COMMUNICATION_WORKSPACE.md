@@ -83,10 +83,12 @@ The existing local-only opt-in command:
 
 ```powershell
 cd apps\api
-.\.venv\Scripts\python.exe -m app.seed_local_crm --apply --confirm-synthetic-only
+.\.venv\Scripts\python.exe -m app.seed_local_crm --apply --confirm-synthetic-only --allow-bulk-reseed
 ```
 
-adds four sample templates, three campaigns and two **inactive** automation
+**Bulk reseeding now requires an additional explicit opt-in** so the demo-cleanup operation cannot be silently undone. See [local demo cleanup](LOCAL_DEMO_SEED_CLEANUP.md). The command above is for intentionally regenerating the entire old fixture set and should not be used as part of ordinary development.
+
+The legacy seed command adds four sample templates, three campaigns and two **inactive** automation
 definitions alongside the existing 100 fake prospects, 10 fake promoters and
 20 planned payout commitments. Sample contacts have no recorded communication
 consent; no messages, receipts or provider dispatches are fabricated. It is
