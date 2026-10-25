@@ -14,6 +14,10 @@ type CampaignSummary={
   excluded_in_review:number;
   delivered:number|null;read:number|null;
 };
+type BulkConsentReview={
+  active:number;already_documented:number;needs_confirmation:number;
+  opted_out:number;no_number:number;
+};
 type SaasytoRun={
   id:string;campaign_id:string;status:"approved"|"cancelled"|"completed";
   due_at:string;eligible_count:number;suppressed_count:number;
@@ -51,6 +55,12 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [reload,setReload]=useState(0);
   const [provider,setProvider]=useState<SaasytoStatus|null>(null);
   const [results,setResults]=useState<Record<string,CampaignSummary>>({});
+  const [consentReview,setConsentReview]=useState<BulkConsentReview|null>(null);
+  const [consentSource,setConsentSource]=useState("Existing permission register");
+  const [consentReference,setConsentReference]=useState("");
+  const [consentConfirmed,setConsentConfirmed]=useState(false);
+  const [consentBusy,setConsentBusy]=useState(false);
+  const [consentNotice,setConsentNotice]=useState("");
   const [run,setRun]=useState<SaasytoRun|null>(null);
   const [runBusy,setRunBusy]=useState(false);
   const [reviewId,setReviewId]=useState<string|null>(null);
@@ -87,6 +97,41 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       .catch(()=>{if(mounted)setProvider(null);});
     return()=>{mounted=false;};
   },[revision,reload]);
+  async function loadConsentReview(){
+    setConsentBusy(true);setConsentNotice("");
+    try{
+      setConsentReview(await apiGet<BulkConsentReview>("/active-consent-review"));
+    }catch{
+      setConsentNotice("Could not review existing permissions.");
+    }finally{setConsentBusy(false);}
+  }
+  async function confirmExistingPermissions(){
+    if(consentBusy||!consentConfirmed||!consentReview?.needs_confirmation||
+      !consentReference.trim()||!consentSource.trim())return;
+    const count=consentReview.needs_confirmation;
+    if(!window.confirm("You are confirming you have independently verified "+
+       "existing WhatsApp opt-in for "+count+" Active contacts against "+
+       "the referenced permission register. Contacts who opted out "+
+       "will stay excluded. No messages will be sent. Continue?"))return;
+    setConsentBusy(true);setConsentNotice("");
+    try{
+      const updated=await apiWrite<BulkConsentReview>(
+        "/active-consent-review","POST",{
+          confirm:"I_HAVE_VERIFIED_EXISTING_CONSENT",
+          expected_needs_confirmation:count,
+          source:consentSource.trim(),
+          evidence_reference:consentReference.trim(),
+        }
+      );
+      setConsentReview(updated);setConsentConfirmed(false);
+      setConsentNotice("Existing permissions recorded. No WhatsApp messages sent. "+
+        "Create a fresh recipient check before approving a campaign.");
+      setReload(x=>x+1);
+    }catch{
+      setConsentNotice("Permission confirmation failed. Review the active "+
+        "audience and referenced evidence again.");
+    }finally{setConsentBusy(false);}
+  }
   async function openReview(item:Campaign){
     if(reviewId===item.id){setReviewId(null);setCheck(null);return;}
     setReviewId(item.id);setCheck(null);setRun(null);setReviewError("");
@@ -181,6 +226,44 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       </span>
       <small>{provider?.notice??"No WhatsApp message is sent from this campaign screen."}</small>
     </div>
+    <details className="comm-consent-batch">
+      <summary>Confirm existing WhatsApp permissions</summary>
+      <p className="comm-muted">Use only if you already have documented
+        permission for these Active prospects. Opt-outs are never overridden.</p>
+      <button type="button" className="btn btn-secondary"
+        disabled={consentBusy} onClick={()=>void loadConsentReview()}>
+        Review Active prospects</button>
+      {consentReview&&<div className="comm-consent-batch-form">
+        <p className="comm-muted">
+          {consentReview.active} Active · {consentReview.already_documented} documented ·
+          {" "+consentReview.needs_confirmation} requiring confirmation ·
+          {" "+consentReview.opted_out} opted out ·
+          {" "+consentReview.no_number} without a number
+        </p>
+        {consentReview.needs_confirmation>0&&<>
+          <label>Existing consent source
+            <input type="text" value={consentSource}
+              onChange={e=>setConsentSource(e.target.value)} maxLength={80}/></label>
+          <label>Permission record reference
+            <input type="text" value={consentReference}
+              onChange={e=>setConsentReference(e.target.value)}
+              maxLength={160}
+              placeholder="Existing signed register or consent record ID"/></label>
+          <label className="comm-consent-batch-check">
+            <input type="checkbox" checked={consentConfirmed}
+              onChange={e=>setConsentConfirmed(e.target.checked)}/>
+            I verified existing WhatsApp permission for every included contact.
+          </label>
+          <button type="button" className="btn btn-primary"
+            disabled={consentBusy||!consentConfirmed||
+              consentReference.trim().length<3||consentSource.trim().length<3}
+            onClick={()=>void confirmExistingPermissions()}>
+            Confirm {consentReview.needs_confirmation} existing permissions
+          </button>
+        </>}
+      </div>}
+      {consentNotice&&<p role="status" className="comm-muted">{consentNotice}</p>}
+    </details>
     {error&&<p className="form-error" role="alert">{error}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
     <div className="comm-campaign-table-scroll"><table className="data-table comm-campaign-table">
