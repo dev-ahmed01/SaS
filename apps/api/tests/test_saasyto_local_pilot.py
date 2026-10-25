@@ -449,4 +449,6 @@ def test_readiness_communicates_disabled_and_older_campaign(
     assert result.status_code == 200
     assert result.json()["code"] == "before_activation"
     assert result.headers["cache-control"] == "no-store"
-    assert client.get(url, headers={"Cookie": "sas_session=not-a-session"}).status_code in (200, 401)
+    assert client.get(url, headers={
+        "Cookie": "sas_session=not-a-session",
+    }).status_code in (200, 401)
