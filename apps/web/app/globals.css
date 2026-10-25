@@ -1512,3 +1512,18 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .comm-result-person{align-items:flex-start;}
   .comm-result-person-outcome{max-width:52%;}
 }
+
+/* Opt-in record reconciliation stays collapsed unless an Admin explicitly opens it. */
+.comm-consent-batch{margin:12px 0 18px;border:1px solid #dfebe5;
+  border-radius:12px;padding:12px 16px;}
+.comm-consent-batch summary{cursor:pointer;font-weight:600;color:#195b47;}
+.comm-consent-batch>p{margin:10px 0;}
+.comm-consent-batch-form{display:flex;flex-wrap:wrap;align-items:flex-end;
+  gap:12px;margin-top:12px;}
+.comm-consent-batch-form>p{width:100%;margin:0;}
+.comm-consent-batch-form label:not(.comm-consent-batch-check){
+  display:flex;flex-direction:column;gap:4px;min-width:240px;flex:1;}
+.comm-consent-batch-form input[type="text"]{width:100%;padding:9px;
+  border:1px solid #cddcd4;border-radius:8px;font:inherit;}
+.comm-consent-batch-form .comm-consent-batch-check{width:100%;display:flex;
+  align-items:center;gap:8px;}
