@@ -15,6 +15,8 @@ function allowed(parts:string[],method:string):string|null{
     return "/provider/saasyto";
   if(parts.length===1&&name==="audience"&&method==="GET")return "/audience";
   if(parts.length===1&&name==="consent-events"&&["GET","POST"].includes(method))return "/consent-events";
+  if(parts.length===1&&name==="active-consent-review"&&
+    ["GET","POST"].includes(method))return "/active-consent-review";
   if(parts.length===1&&["templates","campaigns","rules"].includes(name)&&
     ["GET","POST"].includes(method))return "/"+name;
   if(parts.length===2&&name==="campaigns"&&id==="results"&&method==="GET")
