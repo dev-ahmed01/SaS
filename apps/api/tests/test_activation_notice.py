@@ -47,3 +47,41 @@ def test_activation_notice_is_sent_once_after_verified_activation(api, monkeypat
     assert "payment" in messages[0][1]
     assert client.post(url + "/activate", headers=csrf, json=body).status_code in (400, 409)
     assert len(messages) == 1
+
+
+def test_activation_notice_never_sends_after_optout(api, monkeypatch):
+    client, csrf, _ = api
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Opted out sponsor", "mobile_number": "+918100000082",
+        "area_city": "Bengaluru",
+    }).json()
+    declined = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": person["id"],
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "requested no outreach",
+    })
+    assert declined.status_code == 201, declined.text
+    cfg = SimpleNamespace(
+        otp_delivery_enabled=True,
+        otp_secret="synthetic-otp-test-secret-more-than-thirty-two-characters",
+        otp_activation_notice_enabled=True,
+        saasyto_delivery_enabled=True,
+        saasyto_sender_approved=True,
+    )
+    codes = []
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, _phone, code: codes.append(code))
+    monkeypatch.setattr("app.activation_notice.send_text",
+                        lambda *_args, **_kwargs:
+                        (_ for _ in ()).throw(AssertionError("Opt out must block notice")))
+    base = "/v1/prospects/" + person["id"] + "/otp"
+    issued = client.post(base + "/request", headers=csrf)
+    assert issued.status_code == 200, issued.text
+    result = client.post(base + "/activate", headers=csrf, json={
+        "challenge_id": issued.json()["challenge_id"], "code": codes[0],
+        "version": person["version"], "reactivation_reason": None,
+    })
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "active"
+    assert result.json()["activation_notice"] == "suppressed_no_general_consent"
