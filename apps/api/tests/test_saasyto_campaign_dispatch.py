@@ -13,7 +13,7 @@ from test_communication import activate_for_communication, create_campaign, logi
 
 from app.bootstrap_admin import provision_admin
 from app.main import app
-from app.models import Base, SaasytoCampaignRecipient, SaasytoCampaignRun
+from app.models import Base, Prospect, SaasytoCampaignRecipient, SaasytoCampaignRun
 from app.saasyto_client import Submission
 from app.security import utc_now
 
@@ -300,3 +300,63 @@ def test_campaign_results_distinguish_submission_rejection_unknown_and_no_webhoo
     assert unknown["recipients"][0]["status"] == "unknown"
     # The read-only results endpoint never resets the queue or retries.
     assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+
+
+def test_production_approval_rejects_same_count_swapped_database_contacts(
+    dispatch_system, monkeypatch,
+):
+    """One existing Active contact replaced by another must require fresh review."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    first = _person(client, csrf, "2101")
+    second = _person(client, csrf, "2102")
+    _consent(client, csrf, first, "opted_in")
+    _consent(client, csrf, second, "opted_in")
+    with Session(engine) as db:
+        person = db.get(Prospect, uuid.UUID(second["id"]))
+        person.crm_stage = "inactive"
+        person.version += 1
+        db.commit()
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    row = create_campaign(client, csrf, title="Existing and newly registered sponsors")
+    assert row.status_code == 201, row.text
+    base = "/v1/communication/campaigns/" + row.json()["id"]
+    check = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert check.status_code == 201
+    assert check.json()["eligible_count"] == 1
+    assert client.get(base + "/saasyto/readiness").json()["ready"] is True
+    with Session(engine) as db:
+        original = db.get(Prospect, uuid.UUID(first["id"]))
+        replacement = db.get(Prospect, uuid.UUID(second["id"]))
+        original.crm_stage = "inactive"
+        replacement.crm_stage = "active"
+        original.version += 1
+        replacement.version += 1
+        db.commit()
+    # Active/consented count remains unchanged while actual audience differs.
+    readiness = client.get(base + "/saasyto/readiness")
+    assert readiness.status_code == 200
+    assert readiness.json()["eligible_count"] == 1
+    assert readiness.json()["code"] == "audience_changed"
+    rejected = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": check.json()["id"],
+        "expected_eligible": 1, "confirm_send": True,
+    })
+    assert rejected.status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(SaasytoCampaignRun.id))) == 0
+    fresh = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert fresh.status_code == 201 and fresh.json()["eligible_count"] == 1
+    approved = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": fresh.json()["id"],
+        "expected_eligible": 1, "confirm_send": True,
+    })
+    assert approved.status_code == 201, approved.text
+    with Session(engine) as db:
+        recipients = db.scalars(select(SaasytoCampaignRecipient)).all()
+        assert len(recipients) == 1
+        assert recipients[0].recipient_id == uuid.UUID(second["id"])
