@@ -239,7 +239,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         <label className="prospect-consent">
           <input type="checkbox" checked={values.whatsapp_opt_in}
             onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>
-          <span>WhatsApp reminder consent recorded</span>
+          <span>I confirm the sponsor has explicitly agreed to receive WhatsApp reminders and updates. Record this permission once.</span>
         </label>
 
       </div>
