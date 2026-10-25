@@ -38,6 +38,10 @@ MAX_ISSUES_PER_DAY = 5
 MAX_ATTEMPTS = 5
 
 
+class OtpDeliveryUnconfirmed(Exception):
+    """The provider might have accepted the OTP; do not retry automatically."""
+
+
 class OtpConfirm(BaseModel):
     model_config = ConfigDict(extra="forbid")
     challenge_id: uuid.UUID
@@ -91,8 +95,10 @@ def _deliver(cfg: Settings, phone: str, code: str) -> None:
                 "Valid for 10 minutes. Do not share unless you requested activation."
             ),
         )
+        if submission.state == "unknown":
+            raise OtpDeliveryUnconfirmed("Local OTP submission outcome unknown")
         if submission.state != "accepted_unverified":
-            raise ValueError("Local OTP provider did not confirm acceptance")
+            raise ValueError("Local OTP provider declined the request")
         return
     payload = {
         "messaging_product": "whatsapp",
@@ -198,7 +204,7 @@ def request_otp(
     # In a timeout, the provider may have received the request. Do not auto-retry.
     try:
         _deliver(cfg, number, code)
-    except httpx.TimeoutException:
+    except (httpx.TimeoutException, OtpDeliveryUnconfirmed):
         record.status = "unknown"
         database.commit()
         raise HTTPException(status_code=503, detail="OTP delivery outcome unconfirmed") from None
