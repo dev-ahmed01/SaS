@@ -1,5 +1,20 @@
 # Saasyto campaign integration — verified surface and safe connector foundation
 
+## Controlled localhost one-phone pilot (October 2026)
+
+[Local CRM-only Saasyto setup](SAASYTO_LOCAL_CRM_PILOT.md) documents an opt-in
+single-allowlisted-phone test while the API and database remain on Windows.
+The local worker calls an authenticated loopback endpoint, not a Render job.
+This mode requires `APP_ENV=development`, the exact safeguarded local-demo
+PostgreSQL database, `SAASYTO_LOCAL_TEST_ENABLED=true`, and
+`SAASYTO_LOCAL_TEST_PHONE=+countrycode...` (a documented opt-in recipient).
+All normal sender approvals, fresh campaign checks, activation cutoffs,
+and explicit approval are still required. Production behavior is unchanged.
+It is **not** permission to send to other CRM contacts or to automate monthly
+reminders. Never put API credentials or the private runner secret in frontend
+settings.
+
+
 ## Evidence verified from account screenshots, 24 October 2026
 
 The Foundation's `web.saasyto.com` Developer API page shows:
@@ -24,19 +39,21 @@ backend-secret settings.
 
 ## Implemented now
 
-- Independent `SAASYTO_*` config, off by default. In staging/development
+- Independent `SAASYTO_*` config, off by default. In staging and ordinary development
   `SAASYTO_DELIVERY_ENABLED=true` is invalid; production requires both the
-  sender approval flag and valid credentials. Separate from Pabbly reminder
+  sender approval flag and valid credentials. A separate one-phone localhost
+  pilot is documented above. Separate from Pabbly reminder
   transport and Meta Cloud API OTP.
 - `app.saasyto_client.send_text()`: fixed HTTPS host/path, documented JSON,
   5-second timeout, no redirects or environment-proxy trust, E.164 validation,
   no blind retry, and only `accepted_unverified`, `rejected` or `unknown`.
-  No caller invokes this transport from campaigns yet.
+  The explicitly approved campaign dispatch worker is now wired to this
+  transport; it remains off by default.
 - `GET /v1/communication/provider/saasyto`: admin-authenticated, read-only
   configuration and verification status; never returns token or donor data.
 - Next.js authenticated same-origin read-only gateway and Campaigns status
-  text. The button to send is not exposed because genuine recipient-approval
-  and provider-response verification have not been completed.
+  text. The campaign approval button is shown only when backend configuration enables
+  sending. In local pilot mode it permits one consented allowlisted phone.
 - Offline synthetic tests for request JSON, failure behavior, no retries,
   safety gating and status. No tests use real recipients or provider secrets.
 
@@ -56,11 +73,10 @@ backend-secret settings.
    event names, signature or shared-secret validation mechanism and
    idempotency/replay semantics. Without authenticated receipts, only report
    submitted to provider/unknown—not delivered or read.
-4. **Campaign dispatch implementation:** Add tenant-scoped per-recipient
-   durable outbox, one-send-only keys, re-check permissions and unsubscribe
-   immediately before each send, admin approval, bounded workers, explicit
-   scheduled/now behavior, time-zone handling, report counts, and safe
-   reconciliation for ambiguous timeouts. Keep no blind retries.
+4. **Campaign dispatch implementation:** A durable tenant-bound campaign queue,
+   recipient opt-out recheck, Admin approval and bounded no-retry worker are
+   implemented. Provider-message correlation and cryptographically authenticated
+   callback reconciliation remain unverified.
 5. **Provision secrets:** Rotate any shown access token, then set
    `SAASYTO_INSTANCE_ID`, `SAASYTO_ACCESS_TOKEN`,
    `SAASYTO_SENDER_APPROVED=true`, and finally
