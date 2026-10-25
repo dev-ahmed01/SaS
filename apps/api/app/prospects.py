@@ -50,7 +50,7 @@ def _ist_month() -> date:
 
 router = APIRouter(prefix="/v1/prospects", tags=["Admin prospects"])
 
-E164 = re.compile(r"^\+[1-9]\d{7,14}$")
+E164 = re.compile(r"^\+[1-9][0-9]{7,14}$")
 VPA = re.compile(r"^[a-z0-9][a-z0-9._-]{1,127}@[a-z0-9][a-z0-9.-]{1,63}$")
 MAX_AMOUNT_PAISE = 1_000_000_000
 
@@ -575,6 +575,17 @@ def create_prospect(
             response.headers["Cache-Control"] = "no-store"
             return _read(existing, db=database)
 
+    # A person is identified by their normalized mobile, never their name.
+    # Archived records also reserve their number: restore instead of re-register.
+    existing_mobile = database.scalar(select(Prospect.id).where(
+        Prospect.organization_id == admin.organization_id,
+        Prospect.mobile_number == payload.mobile_number,
+    ))
+    if existing_mobile is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Mobile number already registered as a prospect",
+        )
     settings = database.get(OrganizationSettings, admin.organization_id)
     if settings is None:
         raise HTTPException(status_code=503, detail="Organization settings unavailable")
@@ -653,6 +664,15 @@ def create_prospect(
                 response.status_code = 200
                 response.headers["Cache-Control"] = "no-store"
                 return _read(same, db=database)
+        duplicate = database.scalar(select(Prospect.id).where(
+            Prospect.organization_id == admin.organization_id,
+            Prospect.mobile_number == payload.mobile_number,
+        ))
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Mobile number already registered as a prospect",
+            ) from exc
         raise HTTPException(status_code=409, detail="Prospect registration conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
@@ -686,6 +706,17 @@ def update_prospect(
                if getattr(prospect, field) != value}
     if "pipeline_stage_id" in changed and changed["pipeline_stage_id"] is not None:
         _validate_pipeline(database, admin, changed["pipeline_stage_id"])
+    if "mobile_number" in changed:
+        duplicate = database.scalar(select(Prospect.id).where(
+            Prospect.organization_id == admin.organization_id,
+            Prospect.mobile_number == changed["mobile_number"],
+            Prospect.id != prospect.id,
+        ))
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Mobile number already registered as a prospect",
+            )
     if "mobile_number" in changed or "whatsapp_number" in changed:
         # A verified phone cannot remain trusted after its contact number changes.
         if (changed.get("mobile_number", prospect.mobile_number) != prospect.mobile_number
@@ -727,7 +758,18 @@ def update_prospect(
         _audit(database, admin, prospect, "prospect.updated",
                before={"version": previous},
                after={"version": prospect.version, "changed_fields": sorted(changed)})
-        database.commit()
+        try:
+            database.commit()
+        except IntegrityError as exc:
+            database.rollback()
+            # A concurrent request may have registered the same mobile after
+            # our check. The database unique index is the final authority.
+            if "mobile_number" in changed:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Mobile number already registered as a prospect",
+                ) from exc
+            raise HTTPException(status_code=409, detail="Prospect update conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
 
