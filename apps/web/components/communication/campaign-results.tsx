@@ -210,6 +210,17 @@ export function CampaignResultDetails({id}:{id:string}){
         {older&&!run&&<p className="form-error" role="status">
           This campaign predates Saasyto activation. Create a new campaign
           to obtain a valid delivery approval.</p>}
+        {provider?.local_test_mode&&!run&&details.eligible_in_review>1&&
+          <p className="form-error" role="status">
+            All eligible active contacts are included in the review, but
+            localhost sending is restricted to one explicitly allowlisted
+            test number. Approval of multiple recipients remains disabled;
+            this is a provider safety gate, not missing prospect data.
+          </p>}
+        {run&&<p className="comm-muted">
+          This campaign already has a delivery attempt record. To send a
+          further message, create a new campaign rather than resending it.
+        </p>}
         <div className="comm-recipient-review" aria-label="Recipient approval">
           <div className="comm-review-heading">
             <h3>Recipient review</h3>
