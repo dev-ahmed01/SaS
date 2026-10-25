@@ -46,6 +46,7 @@ class Settings(BaseSettings):
 
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
+    otp_activation_notice_enabled: bool = False
     otp_secret: str | None = None
     otp_meta_access_token: str | None = None
     otp_meta_phone_number_id: str | None = None
@@ -128,6 +129,10 @@ class Settings(BaseSettings):
             )
             if len(token) < 12 or any(ch.isspace() for ch in token):
                 raise ValueError("Valid Saasyto access token required")
+        if self.otp_activation_notice_enabled and not (
+            self.saasyto_delivery_enabled and self.otp_delivery_enabled
+        ):
+            raise ValueError("Activation notice requires Saasyto and OTP delivery")
         if self.otp_delivery_enabled:
             import re
 
