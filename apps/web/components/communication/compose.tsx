@@ -73,7 +73,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
     <section className="comm-panel" aria-label="Compose message">
       <div className="comm-panel-header">
         <h2>New message</h2>
-        <span className="comm-channel-tag">Draft workspace</span>
+        <span className="comm-channel-tag">Create campaign</span>
       </div>
       <form onSubmit={submit}>
         <div className="comm-form-section">
