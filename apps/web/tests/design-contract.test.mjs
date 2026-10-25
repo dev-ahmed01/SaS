@@ -99,8 +99,11 @@ test("Consent and campaign review never send before explicit approval", () => {
   assert.match(campaigns,/Approve WhatsApp delivery/);
   assert.match(campaigns,/Check recipients/);
   assert.match(proxy,/name==="consent-events"/);
-  assert.doesNotMatch(prospect,/ContactConsent/);
-  assert.doesNotMatch(promoter,/ContactConsent|Communication preferences/);
+  assert.match(prospect,/ContactConsent/);
+  assert.match(promoter,/ContactConsent/);
+  assert.match(prospect,/Communication permissions/);
+  assert.match(promoter,/Communication permissions/);
+  assert.match(campaigns,/Why recipients were excluded/);
   assert.match(promoter,/PromoterNotes/);
   assert.match(promoter,/PromoterSponsors/);
   assert.doesNotMatch(campaigns,/\/send|\/dispatch/);
