@@ -131,7 +131,12 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         body:JSON.stringify(body),
       });
       if(!response.ok){
-        const message=response.status===409?"The record changed. Reload before editing."
+        const problem=await response.json().catch(()=>null) as {detail?:unknown}|null;
+        const duplicate=typeof problem?.detail==="string"&&
+          problem.detail.includes("Mobile number already registered");
+        const message=duplicate
+          ?"That mobile number already belongs to a prospect. Search for the existing record or enter a different number."
+          :response.status===409?"The record changed. Reload before editing."
           :response.status===422?"Please check names, contact, tokens and email details."
           :"Could not save this prospect.";
         setError(message);return;

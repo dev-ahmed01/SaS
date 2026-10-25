@@ -106,6 +106,33 @@ def test_postgres_rejects_invalid_reminder_day() -> None:
     engine.dispose()
 
 
+def test_postgres_enforces_unique_prospect_phone_per_org_not_name() -> None:
+    """PostgreSQL must reject concurrent same-number writes; names may repeat."""
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    with Session(engine) as db:
+        org_a = Organization(name=f"Unique prospect A {uuid.uuid4()}")
+        org_b = Organization(name=f"Unique prospect B {uuid.uuid4()}")
+        db.add_all([org_a, org_b])
+        db.flush()
+
+        def candidate(org_id, name, number):
+            return Prospect(
+                organization_id=org_id, full_name=name, mobile_number=number,
+                area_city="Bengaluru", monthly_contribution_paise=25000,
+                whatsapp_opt_in=False, lifecycle_status="new", version=1,
+            )
+
+        db.add(candidate(org_a.id, "Same Name", "+918155550001"))
+        db.add(candidate(org_a.id, "Same Name", "+918155550002"))
+        db.add(candidate(org_b.id, "Different Org", "+918155550001"))
+        db.flush()
+        db.add(candidate(org_a.id, "Different Name", "+918155550001"))
+        with pytest.raises(IntegrityError):
+            db.flush()
+        db.rollback()
+    engine.dispose()
+
+
 def test_postgres_prospect_upi_enforces_same_organization() -> None:
     """A UPI identifier cannot point across organization boundaries at database level."""
     engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)

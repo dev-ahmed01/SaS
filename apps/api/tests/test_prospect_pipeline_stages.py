@@ -118,15 +118,23 @@ def test_assigned_stages_survive_edits_and_cannot_be_deleted_until_unassigned(sy
     }).json()
     created = client.post("/v1/prospects", headers=csrf, json={
         "full_name": "Stage Tested", "mobile_number": "+919766543210",
-        "pipeline_stage_id": stage["id"],
     })
     assert created.status_code == 201, created.text
     person = created.json()
+    assert person["pipeline_stage_name"] == "New Inquiry"
+    moved = client.patch("/v1/prospects/"+person["id"], headers=csrf, json={
+        "version": person["version"], "pipeline_stage_id": stage["id"],
+    })
+    assert moved.status_code == 200, moved.text
+    person = moved.json()
     assert person["pipeline_stage_name"] == "Ready for call"
     assert person["pipeline_stage_color"] == "#7c3aed"
     assert person["lifecycle_status"] == "new"
     assert person["crm_stage"] == "inactive"
-    assert client.get("/v1/prospect-stages").json()[0]["prospect_count"] == 1
+    assert next(
+        row["prospect_count"] for row in client.get("/v1/prospect-stages").json()
+        if row["id"] == stage["id"]
+    ) == 1
     assert client.delete(
         "/v1/prospect-stages/"+stage["id"],
         headers={**csrf, "If-Match": str(stage["version"])},

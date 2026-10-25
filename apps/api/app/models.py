@@ -137,6 +137,7 @@ class Prospect(Base):
     __tablename__ = "prospects"
     __table_args__ = (
         UniqueConstraint("organization_id", "id", name="uq_prospects_org_id"),
+        Index("uq_prospects_org_mobile", "organization_id", "mobile_number", unique=True),
         UniqueConstraint(
             "organization_id", "registration_request_id", name="uq_prospect_registration"
         ),

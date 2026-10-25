@@ -27,6 +27,7 @@ from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
+    CommunicationConsentEvent,
     ManualCollection,
     ManualCollectionReversal,
     OrganizationSettings,
@@ -50,7 +51,7 @@ def _ist_month() -> date:
 
 router = APIRouter(prefix="/v1/prospects", tags=["Admin prospects"])
 
-E164 = re.compile(r"^\+[1-9]\d{7,14}$")
+E164 = re.compile(r"^\+[1-9][0-9]{7,14}$")
 VPA = re.compile(r"^[a-z0-9][a-z0-9._-]{1,127}@[a-z0-9][a-z0-9.-]{1,63}$")
 MAX_AMOUNT_PAISE = 1_000_000_000
 
@@ -71,7 +72,6 @@ class ProspectFields(BaseModel):
     email: EmailStr | None = None
     occupation: str | None = Field(default=None, max_length=120)
     start_month: date | None = None
-    pipeline_stage_id: uuid.UUID | None = None
     mobile_number: str = Field(min_length=9, max_length=16)
     whatsapp_number: str | None = Field(default=None, max_length=16)
     area_city: str = Field(default="", max_length=120)
@@ -576,6 +576,17 @@ def create_prospect(
             response.headers["Cache-Control"] = "no-store"
             return _read(existing, db=database)
 
+    # A person is identified by their normalized mobile, never their name.
+    # Archived records also reserve their number: restore instead of re-register.
+    existing_mobile = database.scalar(select(Prospect.id).where(
+        Prospect.organization_id == admin.organization_id,
+        Prospect.mobile_number == payload.mobile_number,
+    ))
+    if existing_mobile is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Mobile number already registered as a prospect",
+        )
     settings = database.get(OrganizationSettings, admin.organization_id)
     if settings is None:
         raise HTTPException(status_code=503, detail="Organization settings unavailable")
@@ -593,28 +604,23 @@ def create_prospect(
     if ids:
         for identifier in ids:
             _upi_digest(identifier)
-    # Every registration starts at New Inquiry regardless of the supplied stage.
-    # The default is established lazily for organizations created after migrations.
-    inquiry = None
-    if payload.pipeline_stage_id is None:
-        inquiry = database.scalars(select(ProspectStageDefinition).where(
-            ProspectStageDefinition.organization_id == admin.organization_id,
-            ProspectStageDefinition.name_key == "new inquiry",
-        )).one_or_none()
-        if inquiry is None:
-            inquiry = ProspectStageDefinition(
-                organization_id=admin.organization_id,
-                name="New Inquiry", name_key="new inquiry",
-                description="Awaiting first documented follow-up",
-                color="#64748b", sort_order=0, version=1,
-            )
-            database.add(inquiry)
-            database.flush()
-    else:
-        _validate_pipeline(database, admin, payload.pipeline_stage_id)
+    # Server-enforced: registration always begins at New Inquiry.
+    # Admin can change it later only through the versioned details PATCH.
+    inquiry = database.scalars(select(ProspectStageDefinition).where(
+        ProspectStageDefinition.organization_id == admin.organization_id,
+        ProspectStageDefinition.name_key == "new inquiry",
+    )).one_or_none()
+    if inquiry is None:
+        inquiry = ProspectStageDefinition(
+            organization_id=admin.organization_id,
+            name="New Inquiry", name_key="new inquiry",
+            description="Awaiting first documented follow-up",
+            color="#64748b", sort_order=0, version=1,
+        )
+        database.add(inquiry)
+        database.flush()
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
-        "pipeline_stage_id",
     })
     prospect = Prospect(
         organization_id=admin.organization_id,
@@ -623,7 +629,7 @@ def create_prospect(
         lifecycle_status="new",
         crm_stage="inactive",
         crm_stage_changed_at=utc_now(),
-        pipeline_stage_id=payload.pipeline_stage_id or inquiry.id,
+        pipeline_stage_id=inquiry.id,
         registration_request_id=payload.request_id,
         registration_payload_hash=payload_hash if payload.request_id else None,
         version=1,
@@ -659,6 +665,15 @@ def create_prospect(
                 response.status_code = 200
                 response.headers["Cache-Control"] = "no-store"
                 return _read(same, db=database)
+        duplicate = database.scalar(select(Prospect.id).where(
+            Prospect.organization_id == admin.organization_id,
+            Prospect.mobile_number == payload.mobile_number,
+        ))
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Mobile number already registered as a prospect",
+            ) from exc
         raise HTTPException(status_code=409, detail="Prospect registration conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
@@ -692,12 +707,35 @@ def update_prospect(
                if getattr(prospect, field) != value}
     if "pipeline_stage_id" in changed and changed["pipeline_stage_id"] is not None:
         _validate_pipeline(database, admin, changed["pipeline_stage_id"])
+    if "mobile_number" in changed:
+        duplicate = database.scalar(select(Prospect.id).where(
+            Prospect.organization_id == admin.organization_id,
+            Prospect.mobile_number == changed["mobile_number"],
+            Prospect.id != prospect.id,
+        ))
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Mobile number already registered as a prospect",
+            )
     if "mobile_number" in changed or "whatsapp_number" in changed:
-        # A verified phone cannot remain trusted after its contact number changes.
-        if (changed.get("mobile_number", prospect.mobile_number) != prospect.mobile_number
-                or changed.get("whatsapp_number", prospect.whatsapp_number)
-                != prospect.whatsapp_number):
-            changed["whatsapp_verified_at"] = None
+        # Verification and consent belong to an ADDRESS, not simply an ID.
+        # Swapping the WhatsApp recipient must not inherit the former user's opt-in.
+        old_address = prospect.whatsapp_number or prospect.mobile_number
+        new_address = (
+            changed.get("whatsapp_number", prospect.whatsapp_number)
+            or changed.get("mobile_number", prospect.mobile_number)
+        )
+        changed["whatsapp_verified_at"] = None
+        if new_address != old_address:
+            changed["whatsapp_opt_in"] = False
+            database.add(CommunicationConsentEvent(
+                organization_id=admin.organization_id,
+                recipient_kind="prospect", recipient_id=prospect.id,
+                channel="whatsapp", decision="opted_out",
+                source="contact_address_changed", actor_admin_id=admin.id,
+                recorded_at=utc_now(),
+            ))
     if "monthly_contribution_paise" in changed and not valid_commitment(
         changed["monthly_contribution_paise"]
     ):
@@ -733,7 +771,18 @@ def update_prospect(
         _audit(database, admin, prospect, "prospect.updated",
                before={"version": previous},
                after={"version": prospect.version, "changed_fields": sorted(changed)})
-        database.commit()
+        try:
+            database.commit()
+        except IntegrityError as exc:
+            database.rollback()
+            # A concurrent request may have registered the same mobile after
+            # our check. The database unique index is the final authority.
+            if "mobile_number" in changed:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Mobile number already registered as a prospect",
+                ) from exc
+            raise HTTPException(status_code=409, detail="Prospect update conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
 
