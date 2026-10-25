@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
 from app.main import app
@@ -366,10 +367,7 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
     pid = record["id"]
     assert record["crm_stage"] == "inactive"
     assert record["pipeline_stage_name"] == "New Inquiry"
-    activated_first = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
-        "version": record["version"], "stage": "active",
-        "note": "Initial outreach documented",
-    })
+    activated_first = activate_with_test_otp(client, csrf, record)
     assert activated_first.status_code == 200, activated_first.text
     record = activated_first.json()
     assert record["lifecycle_status"] == "new"
@@ -400,10 +398,9 @@ def test_crm_stage_decisions_require_reason_and_preserve_financial_lifecycle(sys
         "version": 1, "stage": "active",
         "note": "Old version cannot overwrite the new status",
     }).status_code == 409
-    activated = client.post("/v1/prospects/" + pid + "/stage", headers=csrf, json={
-        "version": state["version"], "stage": "active",
-        "note": "Sponsor contacted and ready to reactivate",
-    })
+    activated = activate_with_test_otp(
+        client, csrf, state, reason="Sponsor contacted and ready to reactivate",
+    )
     assert activated.status_code == 200, activated.text
     assert activated.json()["crm_stage"] == "active"
     assert activated.json()["crm_inactive_reason"] is None
