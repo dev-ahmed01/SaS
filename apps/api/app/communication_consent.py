@@ -5,11 +5,19 @@ This module is also used by the separately gated legacy Pabbly sender so a
 newly recorded WhatsApp opt-out takes effect before its next attempt.
 """
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CommunicationConsentEvent, Promoter, Prospect
+from app.accounting import effective_credits, evaluate_status, ist_today
+from app.models import (
+    CommunicationConsentEvent,
+    Promoter,
+    Prospect,
+    SponsorshipRate,
+)
+from app.security import utc_now
 
 
 def contact_address(person: Prospect | Promoter, channel: str) -> str:
@@ -65,8 +73,48 @@ def address_opted_out(db: Session, organization_id, channel: str, address: str) 
     )
 
 
+def _inactive_reminder_sponsors(
+    db: Session, organization_id, candidates: list, now: datetime,
+) -> set:
+    """Recompute the net-credit inactivity rule, not the stale status cache.
+
+    Approval previews and actual dispatches must apply the same live policy.
+    Missing rate history fails closed for reminder delivery.
+    """
+    prospects = [p for p in candidates if isinstance(p, Prospect)]
+    if not prospects:
+        return set()
+    rates = defaultdict(list)
+    for row in db.scalars(select(SponsorshipRate).where(
+        SponsorshipRate.organization_id == organization_id,
+        SponsorshipRate.prospect_id.in_([p.id for p in prospects]),
+    )):
+        rates[row.prospect_id].append(row)
+    credits = defaultdict(list)
+    for row in effective_credits(db, organization_id, as_of=now):
+        credits[row.prospect_id].append(row)
+    inactive = set()
+    today = ist_today(now)
+    for person in prospects:
+        if person.archived_at is not None:
+            inactive.add(person.id)
+            continue
+        try:
+            state = evaluate_status(
+                person, rates[person.id], credits[person.id], today, now,
+            )
+        except ValueError:
+            # Missing effective rate is a data-integrity error; never send.
+            inactive.add(person.id)
+            continue
+        if state == "inactive":
+            inactive.add(person.id)
+    return inactive
+
+
 def evaluate_recipients(
     db: Session, organization_id, candidates: list, channel: str, category: str,
+    now: datetime | None = None,
 ):
     """Return (person, recipient kind, state, reason) in stable input order.
 
@@ -75,6 +123,10 @@ def evaluate_recipients(
     """
     latest = _latest_events(db, organization_id, channel)
     blocked = _revoked_addresses(db, organization_id, channel, latest)
+    inactive_reminders = (
+        _inactive_reminder_sponsors(db, organization_id, candidates, now or utc_now())
+        if category == "reminder" else set()
+    )
     seen = set()
     decisions = []
     for person in candidates:
@@ -87,7 +139,9 @@ def evaluate_recipients(
         elif address in blocked or (event and event.decision == "opted_out"):
             reason = "opted_out"
         elif category == "reminder" and (
-            (kind == "prospect" and person.crm_stage != "active") or
+            (kind == "prospect" and (
+                person.crm_stage != "active" or person.id in inactive_reminders
+            )) or
             (kind == "promoter" and not person.is_active)
         ):
             reason = "inactive_reminder"
