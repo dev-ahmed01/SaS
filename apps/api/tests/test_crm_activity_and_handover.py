@@ -1,8 +1,8 @@
 """CRM redesign acceptance: activity is factual and promoter transfers are atomic."""
-from app.accounting import ist_today
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.accounting import ist_today
 from app.models import PromoterAssignment
 
 pytest_plugins = ("test_crm_review_2026_10",)
