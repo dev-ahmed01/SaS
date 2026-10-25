@@ -6,6 +6,7 @@ import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
 import { PromoterEditor } from "./promoter-editor";
 import { PromoterNotes } from "./promoter-notes";
+import { ContactConsent } from "../communication/contact-consent";
 import { PromoterSponsors } from "./promoter-sponsors";
 import { PromoterStatusDialog } from "./promoter-status-dialog";
 import type { Promoter } from "./promoter-types";
@@ -36,6 +37,7 @@ export function PromoterDetails({id}:{id:string}){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [editing,setEditing]=useState(false);
+  const [consentOpen,setConsentOpen]=useState(false);
   const [confirm,setConfirm]=useState(false);
   const [revision,setRevision]=useState(0);
   const refresh=()=>setRevision(x=>x+1);
@@ -126,6 +128,10 @@ export function PromoterDetails({id}:{id:string}){
       <div className="promoter-final-row">
         <PromoterNotes promoter={record} onChanged={refresh}/>
         <div className="crm-redesign-actions" aria-label="Promoter actions">
+          <button type="button" className="btn btn-secondary"
+            aria-expanded={consentOpen} onClick={()=>setConsentOpen(open=>!open)}>
+            Communication permissions
+          </button>
           <button type="button" className="btn btn-secondary" onClick={()=>setEditing(v=>!v)}>
             <Icon name="pencil" size={17}/> Edit
           </button>
@@ -136,6 +142,8 @@ export function PromoterDetails({id}:{id:string}){
           </button>
         </div>
       </div>
+      {consentOpen&&<ContactConsent recipientKind="promoter" recipientId={record.id}
+        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={record.is_active}/>}
     </>}
     {confirm&&record&&<PromoterStatusDialog promoter={record} onClose={()=>setConfirm(false)}
       onChanged={()=>{setConfirm(false);refresh();}}/>}
