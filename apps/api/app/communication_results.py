@@ -42,6 +42,7 @@ class CampaignResultSummary(BaseModel):
     queued: int
     claimed: int
     suppressed_after_approval: int
+    excluded_in_review: int = 0
     delivered: int | None = None
     read: int | None = None
 
@@ -115,7 +116,7 @@ def _recipient(row, lookup) -> RecipientResult:
 
 
 def _summary(campaign_id: uuid.UUID, run: SaasytoCampaignRun | None,
-             states: Counter) -> CampaignResultSummary:
+             states: Counter, excluded_in_review: int = 0) -> CampaignResultSummary:
     return CampaignResultSummary(
         campaign_id=campaign_id,
         run_status=run.status if run else "not_approved",
@@ -126,6 +127,7 @@ def _summary(campaign_id: uuid.UUID, run: SaasytoCampaignRun | None,
         queued=states["queued"],
         claimed=states["claimed"],
         suppressed_after_approval=states["suppressed"],
+        excluded_in_review=excluded_in_review,
         delivered=None, read=None,
     )
 
@@ -163,10 +165,22 @@ def campaign_summaries(
             SaasytoCampaignRecipient.run_id.in_(run_ids),
         )):
             totals[run_id][state] += 1
+    # Show pre-approval failures too, not only worker-run failures.
+    # Latest snapshot per campaign, not an accumulated total of rechecks.
+    latest = {}
+    for prep in db.scalars(select(CommunicationPreparation).where(
+        CommunicationPreparation.organization_id == org,
+        CommunicationPreparation.campaign_id.in_(ids),
+    ).order_by(
+        CommunicationPreparation.evaluated_at.desc(),
+        CommunicationPreparation.id.desc(),
+    )):
+        latest.setdefault(prep.campaign_id, prep.suppressed_count)
     response.headers["Cache-Control"] = "no-store"
     return [
         _summary(c.id, runs.get(c.id),
-                 totals[runs[c.id].id] if c.id in runs else Counter())
+                 totals[runs[c.id].id] if c.id in runs else Counter(),
+                 latest.get(c.id, 0))
         for c in campaigns
     ]
 
@@ -217,7 +231,8 @@ def campaign_detail(
         audience=campaign.audience, segment=campaign.segment,
         category=campaign.category, channel=campaign.channel,
         planned_for=campaign.planned_for, created_at=campaign.created_at,
-        summary=_summary(campaign.id, run, counts),
+        summary=_summary(campaign.id, run, counts,
+                         preflight.suppressed_count if preflight else 0),
         latest_review_at=preflight.evaluated_at if preflight else None,
         eligible_in_review=preflight.eligible_count if preflight else 0,
         excluded_in_review=preflight.suppressed_count if preflight else 0,
