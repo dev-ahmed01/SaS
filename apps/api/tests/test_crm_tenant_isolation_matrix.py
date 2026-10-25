@@ -5,11 +5,11 @@ Never uses real donor information or activates message transports.
 """
 import uuid
 
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start
 from app.main import app
 from app.models import (
