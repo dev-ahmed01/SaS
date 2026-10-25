@@ -551,6 +551,7 @@ def test_explicit_sponsor_optout_blocks_prepared_intent_despite_legacy_checkbox(
     client, engine = system
     csrf = login(client)
     person = sponsor(client, csrf, 350, consent=True)
+    set_start(engine, person["id"], date(2026, 10, 1))
     set_today(monkeypatch, OCT_5)
     created = prepare(client, csrf, "sponsor")
     assert created.status_code == 201, created.text
@@ -586,6 +587,7 @@ def test_explicit_promoter_optout_blocks_consolidated_reminder(
     csrf = login(client)
     promoter_row = promoter(client, csrf, 351, consent=True)
     prospect = sponsor(client, csrf, 351, consent=True)
+    set_start(engine, prospect["id"], date(2026, 10, 1))
     assign(engine, promoter_row["id"], prospect["id"])
     set_today(monkeypatch, OCT_20)
     before = client.get("/v1/reminders/preview?kind=promoter")
