@@ -347,21 +347,21 @@ test("Same-name prospects require different mobile numbers across registrations 
   async function register(mobile){
     await page.goto("/prospects/add");
     await page.getByRole("textbox",{name:/First Name/}).fill(label);
-    await page.getByRole("textbox",{name:/WhatsApp \\/ Mobile/}).fill(mobile);
+    await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(mobile);
     await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-    await expect(page).toHaveURL(/\\/prospects\\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
     await expect(page.getByText("Never paid")).toBeVisible();
   }
   await register(first);
   await register(second);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill("Different Person");
-  await page.getByRole("textbox",{name:/WhatsApp \\/ Mobile/}).fill(first);
+  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(first);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText(
     "That mobile number already belongs to a prospect"
   );
-  await expect(page).toHaveURL(/\\/prospects\\/add$/);
+  await expect(page).toHaveURL(/\/prospects\/add$/);
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   await expect(page.getByRole("row").filter({hasText:label})).toHaveCount(2);
