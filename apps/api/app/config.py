@@ -130,6 +130,12 @@ class Settings(BaseSettings):
             )
             if len(token) < 12 or any(ch.isspace() for ch in token):
                 raise ValueError("Valid Saasyto access token required")
+        if self.otp_activates_prospect and not self.otp_delivery_enabled:
+            raise ValueError("OTP activation requires OTP delivery")
+        if self.otp_activation_notice_enabled and not (
+            self.otp_activates_prospect and self.saasyto_delivery_enabled
+        ):
+            raise ValueError("Activation notice requires OTP activation and Saasyto delivery")
         if self.otp_delivery_enabled:
             import re
 
