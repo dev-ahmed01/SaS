@@ -3,12 +3,14 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from test_communication import activate_for_communication, create_campaign, login
+from test_communication import (
+    activate_for_communication,
+    create_campaign,
+    login,
+    system as system,
+)
 
 from app.models import CommunicationConsentEvent, Prospect
-
-pytest_plugins = ("test_communication",)
-
 
 def test_bulk_attestation_requires_evidence_skips_optouts_and_does_not_send(system):
     client, engine = system
