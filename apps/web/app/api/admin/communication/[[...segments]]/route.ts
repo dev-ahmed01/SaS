@@ -32,6 +32,9 @@ function allowed(parts:string[],method:string):string|null{
     action==="saasyto"&&["GET","POST"].includes(method))
     return "/campaigns/"+id+"/saasyto";
   if(parts.length===4&&name==="campaigns"&&UUID.test(id)&&
+    action==="saasyto"&&parts[3]==="readiness"&&method==="GET")
+    return "/campaigns/"+id+"/saasyto/readiness";
+  if(parts.length===4&&name==="campaigns"&&UUID.test(id)&&
     action==="saasyto"&&parts[3]==="send-now"&&method==="POST")
     return "/campaigns/"+id+"/saasyto/send-now";
   if(parts.length===4&&name==="campaigns"&&UUID.test(id)&&

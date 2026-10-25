@@ -368,3 +368,86 @@ def test_future_local_campaign_cannot_be_manually_dispatched(
     })
     assert approved.status_code == 201, approved.text
     assert client.post(base + "/saasyto/send-now", headers=csrf, json={}).status_code == 409
+
+
+def test_readiness_identifies_wrong_pilot_number_despite_one_eligible(
+    dispatch_system, monkeypatch,
+):
+    """Exactly one consented prospect does not imply allowlisted local contact."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    allowed = _person(client, csrf, "1001")
+    excluded = _person(client, csrf, "1002")
+    _consent(client, csrf, allowed, "opted_in")
+    cfg = _pilot("+919899009999")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    campaign = create_campaign(client, csrf, title="Wrong local phone diagnosis")
+    assert campaign.status_code == 201
+    base = "/v1/communication/campaigns/" + campaign.json()["id"]
+    url = base + "/saasyto/readiness"
+    no_check = client.get(url)
+    assert no_check.status_code == 200
+    assert no_check.json()["code"] == "no_recipient_check"
+    prepared = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert prepared.status_code == 201
+    assert prepared.json()["eligible_count"] == 1
+    assert prepared.json()["suppressed_count"] == 1
+    diagnosis = client.get(url)
+    assert diagnosis.status_code == 200, diagnosis.text
+    data = diagnosis.json()
+    assert data["ready"] is False
+    assert data["code"] == "local_number_mismatch"
+    assert data["eligible_count"] == 1
+    assert data["permitted_phone_masked"] == "•••• 9999"
+    assert "+919899001001" not in diagnosis.text
+    assert "+919899009999" not in diagnosis.text
+    assert excluded["mobile_number"] not in diagnosis.text
+    failed = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": prepared.json()["id"],
+        "expected_eligible": 1, "confirm_send": True,
+    })
+    assert failed.status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(SaasytoCampaignRun.id))) == 0
+
+    cfg.saasyto_local_test_phone = LOCAL_PHONE
+    ready = client.get(url)
+    assert ready.status_code == 200 and ready.json()["ready"] is True
+    assert ready.json()["code"] == "ready"
+    assert ready.json()["eligible_count"] == 1
+    assert ready.json()["permitted_phone_masked"] == "•••• 1001"
+    approved = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": prepared.json()["id"],
+        "expected_eligible": 1, "confirm_send": True,
+    })
+    assert approved.status_code == 201
+    assert client.get(url).json()["code"] == "already_approved"
+
+
+def test_readiness_communicates_disabled_and_older_campaign(
+    dispatch_system, monkeypatch,
+):
+    client, _engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "1001")
+    _consent(client, csrf, person, "opted_in")
+    campaign = create_campaign(client, csrf).json()
+    url = "/v1/communication/campaigns/" + campaign["id"] + "/saasyto/readiness"
+    disabled = _pilot(LOCAL_PHONE)
+    disabled.saasyto_delivery_enabled = False
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: disabled)
+    assert client.get(url).json()["code"] == "sending_disabled"
+
+    from datetime import timedelta
+    future_cfg = _pilot(LOCAL_PHONE)
+    future_cfg.saasyto_enable_after = datetime.now(UTC) + timedelta(days=1)
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: future_cfg)
+    result = client.get(url)
+    assert result.status_code == 200
+    assert result.json()["code"] == "before_activation"
+    assert result.headers["cache-control"] == "no-store"
+    assert client.get(url, headers={
+        "Cookie": "sas_session=not-a-session",
+    }).status_code in (200, 401)
