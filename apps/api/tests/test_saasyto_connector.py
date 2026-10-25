@@ -88,6 +88,31 @@ def test_failed_response_and_ambiguous_timeout_are_not_retried(monkeypatch):
     assert len(client.calls) == 1
 
 
+@pytest.mark.parametrize(("reply", "expected_state", "expected_reason"), [
+    ({"success": True}, "accepted_unverified", None),
+    ({"status": "queued"}, "accepted_unverified", None),
+    ({"status": "sent"}, "accepted_unverified", None),
+    ({"status": "success"}, "accepted_unverified", None),
+    ({"success": False, "error": "private provider details"},
+     "rejected", "provider_rejected"),
+    ({"status": "disconnected"}, "rejected", "provider_rejected"),
+    ({"error": "credentials expired"}, "rejected", "provider_rejected"),
+    ({}, "unknown", "unverified_provider_reply"),
+    ({"message": "Unknown external response"}, "unknown",
+     "unverified_provider_reply"),
+])
+def test_provider_response_must_prove_gateway_acceptance(
+    monkeypatch, reply, expected_state, expected_reason,
+):
+    fake = FakeClient(receipt=reply)
+    monkeypatch.setattr("app.saasyto_client.httpx.Client", lambda **_kw: fake)
+    answer = send_text(_cfg(), phone="+919800001234", message="Synthetic test")
+    assert answer.state == expected_state
+    assert answer.reason == expected_reason
+    assert "private provider details" not in repr(answer)
+    assert "credentials expired" not in repr(answer)
+
+
 def test_bad_phone_or_blank_message_rejected_before_transport(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr("app.saasyto_client.httpx.Client", lambda **_kwargs: client)
