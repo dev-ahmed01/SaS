@@ -5,10 +5,10 @@ Synthetic SQLite tenant + FastAPI requests only. No external sender is enabled.
 import uuid
 from datetime import UTC, date, datetime
 
+from activation_helper import activate_with_test_otp
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start, shift_month
 from app.models import Prospect, SponsorshipRate
 
