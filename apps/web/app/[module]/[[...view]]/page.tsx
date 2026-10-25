@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { ModuleWorkspace } from "../../../components/module-workspace";
+import { CampaignResultDetails } from "../../../components/communication/campaign-results";
 import { requireAdminSession } from "../../../lib/admin-guard";
 
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const valid: Record<string,string[]> = {
   dashboard:["add"],prospects:["add","all","active","inactive","stages"],promoters:["add","active","all","inactive"],
   collections:["add","active","all"],payouts:["add","active","all"],
@@ -17,6 +19,13 @@ export default async function ModuleRoute({params}:{params:Promise<{module:strin
   const {module,view}=await params;
   const target=view?.[0]??(module==="communication"?"compose":
     ["prospects","promoters"].includes(module)?"all":"add");
+  // Keep campaign details within the established authenticated module
+  // route; the legacy catch-all otherwise rejects two-segment views as 404.
+  if(module==="communication" && target==="campaigns" && view?.length===2){
+    if(!UUID.test(view[1]))notFound();
+    await requireAdminSession();
+    return <CampaignResultDetails id={view[1]}/>;
+  }
   if(!valid[module]?.includes(target) || (view && view.length!==1))notFound();
   await requireAdminSession();
   if(module==="reminders") redirect("/communication");
