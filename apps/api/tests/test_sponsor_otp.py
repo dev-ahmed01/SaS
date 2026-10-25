@@ -2,10 +2,13 @@
 import uuid
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import CommunicationConsentEvent, ProspectStageTransition, SponsorOtpChallenge
+from app.saasyto_client import Submission
+from app.sponsor_otp import _deliver
 
 pytest_plugins = ("test_crm_review_2026_10",)
 SECRET = "test-only-sponsor-otp-secret-that-is-long-enough"
@@ -246,3 +249,46 @@ def test_activation_without_marketing_permission_does_not_invent_consent(api, mo
         assert db.scalars(select(CommunicationConsentEvent).where(
             CommunicationConsentEvent.recipient_id == uuid.UUID(person["id"]),
         )).all() == []
+
+
+def test_local_otp_uses_allowlisted_phone_only_and_does_not_claim_delivery(monkeypatch):
+    allowed = "+918100000010"
+    config = SimpleNamespace(otp_local_pilot_enabled=True, saasyto_local_test_phone=allowed)
+    sent = []
+
+    def fake_send(_cfg, *, phone, message):
+        sent.append((phone, message))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.send_text", fake_send)
+    _deliver(config, allowed, "123456")
+    assert len(sent) == 1 and sent[0][0] == allowed
+    assert "123456" in sent[0][1]
+    with pytest.raises(ValueError, match="allowlisted"):
+        _deliver(config, "+918100000011", "654321")
+    assert len(sent) == 1
+    monkeypatch.setattr(
+        "app.sponsor_otp.send_text",
+        lambda _cfg, *, phone, message: Submission("unknown", "provider_timeout"),
+    )
+    with pytest.raises(ValueError, match="acceptance"):
+        _deliver(config, allowed, "123456")
+
+
+def test_local_otp_request_refuses_other_prospect_before_provider_call(api, monkeypatch):
+    client, csrf, engine = api
+    sent = []
+    person = _create(client, csrf, "Other phone", "+918100000012")
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_local_pilot_enabled=True,
+        otp_secret=SECRET, saasyto_local_test_phone="+918100000013",
+    ))
+    monkeypatch.setattr(
+        "app.sponsor_otp._deliver",
+        lambda _cfg, phone, code: sent.append((phone, code)),
+    )
+    response = client.post("/v1/prospects/" + person["id"] + "/otp/request", headers=csrf)
+    assert response.status_code == 403, response.text
+    assert sent == []
+    with Session(engine) as db:
+        assert db.scalars(select(SponsorOtpChallenge)).all() == []
