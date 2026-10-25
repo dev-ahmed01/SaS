@@ -154,6 +154,26 @@ Promoter list without silently scheduling an unapproved worker. Production
 automation of materialization requires a private authenticated scheduler and
 isolated staging validation. No provider sends or real donor data are touched.
 
+## Continued QA: Reject no-op promoter reassignment requests (PR #51)
+
+**Confirmed input-validation bypass:** a Promoter PATCH carrying only
+`reassign_to_promoter_id` or `reassign_individually`, with no actual field
+change, returned a successful unchanged profile **before** evaluating whether
+reassignment was permitted. This was misleading: an Admin could believe
+assignments had moved even though the transfer did not occur. A simultaneous
+unchanged `is_active: true` had the same bypass.
+
+**Correction:** validate incompatible bulk/individual selections and require
+a genuine deactivation transition *before* the normal no-change return.
+Without deactivation, reject with HTTP 422 and preserve the promoter,
+current assignment, version and audit history. Ordinary unchanged non-transfer
+edits remain valid no-ops.
+
+**Regression:** a sponsor assigned to promoter A; attempt bulk, individual,
+empty individual and unchanged-active transfer requests toward B. All must be
+rejected without changes to either promoter or historical assignment count.
+Test remains entirely synthetic and does not send any notifications.
+
 ## Migration and existing data
 
 `0021_unique_prospect_mobile` runs a **read-only preflight** against all

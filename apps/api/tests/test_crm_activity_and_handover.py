@@ -1,5 +1,9 @@
 """CRM redesign acceptance: activity is factual and promoter transfers are atomic."""
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
 from app.accounting import ist_today
+from app.models import PromoterAssignment
 
 pytest_plugins = ("test_crm_review_2026_10",)
 
@@ -77,3 +81,54 @@ def test_prospect_timeline_records_real_followup_and_no_unmade_payments(api):
     assert events.status_code == 200
     assert any(item["title"] == "Follow-up: contacted" for item in events.json())
     assert not any(item["kind"] == "payment" for item in events.json())
+
+
+def test_reassignment_without_deactivation_is_rejected_instead_of_silent_success(api):
+    client, csrf, engine = api
+    first = []
+    for i in range(2):
+        response = client.post("/v1/promoters", headers=csrf, json={
+            "full_name": f"Transfer Guard Promoter {i}",
+            "mobile_number": f"+91870100510{i}", "area_city": "Bengaluru",
+        })
+        assert response.status_code == 201, response.text
+        first.append(response.json())
+    original, destination = first
+    prospect = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Transfer Guard Sponsor",
+        "mobile_number": "+918701005199", "area_city": "Bengaluru",
+    })
+    assert prospect.status_code == 201, prospect.text
+    assigned = client.put(
+        f"/v1/promoters/{original['id']}/sponsors/{prospect.json()['id']}",
+        headers={**csrf, "If-Match": str(prospect.json()["version"])},
+    )
+    assert assigned.status_code == 200, assigned.text
+    before = client.get("/v1/promoters/" + original["id"]).json()
+    assert before["sponsor_count"] == 1
+    paths = [
+        {"reassign_to_promoter_id": destination["id"]},
+        {"reassign_individually": {prospect.json()["id"]: destination["id"]}},
+        {"is_active": True, "reassign_to_promoter_id": destination["id"]},
+        {"reassign_individually": {}},
+    ]
+    for intent in paths:
+        result = client.patch(
+            "/v1/promoters/" + original["id"], headers=csrf,
+            json={"version": before["version"], **intent},
+        )
+        assert result.status_code == 422, result.text
+        assert "deactivation" in result.text.lower()
+        assert client.get("/v1/promoters/" + original["id"]).json() == before
+        assert client.get("/v1/promoters/" + destination["id"]).json()[
+            "sponsor_count"
+        ] == 0
+
+    # An unchanged ordinary edit still succeeds without a fake transfer.
+    no_op = client.patch("/v1/promoters/" + original["id"], headers=csrf, json={
+        "version": before["version"], "full_name": before["full_name"],
+    })
+    assert no_op.status_code == 200, no_op.text
+    assert no_op.json() == before
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(PromoterAssignment.id))) == 1

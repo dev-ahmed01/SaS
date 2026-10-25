@@ -332,16 +332,20 @@ def update_promoter(
             source="contact_address_changed", actor_admin_id=admin.id,
             recorded_at=utc_now(),
         ))
-    if not changed:
-        response.headers["Cache-Control"] = "no-store"
-        return _present(database, promoter)
+    # Validate the *intent* before short-circuiting an unchanged profile.
+    # Otherwise PATCH(version, reassign_to_promoter_id) returned HTTP 200
+    # without transferring anyone or rejecting a forbidden non-deactivation.
+    if payload.reassign_to_promoter_id and payload.reassign_individually is not None:
+        raise HTTPException(status_code=422, detail="Choose bulk or individual reassignment")
     requesting_reassignment = (
-        payload.reassign_to_promoter_id or payload.reassign_individually is not None
+        payload.reassign_to_promoter_id is not None
+        or payload.reassign_individually is not None
     )
     if requesting_reassignment and changed.get("is_active") is not False:
         raise HTTPException(status_code=422, detail="Reassignment requires deactivation")
-    if payload.reassign_to_promoter_id and payload.reassign_individually is not None:
-        raise HTTPException(status_code=422, detail="Choose bulk or individual reassignment")
+    if not changed:
+        response.headers["Cache-Control"] = "no-store"
+        return _present(database, promoter)
     transfer_count = 0
     if changed.get("is_active") is False:
         assignments = database.scalars(select(PromoterAssignment).where(
