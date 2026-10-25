@@ -98,7 +98,7 @@ def test_two_admins_cannot_read_or_mutate_each_others_records(api):
         db.flush()
         db.add(AdminUser(
             organization_id=second_org.id,
-            email="tenant-isolation@foundation.example",
+            email="tenant-isolation@foundation.org",
             password_hash=hash_password("synthetic-second-tenant-password"),
             is_active=True,
         ))
@@ -115,7 +115,7 @@ def test_two_admins_cannot_read_or_mutate_each_others_records(api):
 
     with TestClient(app) as second:
         signed_in = second.post("/v1/auth/login", json={
-            "email": "tenant-isolation@foundation.example",
+            "email": "tenant-isolation@foundation.org",
             "password": "synthetic-second-tenant-password",
         })
         assert signed_in.status_code == 200, signed_in.text
