@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start, shift_month
 from app.models import Prospect, SponsorshipRate
 
@@ -24,11 +25,7 @@ def _registered_active(client, csrf, engine, phone, start_month):
     })
     assert created.status_code == 201, created.text
     person = created.json()
-    stage = client.post("/v1/prospects/" + person["id"] + "/stage", headers=csrf, json={
-        "version": person["version"],
-        "stage": "active",
-        "note": "Synthetic sponsor activated for reminder eligibility regression",
-    })
+    stage = activate_with_test_otp(client, csrf, person)
     assert stage.status_code == 200, stage.text
     with Session(engine) as db:
         sponsor = db.get(Prospect, uuid.UUID(person["id"]))
