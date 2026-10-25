@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from activation_helper import activate_with_test_otp
 from app.accounting import ist_today, month_start
 from app.bootstrap_admin import provision_admin
 from app.main import app
@@ -65,10 +66,7 @@ def login(client):
 
 def activate_for_financial_flow(client, csrf, record):
     """Older payment/reminder tests explicitly activate enrolled CRM prospects."""
-    response = client.post("/v1/prospects/" + record["id"] + "/stage", headers=csrf, json={
-        "version": record["version"], "stage": "active",
-        "note": "Synthetic outreach completed for financial flow test",
-    })
+    response = activate_with_test_otp(client, csrf, record)
     assert response.status_code == 200, response.text
     return response.json()
 
