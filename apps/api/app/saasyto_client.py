@@ -39,6 +39,10 @@ def send_text(cfg: Settings, *, phone: str, message: str) -> Submission:
         raise ValueError("Saasyto sender credentials unavailable")
     if not PHONE.fullmatch(phone):
         raise ValueError("Recipient number must be E.164 with a country code")
+    if getattr(cfg, "saasyto_local_test_enabled", False):
+        allowed = (cfg.saasyto_local_test_phone or "").lstrip("+")
+        if not allowed or phone.lstrip("+") != allowed:
+            raise ValueError("Local pilot recipient is not allowlisted")
     if not message or len(message) > 1200:
         raise ValueError("Invalid outgoing message length")
     token = cfg.saasyto_access_token.get_secret_value()
