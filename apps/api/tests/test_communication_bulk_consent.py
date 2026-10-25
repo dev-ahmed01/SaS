@@ -4,8 +4,9 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CommunicationConsentEvent, Prospect
 from test_communication import activate_for_communication, create_campaign, login
+
+from app.models import CommunicationConsentEvent, Prospect
 
 pytest_plugins = ("test_communication",)
 
