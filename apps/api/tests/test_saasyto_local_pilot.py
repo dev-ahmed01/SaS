@@ -377,7 +377,7 @@ def test_readiness_identifies_wrong_pilot_number_despite_one_eligible(
     client, engine = dispatch_system
     csrf = login(client)
     allowed = _person(client, csrf, "1001")
-    excluded = _person(client, csrf, "1002")
+    excluded = _person(client, csrf, "1002", consent=False)
     _consent(client, csrf, allowed, "opted_in")
     cfg = _pilot("+919899009999")
     monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
