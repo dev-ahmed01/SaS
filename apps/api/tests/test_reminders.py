@@ -543,3 +543,65 @@ def test_reminder_history_reflects_confirmed_deliveries(system, monkeypatch):
     done = client.get("/v1/reminders/batches").json()["items"][0]
     assert done["status"] == "delivered"
     assert done["delivered_count"] == 2
+
+
+def test_explicit_sponsor_optout_blocks_prepared_intent_despite_legacy_checkbox(
+    system, monkeypatch,
+):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, 350, consent=True)
+    set_start(engine, person["id"], date(2026, 10, 1))
+    set_today(monkeypatch, OCT_5)
+    created = prepare(client, csrf, "sponsor")
+    assert created.status_code == 201, created.text
+    with Session(engine) as db:
+        admin = db.scalars(select(AdminUser)).one()
+        intent = db.scalars(select(ReminderIntent)).one()
+        assert current_intent_eligible(
+            db, admin, intent, OCT_5.astimezone(UTC),
+        ) is True
+
+    opted_out = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "prospect", "recipient_id": person["id"],
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "synthetic sponsor requested stop",
+    })
+    assert opted_out.status_code == 201, opted_out.text
+    with Session(engine) as db:
+        assert db.get(Prospect, uuid.UUID(person["id"])).whatsapp_opt_in is True
+        admin = db.scalars(select(AdminUser)).one()
+        intent = db.scalars(select(ReminderIntent)).one()
+        assert current_intent_eligible(
+            db, admin, intent, OCT_5.astimezone(UTC),
+        ) is False
+    assert client.get("/v1/reminders/preview?kind=sponsor").json()[
+        "eligible_recipients"
+    ] == 0
+
+
+def test_explicit_promoter_optout_blocks_consolidated_reminder(
+    system, monkeypatch,
+):
+    client, engine = system
+    csrf = login(client)
+    promoter_row = promoter(client, csrf, 351, consent=True)
+    prospect = sponsor(client, csrf, 351, consent=True)
+    set_start(engine, prospect["id"], date(2026, 10, 1))
+    assign(engine, promoter_row["id"], prospect["id"])
+    set_today(monkeypatch, OCT_20)
+    before = client.get("/v1/reminders/preview?kind=promoter")
+    assert before.status_code == 200, before.text
+    assert before.json()["eligible_recipients"] == 1
+    assert before.json()["unpaid_sponsors"] == 1
+
+    opted_out = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "promoter", "recipient_id": promoter_row["id"],
+        "channel": "whatsapp", "decision": "opted_out",
+        "source": "synthetic promoter requested stop",
+    })
+    assert opted_out.status_code == 201, opted_out.text
+    preview = client.get("/v1/reminders/preview?kind=promoter")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["eligible_recipients"] == 0
+    assert preview.json()["unpaid_sponsors"] == 0

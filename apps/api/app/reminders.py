@@ -22,6 +22,7 @@ from app.accounting import (
     period_balance,
 )
 from app.auth import db_session, get_admin, require_csrf
+from app.communication_consent import evaluate_recipients
 from app.models import (
     AdminSession,
     AdminUser,
@@ -178,15 +179,18 @@ def _build_preview(
     recipients: list[ReminderRecipient] = []
 
     if kind == "sponsor":
+        decisions = evaluate_recipients(
+            database, admin.organization_id, list(sponsor_map.values()),
+            "whatsapp", "reminder", now=now,
+        )
+        eligible_ids = {
+            person.id for person, _, state, _ in decisions if state == "eligible"
+        }
         for sponsor_id, person in unpaid.items():
-            sponsor = sponsor_map[sponsor_id]
-            # Contact permission is mandatory even though no transport is connected.
-            if not sponsor.whatsapp_opt_in or not (
-                sponsor.whatsapp_number or sponsor.mobile_number
-            ):
+            if sponsor_id not in eligible_ids:
                 continue
             recipients.append(ReminderRecipient(
-                recipient_id=sponsor_id, recipient_name=sponsor.full_name,
+                recipient_id=sponsor_id, recipient_name=person.full_name,
                 sponsor_count=1, outstanding_paise=person.outstanding_paise,
                 unpaid_sponsors=[person],
             ))
@@ -198,6 +202,19 @@ def _build_preview(
                 Promoter.whatsapp_opt_in.is_(True),
             ))
             if row.whatsapp_number or row.mobile_number
+        }
+        # Explicit opt-out events and address-level blocking override a
+        # legacy checked consent box. Shared numbers are deduplicated.
+        decisions = evaluate_recipients(
+            database, admin.organization_id, list(promoters.values()),
+            "whatsapp", "reminder", now=now,
+        )
+        eligible_ids = {
+            person.id for person, _, state, _ in decisions if state == "eligible"
+        }
+        promoters = {
+            identifier: person for identifier, person in promoters.items()
+            if identifier in eligible_ids
         }
         assigned = defaultdict(list)
         for link in database.scalars(select(PromoterAssignment).where(
