@@ -30,6 +30,7 @@ from app.models import (
     AuditEvent,
     CommunicationCampaign,
     CommunicationPreparation,
+    CommunicationRecipientSnapshot,
     Promoter,
     Prospect,
     SaasytoCampaignRecipient,
@@ -107,6 +108,20 @@ def _existing_run(db: Session, org: uuid.UUID, campaign: uuid.UUID):
         SaasytoCampaignRun.organization_id == org,
         SaasytoCampaignRun.campaign_id == campaign,
     )).one_or_none()
+
+
+def _reviewed_eligible(
+    db: Session, organization_id: uuid.UUID, preparation_id: uuid.UUID,
+) -> set[tuple[str, uuid.UUID]]:
+    """Identify actual reviewed contacts; counts cannot authorize a swapped donor."""
+    return set(db.execute(select(
+        CommunicationRecipientSnapshot.recipient_kind,
+        CommunicationRecipientSnapshot.recipient_id,
+    ).where(
+        CommunicationRecipientSnapshot.organization_id == organization_id,
+        CommunicationRecipientSnapshot.preparation_id == preparation_id,
+        CommunicationRecipientSnapshot.status == "eligible",
+    )).all())
 
 
 @admin_router.get("/campaigns/{identifier}/saasyto", response_model=CampaignRunRead | None)
@@ -196,7 +211,10 @@ def campaign_approval_readiness(
     if count == 0:
         return result("no_eligible_contacts",
                       "No eligible contacts. Review consent, opt-outs and active status.")
-    if count > MAX_APPROVAL_RECIPIENTS or count != preparation.eligible_count:
+    if (count > MAX_APPROVAL_RECIPIENTS or count != preparation.eligible_count
+            or {(kind, person.id) for person, kind in eligible} != _reviewed_eligible(
+                db, admin.organization_id, preparation.id,
+            )):
         return result("audience_changed",
                       "Eligible contacts changed since the last check. "
                       "Click Check recipients again.")
@@ -252,7 +270,10 @@ def approve_campaign(
                 if state == "eligible"]
     if (not eligible or len(eligible) > MAX_APPROVAL_RECIPIENTS
             or len(eligible) != payload.expected_eligible
-            or len(eligible) != prep.eligible_count):
+            or len(eligible) != prep.eligible_count
+            or {(kind, person.id) for person, kind in eligible} != _reviewed_eligible(
+                db, admin.organization_id, prep.id,
+            )):
         raise HTTPException(status_code=409, detail="Audience changed; review again")
     if getattr(cfg, "saasyto_local_test_enabled", False):
         allowed = (cfg.saasyto_local_test_phone or "").lstrip("+")
