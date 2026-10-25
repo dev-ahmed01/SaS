@@ -161,7 +161,7 @@ def test_new_contact_number_revokes_whatsapp_permission_for_both_roles(api):
             )).all()
             assert len(revoked)==1
     with Session(engine) as db:
-        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 4
+        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) == 5
 
 
 def test_registration_stage_is_always_new_inquiry_then_editable(api):
