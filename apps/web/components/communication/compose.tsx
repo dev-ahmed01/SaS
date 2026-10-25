@@ -1,12 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   apiGet, apiWrite, audienceOptions, categoryOptions, istLocalInput, segmentOptions,
 } from "./types";
 import type { Audience, Campaign, Category, Channel, Segment, Template } from "./types";
 
 export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
+  const router=useRouter();
   const [title,setTitle]=useState("");
   const [channel,setChannel]=useState<Channel>("whatsapp");
   const [audience,setAudience]=useState<Audience>("prospects");
@@ -17,7 +19,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const [subject,setSubject]=useState("");
   const [body,setBody]=useState("");
   const [providerTemplate,setProviderTemplate]=useState("");
-  const [timing,setTiming]=useState<"draft"|"planned">("draft");
+  const [timing,setTiming]=useState<"now"|"planned">("now");
   const [plannedFor,setPlannedFor]=useState(()=>istLocalInput(new Date(Date.now()+3600000)));
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -61,9 +63,9 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         provider_template_id:providerTemplate.trim()||null,planned_for:schedule,
       });
       requestId.current=null;
-      setNotice((campaign.status==="scheduled"?"Scheduled plan":"Draft")+" saved. "
-        +"No message has been sent or queued for delivery.");
+      setNotice("Campaign created. No message has been sent or queued for delivery.");
       onSaved();
+      router.push("/communication/campaigns/"+campaign.id);
     }catch(e){setError(e instanceof Error?e.message:"Unable to save message.");}
     finally{setSaving(false);}
   }
@@ -144,8 +146,8 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         <div className="comm-form-section">
           <h3>Timing</h3>
           <div className="comm-radio-options">
-            <label><input type="radio" name="timing" checked={timing==="draft"}
-              onChange={()=>{setTiming("draft");invalidate();}}/> Save draft</label>
+            <label><input type="radio" name="timing" checked={timing==="now"}
+              onChange={()=>{setTiming("now");invalidate();}}/> Review & send</label>
             <label><input type="radio" name="timing" checked={timing==="planned"}
               onChange={()=>{setTiming("planned");invalidate();}}/> Plan for later</label>
           </div>
@@ -159,9 +161,9 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         {error&&<p className="form-error" role="alert">{error}</p>}
         {notice&&<p className="form-success" role="status">{notice}</p>}
         <div className="comm-actions">
-          <span className="comm-muted">Saving does not send messages.</span>
+          <span className="comm-muted">Sending requires a fresh recipient check and explicit approval.</span>
           <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving?"Saving…":timing==="planned"?"Save scheduled plan":"Save draft"}
+            {saving?"Saving…":timing==="planned"?"Plan for later":"Continue to recipient review"}
           </button>
         </div>
       </form>
