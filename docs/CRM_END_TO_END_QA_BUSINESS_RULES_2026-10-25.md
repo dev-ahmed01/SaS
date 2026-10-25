@@ -99,6 +99,29 @@ not just an earlier successful main run. Tests use disposable databases and
 mock/no-send transport; real Saasyto approval and production rollout still
 require the existing sender, webhook, privacy and staging sign-off gates.
 
+## Continued audit: explicit opt-out must override native reminder checkboxes (PR #49)
+
+**Reproduced rule mismatch in source:** The dedicated `/v1/reminders`
+sponsor and promoter previews originally checked only legacy
+`whatsapp_opt_in` flags and addresses. However, the Communication
+module can record an explicit `opted_out` consent event independently
+of that checkbox. Thus an opt-out could remain in a prepared reminder
+recipient set, and `current_intent_eligible` could consider it eligible.
+
+**Hardening:** Reuse the tenant-scoped shared consent decision engine in
+native sponsor and consolidated promoter reminder previews. This applies the
+latest explicit opt-out, address-level opt-out blocking and duplicate-address
+suppression while retaining current payment, assignment and two-missed-month
+eligibility checks. Prepared reminders must revalidate the same consent at
+send-time; no transport is activated.
+
+**Regression paths:** A sponsor opts out after an eligible batch is prepared
+while the old WhatsApp checkbox remains checked; preview and intent
+revalidation must both reject it. An active promoter with an eligible unpaid
+sponsor opts out; the consolidated reminder must no longer count that promoter
+or include their sponsor in a dispatchable summary. These cases run in
+`test_reminders.py` using synthetic addresses, no actual messages.
+
 ## Migration and existing data
 
 `0021_unique_prospect_mobile` runs a **read-only preflight** against all
