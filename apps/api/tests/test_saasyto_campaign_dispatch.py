@@ -253,9 +253,9 @@ def test_campaign_results_include_excluded_contacts_and_mask_numbers(dispatch_sy
     assert excluded["phone_masked"] == "•••• 1102"
     assert excluded["status"] == "excluded"
     assert "+919899001102" not in detail.text
-    assert client.get("/v1/communication/campaigns/results").json()[0][
-        "run_status"
-    ] == "not_approved"
+    all_summaries = client.get("/v1/communication/campaigns/results").json()
+    assert all_summaries[0]["run_status"] == "not_approved"
+    assert all_summaries[0]["excluded_in_review"] == 1
     assert client.get("/v1/communication/campaigns/"+str(uuid.uuid4())+
                       "/results").status_code == 404
 
