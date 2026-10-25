@@ -16,7 +16,7 @@ type CampaignSummary={
 };
 type BulkConsentReview={
   active:number;already_documented:number;needs_confirmation:number;
-  opted_out:number;no_number:number;
+  opted_out:number;no_number:number;review_fingerprint:string;
 };
 type SaasytoRun={
   id:string;campaign_id:string;status:"approved"|"cancelled"|"completed";
@@ -99,6 +99,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   },[revision,reload]);
   async function loadConsentReview(){
     setConsentBusy(true);setConsentNotice("");
+    setConsentReview(null);setConsentConfirmed(false);
     try{
       setConsentReview(await apiGet<BulkConsentReview>("/active-consent-review"));
     }catch{
@@ -119,6 +120,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         "/active-consent-review","POST",{
           confirm:"I_HAVE_VERIFIED_EXISTING_CONSENT",
           expected_needs_confirmation:count,
+          expected_review_fingerprint:consentReview.review_fingerprint,
           source:consentSource.trim(),
           evidence_reference:consentReference.trim(),
         }
@@ -128,8 +130,9 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         "Create a fresh recipient check before approving a campaign.");
       setReload(x=>x+1);
     }catch{
-      setConsentNotice("Permission confirmation failed. Review the active "+
-        "audience and referenced evidence again.");
+      setConsentReview(null);setConsentConfirmed(false);
+      setConsentNotice("The audience may have changed or confirmation failed. "+
+        "Review Active prospects again before continuing.");
     }finally{setConsentBusy(false);}
   }
   async function openReview(item:Campaign){
