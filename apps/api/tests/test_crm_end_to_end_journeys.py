@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from activation_helper import activate_with_test_otp
 from app.accounting import effective_credits, ist_today, month_start
 from app.models import (
     AuditEvent,
@@ -32,10 +33,7 @@ def _create(client, csrf, *, name="Same Person", phone="+918701001111", **change
 
 
 def _activate(client, csrf, person):
-    result = client.post("/v1/prospects/"+person["id"]+"/stage", headers=csrf, json={
-        "version": person["version"], "stage": "active",
-        "note": "Synthetic contact confirmed sponsor wants to participate",
-    })
+    result = activate_with_test_otp(client, csrf, person)
     assert result.status_code == 200, result.text
     return result.json()
 
