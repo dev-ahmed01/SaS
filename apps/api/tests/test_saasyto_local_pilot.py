@@ -7,18 +7,12 @@ import pytest
 from pydantic import SecretStr, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from test_communication import create_campaign, login
+from test_saasyto_campaign_dispatch import RUNNER, _approved, _cfg, _consent, _person
 
 from app.config import Settings
 from app.models import SaasytoCampaignRun
 from app.saasyto_client import Submission, send_text
-from test_saasyto_campaign_dispatch import (
-    RUNNER,
-    _approved,
-    _cfg,
-    _consent,
-    _person,
-)
-from test_communication import create_campaign, login
 
 pytest_plugins = ("test_saasyto_campaign_dispatch",)
 
