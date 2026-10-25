@@ -1,19 +1,47 @@
 """Admin-only existing-consent confirmation never sends WhatsApp."""
 import uuid
+from types import SimpleNamespace
 
-from sqlalchemy import select
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from test_communication import (
-    activate_for_communication,
-    create_campaign,
-    login,
-    system as system,
-)
+from sqlalchemy.pool import StaticPool
+from test_communication import activate_for_communication, create_campaign, login
 
-from app.models import CommunicationConsentEvent, Prospect
+from app.bootstrap_admin import provision_admin
+from app.main import app
+from app.models import Base, CommunicationConsentEvent, Prospect
 
-def test_bulk_attestation_requires_evidence_skips_optouts_and_does_not_send(system):
-    client, engine = system
+
+@pytest.fixture
+def test_system(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org",
+            password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr("app.auth.get_settings", lambda: SimpleNamespace(
+        auth_secret="synthetic-secure-auth-key-longer-than-thirty-two",
+        app_env="test",
+    ))
+    monkeypatch.setattr("app.prospects.get_settings", lambda: SimpleNamespace(
+        upi_match_secret="synthetic-unique-hmac-secret-for-communication-test",
+    ))
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
+
+
+def test_bulk_attestation_requires_evidence_skips_optouts_and_does_not_send(test_system):
+    client, engine = test_system
     url = "/v1/communication/active-consent-review"
     assert client.get(url).status_code == 401
     assert client.post(url, json={}).status_code == 401
@@ -94,8 +122,8 @@ def test_bulk_attestation_requires_evidence_skips_optouts_and_does_not_send(syst
     assert prepared.json()["exclusion_reasons"] == {"opted_out":1}
 
 
-def test_existing_permission_review_is_read_only(system):
-    client, engine = system
+def test_existing_permission_review_is_read_only(test_system):
+    client, engine = test_system
     csrf = login(client)
     person = client.post("/v1/prospects", headers=csrf, json={
         "full_name":"No prior consent", "mobile_number":"+919822331122",
