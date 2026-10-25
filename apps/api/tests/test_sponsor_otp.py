@@ -312,3 +312,48 @@ def test_verified_new_prospect_reverts_inactive_after_phone_change(api, monkeypa
         "note": "Manual override after address change",
     })
     assert without_code.status_code == 409
+
+
+def test_secondary_mobile_edit_preserves_verified_whatsapp_and_then_revokes_on_change(
+    api, monkeypatch,
+):
+    client, csrf, _engine = api
+    person = _create(client, csrf, "Secondary mobile", "+918100000031")
+    alternate = "+918100000032"
+    p = client.patch("/v1/prospects/" + person["id"], headers=csrf, json={
+        "version": person["version"], "whatsapp_number": alternate,
+    })
+    assert p.status_code == 200, p.text
+    cfg = SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activates_prospect=True, otp_activation_notice_enabled=False,
+    )
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.prospects.get_settings", lambda: SimpleNamespace(
+        upi_match_secret="synthetic-upi-key-for-otp-secondary-contact",
+        otp_activates_prospect=True,
+    ))
+    out = []
+    monkeypatch.setattr("app.sponsor_otp._deliver",
+                        lambda _cfg, phone, code: out.append((phone, code)))
+    endpoint = "/v1/prospects/" + person["id"] + "/otp"
+    issued = client.post(endpoint + "/request", headers=csrf).json()
+    assert out[0][0] == alternate
+    verified = client.post(endpoint + "/verify", headers=csrf, json={
+        "challenge_id": issued["challenge_id"], "code": out[0][1],
+    })
+    assert verified.status_code == 200 and verified.json()["crm_stage"] == "active"
+    updated = client.get("/v1/prospects/" + person["id"]).json()
+    secondary = client.patch("/v1/prospects/" + person["id"], headers=csrf, json={
+        "version": updated["version"], "mobile_number": "+918100000033",
+    })
+    assert secondary.status_code == 200, secondary.text
+    assert secondary.json()["crm_stage"] == "active"
+    assert client.get(endpoint + "/status").json()["verified"] is True
+    primary = client.patch("/v1/prospects/" + person["id"], headers=csrf, json={
+        "version": secondary.json()["version"],
+        "whatsapp_number": "+918100000034",
+    })
+    assert primary.status_code == 200, primary.text
+    assert primary.json()["crm_stage"] == "inactive"
+    assert client.get(endpoint + "/status").json()["verified"] is False
