@@ -46,6 +46,8 @@ class Settings(BaseSettings):
 
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
+    otp_activates_prospect: bool = False
+    otp_activation_notice_enabled: bool = False
     otp_secret: str | None = None
     otp_meta_access_token: str | None = None
     otp_meta_phone_number_id: str | None = None
