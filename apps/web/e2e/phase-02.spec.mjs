@@ -827,9 +827,21 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.reload();
   const ledger=page.getByRole("region",{name:"Monthly sponsorship ledger"});
   const dueRow=ledger.getByRole("row",{name:new RegExp(name)});
-  // The ledger intentionally paginates; the sponsor need not be on page one.
-  for(let pageNumber=0;pageNumber<12;pageNumber++){
-    if(await dueRow.count()>0)break;
+  // First verify the authoritative, paginated API projection after reversal.
+  // Then navigate to the page where the response says the sponsor belongs.
+  let rows=[];
+  for(let offset=0;offset<500;offset+=100){
+    const res=await page.request.get(
+      "/api/admin/accounting/overview?limit=100&offset="+offset
+    );
+    expect(res.status()).toBe(200);
+    const body=await res.json();
+    rows.push(...body.items);
+    if(rows.length>=body.total_sponsors)break;
+  }
+  const sponsorPosition=rows.findIndex(row=>row.name===name);
+  expect(sponsorPosition,"Reversed sponsor missing from accounting overview").toBeGreaterThanOrEqual(0);
+  for(let n=0;n<Math.floor(sponsorPosition/20);n++){
     const next=ledger.getByRole("button",{name:"Next"});
     await expect(next).toBeEnabled();
     await next.click();
