@@ -14,8 +14,8 @@ from app.admin_settings import router as settings_router
 from app.auth import router as auth_router
 from app.collections import router as collections_router
 from app.communication import router as communication_router
-from app.communication_results import router as communication_results_router
 from app.communication_bulk_consent import router as communication_bulk_consent_router
+from app.communication_results import router as communication_results_router
 from app.config import get_settings
 from app.dashboard import router as dashboard_router
 from app.db import get_engine
