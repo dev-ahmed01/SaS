@@ -10,6 +10,7 @@ type CampaignSummary={
   campaign_id:string;run_status:"not_approved"|"approved"|"cancelled"|"completed";
   planned:number;submitted_unverified:number;rejected:number;unknown:number;
   queued:number;claimed:number;suppressed_after_approval:number;
+  excluded_in_review:number;
   delivered:number|null;read:number|null;
 };
 type SaasytoRun={
@@ -181,7 +182,9 @@ export function CommunicationCampaigns({revision}:{revision:number}){
           <td>{item.planned_for?istDisplay(item.planned_for):"Awaiting approval"}</td>
           <td>{results[item.id]?.submitted_unverified??0}</td>
           <td>{results[item.id]?.rejected??0}</td>
-          <td>{results[item.id]?.suppressed_after_approval??0}</td>
+          <td>{results[item.id]
+            ?results[item.id].suppressed_after_approval+results[item.id].excluded_in_review
+            :0}</td>
           <td>{results[item.id]?.read??"Unavailable"}</td>
           <td><div className="comm-review-actions">
             <Link className="comm-text-button" href={"/communication/campaigns/"+item.id}>
@@ -271,8 +274,9 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       </section>}
     <p className="comm-muted comm-history-footnote">
       Submitted means accepted by Saasyto, not delivered or read. "Not sent" above
-      counts suppressed recipients after approval; contacts excluded during the
-      pre-send review appear in each campaign's detailed results. Planned dates use IST.
+      includes the latest recipient-check exclusions plus people suppressed
+      after approval. These categories are explained individually in each
+      campaign's detailed results. Planned dates use IST.
       Creating a campaign never sends WhatsApp messages.
       An approved campaign requires the private dispatch worker. Local pilots
       can send only to the number explicitly permitted in API settings.
