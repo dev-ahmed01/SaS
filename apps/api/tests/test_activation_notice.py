@@ -16,7 +16,7 @@ pytest_plugins = ("test_crm_review_2026_10",)
 SECRET = "synthetic-otp-notice-secret-long-enough-for-tests"
 
 
-def setup(monkeypatch, *, allowed=True, local=False, cutoff=None, error=False):
+def setup(monkeypatch, *, local=False, cutoff=None, error=False):
     codes = []
     messages = []
     settings = SimpleNamespace(
@@ -81,7 +81,7 @@ def test_acknowledgement_once_for_registration_consented_sponsor(api, monkeypatc
     assert messages[0][0] == person["mobile_number"]
     assert "activated" in messages[0][1]
     assert "not a payment confirmation" in messages[0][1]
-    assert "123456" not in messages[0][1]
+    assert codes[0] not in messages[0][1]
     replay = activate(client, csrf, person, codes[0], challenge)
     assert replay.status_code in (400, 409)
     assert len(messages) == 1
