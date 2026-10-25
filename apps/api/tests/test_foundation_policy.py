@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from activation_helper import activate_with_test_otp
 from app.accounting import evaluate_status, ist_today, month_start, shift_month
 from app.bootstrap_admin import provision_admin
 from app.main import app
@@ -157,10 +158,7 @@ def test_250_receipt_reactivates_and_full_reversal_deactivates(policy_api):
     })
     assert person.status_code == 201, person.text
     profile = person.json()
-    started = client.post("/v1/prospects/" + profile["id"] + "/stage", headers=csrf, json={
-        "version": profile["version"], "stage": "active",
-        "note": "Synthetic sponsor consented to activation",
-    })
+    started = activate_with_test_otp(client, csrf, profile)
     assert started.status_code == 200, started.text
     profile = started.json()
     assert profile["monthly_contribution_paise"] == 25000
