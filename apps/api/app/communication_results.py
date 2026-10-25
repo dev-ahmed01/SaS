@@ -72,6 +72,7 @@ class CampaignResultDetail(BaseModel):
     excluded_in_review: int = 0
     excluded_reasons: dict[str, int] = Field(default_factory=dict)
     recipients: list[RecipientResult] = Field(default_factory=list)
+    eligible_recipients: list[RecipientResult] = Field(default_factory=list)
     excluded_recipients: list[RecipientResult] = Field(default_factory=list)
     delivery_notice: str = (
         "Saasyto acceptance confirms only gateway submission. Delivered/read "
@@ -220,7 +221,13 @@ def campaign_detail(
         CommunicationRecipientSnapshot.status == "suppressed",
     ).order_by(CommunicationRecipientSnapshot.id).limit(MAX_RECIPIENTS)).all() if preflight else []
 
-    keys = {(row.recipient_kind, row.recipient_id) for row in [*queue, *excluded]}
+    eligible = db.scalars(select(CommunicationRecipientSnapshot).where(
+        CommunicationRecipientSnapshot.organization_id == org,
+        CommunicationRecipientSnapshot.preparation_id == preflight.id,
+        CommunicationRecipientSnapshot.status == "eligible",
+    ).order_by(CommunicationRecipientSnapshot.id).limit(MAX_RECIPIENTS)).all() if preflight else []
+    keys = {(row.recipient_kind, row.recipient_id)
+            for row in [*queue, *eligible, *excluded]}
     lookup = _people(db, org, keys)
     counts = Counter(row.status for row in queue)
     reasons = Counter(row.suppression_reason for row in excluded)
@@ -238,6 +245,19 @@ def campaign_detail(
         excluded_in_review=preflight.suppressed_count if preflight else 0,
         excluded_reasons=dict(reasons),
         recipients=[_recipient(row, lookup) for row in queue],
+        eligible_recipients=[
+            RecipientResult(
+                recipient_kind=row.recipient_kind, recipient_id=row.recipient_id,
+                name=(person.full_name if (person := lookup.get(
+                    (row.recipient_kind, row.recipient_id)
+                )) else "Contact no longer available"),
+                phone_masked=_masked(
+                    person.whatsapp_number or person.mobile_number
+                    if person else None
+                ),
+                status="eligible_in_review",
+            ) for row in eligible
+        ],
         excluded_recipients=[
             RecipientResult(
                 recipient_kind=row.recipient_kind, recipient_id=row.recipient_id,
