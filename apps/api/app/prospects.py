@@ -920,6 +920,15 @@ def change_crm_stage(
     _check_version(prospect, payload.version)
     if prospect.crm_stage == payload.stage:
         raise HTTPException(status_code=409, detail="Prospect is already in that CRM stage")
+    if (payload.stage == "active"
+            and getattr(get_settings(), "otp_activates_prospect", False)
+            and prospect.lifecycle_status == "new"
+            and prospect.last_verified_payment_at is None
+            and prospect.whatsapp_verified_at is None):
+        raise HTTPException(
+            status_code=409,
+            detail="Verify the prospect's WhatsApp OTP before marking Active",
+        )
     previous = prospect.crm_stage
     now = utc_now()
     database.add(ProspectStageTransition(
