@@ -1,0 +1,149 @@
+# Saasyto WhatsApp — guarded localhost pilot
+
+This setup allows a **single explicitly allowlisted and consented test phone** to
+receive a WhatsApp campaign approved in Sponsor a Salah's local CRM. It is not
+a general production sending switch or a replacement for official WhatsApp
+sender compliance. This path is off by default.
+
+## Preconditions
+
+- Windows localhost Sponsor a Salah, using the isolated local-demo Admin,
+  `APP_ENV=development`, `LOCAL_DEMO_LOGIN_ENABLED=true` and the existing
+  `sas_dev` PostgreSQL database on `127.0.0.1:5432` with username `sas_dev`.
+  Local pilot enablement is rejected on every other database/environment.
+- Saasyto account has a connected, authorized instance with current private
+  credentials. Do **not** share your real token in chat or commit it to Git.
+- One *real*, explicitly owner-authorized test number, **not a synthetic
+  +916000... phone**, recorded in an existing CRM prospect or promoter. That
+  exact phone must be allowed locally; obtain its opt-in and corresponding
+  Communication consent evidence. Do not change an unrelated contact's number
+  to receive an experimental send.
+- No provider dispatch is attempted until you explicitly enable and approve
+  a campaign in the CRM. API acceptance does not confirm WhatsApp delivery.
+
+## Step 1: pull the code and edit existing private API environment
+
+From the existing `C:\Users\Admin\Desktop\SaS` checkout, in PowerShell:
+
+```powershell
+git pull --ff-only origin main
+notepad .\apps\api\.env
+```
+
+Keep your existing `DATABASE_URL`, `AUTH_SECRET`,
+`UPI_MATCH_SECRET` and local Admin settings. The app loads the `.env` when
+started inside `apps/api`. Add or update:
+
+```dotenv
+APP_ENV=development
+LOCAL_DEMO_LOGIN_ENABLED=true
+SAASYTO_INSTANCE_ID=YOUR_CONNECTED_INSTANCE_ID
+SAASYTO_ACCESS_TOKEN=YOUR_PRIVATE_ACCESS_TOKEN
+SAASYTO_RUNNER_SECRET=YOUR_DIFFERENT_RANDOM_SECRET_AT_LEAST_32_CHARS
+SAASYTO_LOCAL_TEST_ENABLED=true
+SAASYTO_LOCAL_TEST_PHONE=+919XXXXXXXXX
+SAASYTO_SENDER_APPROVED=false
+SAASYTO_DELIVERY_ENABLED=false
+```
+
+If a runner secret is not yet generated, execute:
+`py -3.12 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+The phone **must be a real number whose owner authorized this pilot**, in
+`+countrycode` format, with no spaces or brackets. Do not publish it.
+
+Choose the activation moment only when you are ready to review an authorized
+new campaign; **a campaign created before the cutoff cannot be approved**.
+For India, PowerShell can generate the local time with offset:
+
+```powershell
+(Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
+```
+
+Copy its output into `SAASYTO_ENABLE_AFTER` in `.env`. Verify the
+machine's timezone is IST (`+05:30`). Then, only after confirming
+sender authorization and the recipient's documented consent, explicitly
+set both `SAASYTO_SENDER_APPROVED=true` and
+`SAASYTO_DELIVERY_ENABLED=true`. Save the file.
+
+**No delivery will occur simply because the settings are enabled.** The
+Admin must still create a new campaign, perform a fresh recipient check
+and approve it, and the private local worker must be running.
+
+## Step 2: run local API, frontend and worker
+
+Restart the API *after* any `.env` changes; from the repository root:
+
+Terminal 1 — API (choose an unused port):
+
+```powershell
+cd C:\Users\Admin\Desktop\SaS\apps\api
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+Terminal 2 — existing frontend (retaining your current `.env.local`):
+
+```powershell
+cd C:\Users\Admin\Desktop\SaS\apps\web
+notepad .env.local
+```
+
+It should contain `API_INTERNAL_URL=http://127.0.0.1:8001` and your
+existing demo login setting; do not put `SAASYTO_*` secrets here. Start
+`npm run dev -- --port 3002`. Open
+`http://localhost:3002/communication`.
+
+Terminal 3 — local queue worker (private, loopback-only):
+
+```powershell
+cd C:\Users\Admin\Desktop\SaS\apps\api
+.\.venv\Scripts\python.exe -m app.saasyto_local_worker --port 8001
+```
+
+The worker polls every 30 seconds. It never exposes a public HTTP port,
+uses no proxy/redirect, sends the private runner token only to localhost
+and prints aggregate attempt counts. For a *single manual* check instead
+of continuous polling, use
+`python -m app.saasyto_local_worker --port 8001 --once`.
+Stop the worker with Ctrl+C.
+
+## Step 3: send from CRM (not Saasyto dashboard)
+
+1. In the selected test person's CRM detail, ensure the correct
+   WhatsApp number is recorded, `whatsapp_opt_in` is enabled with the
+   owner's permission, and a Communication **opted-in** consent event
+   exists with evidence reference for general WhatsApp outreach.
+2. **Communication → Compose**. Create a **new** WhatsApp campaign after
+   `SAASYTO_ENABLE_AFTER`, selecting an audience/segment whose live
+   *eligible* recipient set contains **exactly the one allowlisted number**.
+   The local pilot refuses campaigns with multiple eligible recipients.
+3. **Communication → Campaigns → Review → Check recipients**.
+   Check `1 Eligible`; if it shows `0`, fix consent/segment. If it shows
+   `2+`, restrict the segment (not by disabling other people's consent).
+4. Click **Approve WhatsApp delivery** and confirm. This queues a one-time
+   send, not a separate Saasyto campaign.
+5. With Terminal 3 running, click **Refresh delivery attempts** on the
+   Campaigns review pane. The only accepted status initially available
+   is `accepted_unverified`, not a delivery receipt. Verify actual receipt
+   on the authorized phone and in Saasyto's message history.
+
+The local pilot checks the phone allowlist on **approval, dispatch
+eligibility, and final HTTP transport**. Changes to consent, opt-out,
+CRM status, or approved phone after review can suppress a queued send.
+No uncertain send is automatically retried.
+
+## Limits and stop controls
+
+- This is a controlled **single-phone pilot**. To message broader audiences,
+  deploy/approve the production-grade transport instead; do not remove the
+  local recipient allowlist or use `APP_ENV=test` to bypass it.
+- Disable at any time by setting `SAASYTO_DELIVERY_ENABLED=false`,
+  restarting API + worker, and stopping Terminal 3. Cancel queued campaigns
+  in the CRM when appropriate; an already submitted WhatsApp message cannot
+  be recalled.
+- No inbound webhook is configured. Replies, delivered/read status, email,
+  automatic 5th/20th reminders and payment-triggered WhatsApp messages are
+  **not** activated by this change.
+- QR-linked WhatsApp sessions may not have the same compliance guarantees
+  as the official Meta WhatsApp Business Platform. Obtain sender and consent
+  approvals before automatic business-initiated messages.
