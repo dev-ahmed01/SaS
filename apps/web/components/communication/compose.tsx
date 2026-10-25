@@ -185,7 +185,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         {error&&<p className="form-error" role="alert">{error}</p>}
         {notice&&<p className="form-success" role="status">{notice}</p>}
         <div className="comm-actions">
-          <span className="comm-muted">Creating a campaign never sends it. A fresh recipient check and explicit approval are required; production delivery needs the private worker.</span>
+          <span className="comm-muted">Sending requires a fresh recipient check and explicit approval. Creating a campaign does not send it; the private production worker processes approved messages.</span>
           <button className="btn btn-primary" type="submit" disabled={saving}>
             {saving?"Saving…":timing==="planned"?"Plan for later":"Continue to recipient review"}
           </button>
