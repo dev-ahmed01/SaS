@@ -23,7 +23,8 @@ type CampaignDetails={
   summary:Summary;latest_review_at:string|null;
   eligible_in_review:number;excluded_in_review:number;
   excluded_reasons:Record<string,number>;
-  recipients:Recipient[];excluded_recipients:Recipient[];
+  recipients:Recipient[];eligible_recipients:Recipient[];
+  excluded_recipients:Recipient[];
   delivery_notice:string;
 };
 type Review={
@@ -58,6 +59,7 @@ const statuses:Record<string,string>={
   unknown:"Unknown — do not retry automatically",
   suppressed:"Not sent",
   excluded:"Not eligible at recipient check",
+  eligible_in_review:"Eligible at latest check — not yet sent",
 };
 function Metric({name,value,help}:{
   name:string;value:number|string;help?:string;
@@ -95,7 +97,9 @@ function RecipientTable({title,rows}:{
   </section>;
 }
 
-export function CampaignResultDetails({id}:{id:string}){
+export function CampaignResultDetails({id,onBack}:{
+  id:string;onBack?:()=>void;
+}){
   const [details,setDetails]=useState<CampaignDetails|null>(null);
   const [review,setReview]=useState<Review|null>(null);
   const [run,setRun]=useState<DeliveryRun|null>(null);
@@ -105,14 +109,23 @@ export function CampaignResultDetails({id}:{id:string}){
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const refresh=useCallback(async()=>{
-    const [result,checks,dispatch,availability]=await Promise.all([
-      apiGet<CampaignDetails>("/campaigns/"+id+"/results"),
+    // Results must remain visible even if optional provider/readiness APIs
+    // cannot be reached. These read failures never authorize delivery.
+    const result=await apiGet<CampaignDetails>("/campaigns/"+id+"/results");
+    setDetails(result);
+    const [checks,dispatch,availability]=await Promise.allSettled([
       apiGet<Review[]>("/campaigns/"+id+"/preparations"),
       apiGet<DeliveryRun|null>("/campaigns/"+id+"/saasyto"),
       apiGet<Provider>("/provider/saasyto"),
     ]);
-    setDetails(result);setReview(checks[0]??null);
-    setRun(dispatch);setProvider(availability);
+    setReview(checks.status==="fulfilled"?(checks.value[0]??null):null);
+    setRun(dispatch.status==="fulfilled"?dispatch.value:null);
+    setProvider(availability.status==="fulfilled"?availability.value:null);
+    if(checks.status==="rejected"||dispatch.status==="rejected"||
+      availability.status==="rejected"){
+      setNotice("Campaign results loaded, but some delivery settings are unavailable. "+
+        "Live approval is disabled until those settings can be verified.");
+    }
   },[id]);
   useEffect(()=>{
     let active=true;
@@ -166,7 +179,8 @@ export function CampaignResultDetails({id}:{id:string}){
   const s=details?.summary;
   return <section className="comm-panel" aria-label="Campaign results detail">
       <div className="comm-panel-header">
-        <div><Link href="/communication/campaigns" className="back-link">
+        <div><Link href="/communication/campaigns" className="back-link"
+          onClick={onBack}>
           All campaigns</Link>
           <h2>{details?.title??"Campaign results"}</h2>
           {details&&<p>{details.channel==="whatsapp"?"WhatsApp":"Email"} ·
@@ -208,7 +222,18 @@ export function CampaignResultDetails({id}:{id:string}){
         {older&&!run&&<p className="form-error" role="status">
           This campaign predates Saasyto activation. Create a new campaign
           to obtain a valid delivery approval.</p>}
-        <div className="comm-recipient-review" aria-label="Recipient approval">
+        {provider?.local_test_mode&&!run&&details.eligible_in_review>1&&
+          <p className="form-error" role="status">
+            All eligible active contacts are included in the review, but
+            localhost sending is restricted to one explicitly allowlisted
+            test number. Approval of multiple recipients remains disabled;
+            this is a provider safety gate, not missing prospect data.
+          </p>}
+        {run&&<p className="comm-muted">
+          This campaign already has a delivery attempt record. To send a
+          further message, create a new campaign rather than resending it.
+        </p>}
+        <div className="comm-recipient-review" role="region" aria-label="Recipient approval">
           <div className="comm-review-heading">
             <h3>Recipient review</h3>
             <span className="comm-muted">
@@ -219,6 +244,14 @@ export function CampaignResultDetails({id}:{id:string}){
             <span><strong>{details.eligible_in_review}</strong> Eligible</span>
             <span><strong>{details.excluded_in_review}</strong> Excluded</span>
           </div>
+          <p className="comm-muted">
+            {details.segment==="active"
+              ?"Active means the CRM Active status shown in Prospects, not only a payment-derived status. "
+              :""}
+            {details.category==="reminder"
+              ?"Reminders include CRM-active contacts with WhatsApp permission; inactive or opted-out contacts cannot be messaged."
+              :"Updates and announcements also require a documented general-message opt-in."}
+          </p>
           {Object.keys(details.excluded_reasons).length>0&&
             <div className="comm-provider-status">
               <strong>Exclusions during latest check</strong>
@@ -239,13 +272,17 @@ export function CampaignResultDetails({id}:{id:string}){
               disabled={busy} onClick={()=>void cancel()}>Stop pending sends</button>}
           </div>
         </div>
+        <RecipientTable title="Eligible contacts (latest recipient check)"
+          rows={details.eligible_recipients}/>
         <RecipientTable title="Sending results by contact" rows={details.recipients}/>
         <RecipientTable title="Excluded before sending (latest review)"
           rows={details.excluded_recipients}/>
         <p className="comm-muted">
-          Numbers are masked. A recipient excluded during the latest check was
-          not submitted by that check. Never interpret submitted-to-gateway as
-          delivered or seen without verified callbacks.
+          Names and masked numbers reflect the latest review snapshot.
+          Eligible at check is not proof of delivery or a queued message.
+          A recipient excluded during the latest check was not submitted by
+          that check. Never interpret submitted-to-gateway as delivered or seen
+          without verified callbacks.
         </p>
       </>}
   </section>;

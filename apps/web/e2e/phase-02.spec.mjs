@@ -1034,7 +1034,7 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await expect(row).toBeVisible();
   await expect(row.getByRole("link",{name:"View results"})).toBeVisible();
   page.once("dialog",dialog=>dialog.accept());
-  await row.getByRole("button",{name:"Cancel"}).click();
+  await row.getByRole("button",{name:"Cancel plan"}).click();
   await expect(row.getByText("Cancelled")).toBeVisible();
   await page.goto("/communication/automations");
   await page.getByRole("textbox",{name:"Workflow name"}).fill("Monthly demo "+key);
@@ -1070,12 +1070,16 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await page.goto("/communication/campaigns");
   const campaign=page.getByRole("row",{name:new RegExp("Consent update "+suffix)});
   await expect(campaign).toBeVisible();
-  await campaign.getByRole("button",{name:"Quick review"}).click();
-  const review=page.getByRole("region",{name:"Recipient review"});
-  await expect(review.getByText("Not checked yet.")).toBeVisible();
+  await campaign.getByRole("link",{name:"View results"}).click();
+  await expect(page).toHaveURL(/#campaign-[0-9a-f-]{36}$/);
+  const review=page.getByRole("region",{name:"Recipient approval"});
+  await expect(page.getByRole("heading",{name:"Consent update "+suffix})).toBeVisible();
+  await expect(review.getByRole("button",{name:"Check recipients"})).toBeVisible();
   await review.getByRole("button",{name:"Check recipients"}).click();
-  await expect(review.getByText("Recipient check is a preview; no messages sent.")).toBeVisible();
+  await expect(page.getByText("Recipient check updated. No messages were sent.")).toBeVisible();
   await expect(review.locator(".comm-review-counts strong").first()).toBeVisible();
+  await expect(page.getByRole("region",{name:"Eligible contacts (latest recipient check)"}))
+    .toBeVisible();
   const numbers=await review.locator(".comm-review-counts strong").allTextContents();
   expect(Number(numbers[0])).toBeGreaterThanOrEqual(0);
   const data=await page.evaluate(async(title)=>{
@@ -1086,6 +1090,10 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
     return await latest.json();
   },"Consent update "+suffix);
   expect(data[0].delivery_activated).toBe(false);
+  await page.getByRole("link",{name:"All campaigns"}).click();
+  await expect(page.getByRole("heading",{name:"Campaigns"})).toBeVisible();
+  await expect(page.getByRole("row",{name:new RegExp("Consent update "+suffix)}))
+    .toBeVisible();
 });
 
 test("Communication proxy blocks forged-origin writes and has no unapproved send endpoint",async ({page})=>{

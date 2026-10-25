@@ -569,7 +569,9 @@ def test_explicit_sponsor_optout_blocks_prepared_intent_despite_legacy_checkbox(
     })
     assert opted_out.status_code == 201, opted_out.text
     with Session(engine) as db:
-        assert db.get(Prospect, uuid.UUID(person["id"])).whatsapp_opt_in is True
+        # Documented opt-out now synchronizes and clears the legacy checkbox.
+        # The immutable event independently blocks any future send as well.
+        assert db.get(Prospect, uuid.UUID(person["id"])).whatsapp_opt_in is False
         admin = db.scalars(select(AdminUser)).one()
         intent = db.scalars(select(ReminderIntent)).one()
         assert current_intent_eligible(

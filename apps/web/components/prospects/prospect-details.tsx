@@ -143,7 +143,7 @@ export function ProspectDetails({id}:{id:string}){
           onClick={()=>setStageOpen(true)}>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</button>
       </div>
       {consentOpen&&<ContactConsent recipientKind="prospect" recipientId={record.id}
-        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={!record.archived_at}/>}
+        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={!record.archived_at} onChanged={refresh}/>}
     </>}
     {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}
       onChanged={()=>{setStageOpen(false);refresh();}}/>}

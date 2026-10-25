@@ -160,7 +160,8 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     }catch(e){setError(e instanceof Error?e.message:"Could not cancel.");}
     finally{setBusy("");}
   }
-  if(selectedId)return <CampaignResultDetails id={selectedId}/>;
+  if(selectedId)return <CampaignResultDetails id={selectedId}
+    onBack={()=>setSelectedId(null)}/>;
   return <section className="comm-panel" aria-label="Communication campaigns">
     <div className="comm-panel-header"><div><h2>Campaigns</h2>
       <p>Open any campaign to see its recipient checks, failed submissions and
@@ -189,7 +190,8 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         <tr><td colSpan={9} className="comm-empty">No campaigns yet. Start in Compose.</td></tr>:
         items.map(item=><tr key={item.id}>
           <td><div className="comm-campaign-title">
-            <strong><Link href={"/communication/campaigns#campaign-"+item.id}>{item.title}</Link></strong>
+            <strong><Link href={"/communication/campaigns#campaign-"+item.id}
+              onClick={()=>setSelectedId(item.id)}>{item.title}</Link></strong>
             <span>{item.channel==="whatsapp"?"WhatsApp":"Email"} ·
               {" "+item.category.replace("_"," ")}</span></div></td>
           <td>{item.audience} · {item.segment}</td>
@@ -206,16 +208,16 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             ?results[item.id].suppressed_after_approval+results[item.id].excluded_in_review
             :0}</td>
           <td>{results[item.id]?.read??"Unavailable"}</td>
-          <td><div className="comm-review-actions">
-            <Link className="comm-text-button" href={"/communication/campaigns#campaign-"+item.id}>
+          <td className="comm-sticky-actions"><div className="comm-review-actions">
+            <Link className="comm-action-primary"
+              href={"/communication/campaigns#campaign-"+item.id}
+              onClick={()=>setSelectedId(item.id)}>
               View results</Link>
-            {item.status!=="cancelled"&&<>
+            {item.status!=="cancelled"&&
+              results[item.id]?.run_status!=="completed"&&
+              results[item.id]?.run_status!=="approved"&&
               <button type="button" className="comm-text-button"
-                aria-expanded={reviewId===item.id}
-                onClick={()=>openReview(item)}>{reviewId===item.id?"Close review":"Quick review"}</button>
-              <button type="button" className="comm-text-button"
-                disabled={busy===item.id} onClick={()=>cancel(item)}>Cancel</button>
-            </>}
+                disabled={busy===item.id} onClick={()=>cancel(item)}>Cancel plan</button>}
           </div></td>
         </tr>)}</tbody>
     </table></div>
