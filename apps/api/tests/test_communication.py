@@ -4,12 +4,12 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from activation_helper import activate_with_test_otp
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from activation_helper import activate_with_test_otp
 from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
