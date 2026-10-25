@@ -463,14 +463,10 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await expect(reactivate.getByRole("textbox",{name:/Why are they returning/})).toBeVisible();
   await expect(reactivate.getByRole("button",{name:"Verify OTP & Activate"})).toBeDisabled();
   await reactivate.getByRole("button",{name:"Close stage dialog"}).click();
-  const details=await page.evaluate(async name=>{
-    const response=await fetch("/api/admin/prospects?limit=100&crm_stage=inactive");
-    if(!response.ok)throw Error("Synthetic prospect not found");
-    const people=(await response.json()).items;
-    return people.find(person=>person.full_name===name)?.id;
-  },name);
-  if(!details)throw Error("Synthetic reactivation fixture missing");
-  seedSyntheticActive(details,"return");
+  const detailsHref=await row.getByRole("link",{name}).getAttribute("href");
+  const detailsId=detailsHref?.split("/").at(-1);
+  if(!detailsId)throw Error("Synthetic reactivation fixture missing");
+  seedSyntheticActive(detailsId,"return");
   await page.reload();
   await expect(row).toHaveCount(0);
   await page.goto("/prospects/active");
