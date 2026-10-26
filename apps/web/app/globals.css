@@ -1749,3 +1749,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
   .collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;}
 }
+
+/* Date, stable stage ID, next date and IST time in one follow-up row. */
+.crm-followup-fields {grid-template-columns:repeat(4,minmax(0,1fr));}
+.crm-followup-fields .field {min-width:0;}
+.crm-followup-fields input,.crm-followup-fields select {max-width:100%;}
+@media(max-width:1080px){.crm-followup-fields {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:650px){.crm-followup-fields {grid-template-columns:minmax(0,1fr);}}
