@@ -688,7 +688,7 @@ def test_legacy_375_commitment_receives_actual_amount_in_activation_otp(
 def test_oversized_existing_otp_copy_is_rejected_without_consuming_a_code(
     api, monkeypatch,
 ):
-    from app.models import CommunicationTemplate
+    from app.models import CommunicationTemplate, Prospect
     from app.sponsor_otp_copy import DEFAULT_OTP_BODY, OTP_TEMPLATE_KEY
 
     client, csrf, engine = api
@@ -699,8 +699,9 @@ def test_oversized_existing_otp_copy_is_rejected_without_consuming_a_code(
     ))
     # Model stale data that predates the new expansion-size check.
     with Session(engine) as db:
+        sponsor = db.get(Prospect, uuid.UUID(person["id"]))
         db.add(CommunicationTemplate(
-            organization_id=uuid.UUID(person["organization_id"]),
+            organization_id=sponsor.organization_id,
             name="Sponsorship registration OTP", name_key=OTP_TEMPLATE_KEY,
             channel="whatsapp", category="other", subject=None,
             body=DEFAULT_OTP_BODY + " {{name}}" * 8,
