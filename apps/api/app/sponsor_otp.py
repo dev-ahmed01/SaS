@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.saasyto_client import local_pilot_permits, send_text
 from app.security import as_utc, utc_now
+from app.sponsor_otp_copy import DEFAULT_OTP_BODY, render_otp, template_body
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
 OTP_MINUTES = 2
@@ -87,27 +88,9 @@ def _enabled(cfg: Settings) -> bool:
     )
 
 
-def _otp_message(person: Prospect, code: str) -> str:
-    """Registration copy uses the selected prospect's real monthly commitment."""
-    contribution = person.monthly_contribution_paise
-    amount = f"₹{contribution // 100:,}"
-    units = contribution // 25_000
-    unit_detail = f" ({units} sponsorship units)" if units > 1 else ""
-    return (
-        f"Salaam {person.first_name or person.full_name},\n\n"
-        "Thank you for taking this step and helping us re-establish Namaz "
-        "in the house of Allah.\n\n"
-        "*Your sponsorship*\n"
-        f"Monthly contribution: {amount}{unit_detail}\n"
-        "Please make your monthly contribution by the 7th of every month.\n\n"
-        f"*Your verification code: {code}*\n"
-        "Use this code to confirm your sponsorship registration. "
-        "Valid for 2 minutes."
-    )
-
-
 def _deliver(cfg: Settings, phone: str, code: str,
-             person: Prospect | None = None) -> None:
+             person: Prospect | None = None,
+             message_template: str | None = None) -> None:
     """Send only to the selected prospect through the explicitly enabled adapter."""
     local_pilot = getattr(cfg, "otp_local_pilot_enabled", False)
     saasyto_dynamic = getattr(cfg, "otp_saasyto_enabled", False)
@@ -116,7 +99,8 @@ def _deliver(cfg: Settings, phone: str, code: str,
             raise ValueError("Local OTP recipient is not allowlisted")
         submission = send_text(
             cfg, phone=phone,
-            message=_otp_message(person, code) if person is not None else (
+            message=render_otp(message_template or DEFAULT_OTP_BODY, person, code)
+            if person is not None else (
                 f"Your Sponsor a Salah activation code is {code}. "
                 "Valid for 2 minutes. Do not share unless you requested activation."
             ),
@@ -257,7 +241,8 @@ def request_otp(
     database.commit()
     # In a timeout, the provider may have received the request. Do not auto-retry.
     try:
-        _deliver(cfg, number, code, person)
+        _deliver(cfg, number, code, person,
+                 template_body(database, admin.organization_id))
     except (httpx.TimeoutException, OtpDeliveryUnconfirmed):
         record.status = "unknown"
         database.commit()
