@@ -1,0 +1,9 @@
+.env
+.env.api
+.env.web
+*.pem
+*.key
+*.crt
+*.sql
+*.dump
+backups/
