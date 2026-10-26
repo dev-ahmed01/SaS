@@ -2,7 +2,8 @@
 
 An explicitly enabled Saasyto adapter supports approved production delivery
 and a guarded loopback demo that selects the exact CRM prospect phone. The
-older local allowlist pilot and Meta AUTHENTICATION adapter remain separate. Provider acceptance is not delivery; plaintext
+older local allowlist pilot and Meta AUTHENTICATION adapter remain separate.
+Provider acceptance is not delivery; plaintext
 OTP is never persisted or returned to the browser.
 """
 import hashlib
