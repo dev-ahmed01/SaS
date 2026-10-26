@@ -1,9 +1,9 @@
 """Sponsor OTP: bounded challenge, tenant binding, no delivery claims or consent changes."""
 import uuid
-import httpx
 from datetime import timedelta
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
