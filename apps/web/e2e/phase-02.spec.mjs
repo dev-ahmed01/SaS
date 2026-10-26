@@ -378,7 +378,6 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
-  const disclosure=page.locator("details.crm-profile-disclosure");
   if(await disclosure.getAttribute("open")===null){
     await disclosure.locator("summary").click();
   }
