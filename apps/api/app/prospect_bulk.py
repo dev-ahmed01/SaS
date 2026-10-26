@@ -18,8 +18,13 @@ from sqlalchemy.orm import Session
 from app import auth as auth_module
 from app.auth import db_session, require_csrf
 from app.models import (
-    AdminSession, AdminUser, AuditEvent, OrganizationSettings, Prospect,
-    ProspectStageDefinition, SponsorshipRate,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    OrganizationSettings,
+    Prospect,
+    ProspectStageDefinition,
+    SponsorshipRate,
 )
 from app.prospects import ProspectFields, _ist_month
 from app.security import utc_now
