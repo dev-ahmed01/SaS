@@ -1,0 +1,81 @@
+# InterServer VPS staging: only Caddy is publicly exposed.
+# Supply .env (host only) and .env.api (private API/database settings) locally.
+name: sas-staging
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - .env.api
+    environment:
+      APP_ENV: staging
+      LOCAL_DEMO_LOGIN_ENABLED: "false"
+      MESSAGING_DELIVERY_ENABLED: "false"
+      MESSAGING_SENDER_APPROVED: "false"
+      SAASYTO_DELIVERY_ENABLED: "false"
+      SAASYTO_SENDER_APPROVED: "false"
+      OTP_DELIVERY_ENABLED: "false"
+      OTP_SAASYTO_ENABLED: "false"
+      OTP_LOCAL_PILOT_ENABLED: "false"
+      OTP_ACTIVATION_NOTICE_ENABLED: "false"
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/live', timeout=4)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.web
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      NODE_ENV: production
+      APP_PUBLIC_ORIGIN: https://${STAGING_HOST:?Set STAGING_HOST in ops/staging/.env}
+      API_INTERNAL_URL: https://${STAGING_HOST:?Set STAGING_HOST in ops/staging/.env}
+      NEXT_TELEMETRY_DISABLED: "1"
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      STAGING_HOST: ${STAGING_HOST:?Set STAGING_HOST in ops/staging/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    init: true
+
+volumes:
+  caddy_data:
+  caddy_config:
