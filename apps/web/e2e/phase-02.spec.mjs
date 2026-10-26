@@ -504,17 +504,17 @@ test("Admin can archive and restore a prospect without deleting its record",asyn
   await expect(page.getByText("Inactive",{exact:true}).first()).toBeVisible();
 });
 
-test("Prospect listing shows dedicated Stage and sticky Action dropdown",async ({page})=>{
+test("Prospect listing shows contribution, follow-ups and selected CSV export",async ({page})=>{
   await page.goto("/prospects");
   await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
   await expect(page.locator(".crm-list-tools-right")).toHaveCount(0);
   await expect(page.locator(".prospects-table th").allTextContents()).resolves.toEqual([
-    "Created","Full Name","Mobile","City","Sponsorship","Start","Promoter",
-    "Stage","Action"
+    "", "Created","Full Name","Mobile","City","Sponsorship","Total contribution",
+    "Active date","Recent follow-up","Next follow-up","Promoter","Stage"
   ]);
-  const style=await page.locator(".prospects-table th").last()
-    .evaluate(el=>getComputedStyle(el).position);
-  expect(style).toBe("sticky");
+  await expect(page.getByRole("checkbox",{name:"Select all prospects on this page"})).toBeVisible();
+  await expect(page.getByRole("button",{name:/Export selected/})).toBeDisabled();
+  await expect(page.locator(".crm-row-actions")).toHaveCount(0);
   const weight=await page.locator(".topbar-name")
     .evaluate(el=>getComputedStyle(el).fontWeight);
   expect(weight).toBe("800");
@@ -543,7 +543,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await expect(page.getByRole("heading",{name:"Overview"})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
   await expect(page.getByText("Never paid")).toBeVisible();
-  await expect(page.getByRole("combobox",{name:"Change prospect stage"})).toHaveValue(/.+/);
+  await expect(page.getByRole("combobox",{name:"Follow-up stage"})).toHaveValue(/.+/);
   await activateNewProspect(page);
   await page.getByRole("button",{name:/Mark Inactive/}).click();
   const dialog=page.getByRole("dialog",{name:"Mark prospect inactive"});
@@ -557,7 +557,8 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await page.getByRole("textbox",{name:"Search prospects"}).fill(name);
   const row=page.getByRole("row",{name:new RegExp(name)});
   await expect(row.getByText("Inactive",{exact:true})).toBeVisible();
-  await row.getByRole("combobox",{name:"Actions for "+name}).selectOption("status");
+  await row.getByRole("link",{name}).click();
+  await page.getByRole("button",{name:/Mark Active/}).click();
   const reactivate=page.getByRole("dialog",{name:"Reactivate prospect"});
   await expect(reactivate.getByRole("textbox",{name:/Why are they returning/})).toBeVisible();
   await expect(reactivate.getByRole("button",{name:"Verify OTP & Activate"})).toBeDisabled();
@@ -595,12 +596,13 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await expect(page.getByRole("combobox",{name:"Prospect Stage"})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("combobox",{name:"Change prospect stage"})).toBeVisible();
-  const savedStage=page.waitForResponse(r=>r.url().includes("/api/admin/prospects/") &&
-    r.request().method()==="PATCH" && r.status()===200);
-  await page.getByRole("combobox",{name:"Change prospect stage"}).selectOption({label:renamed});
+  const savedStage=page.waitForResponse(r=>r.url().includes("/followups") &&
+    r.request().method()==="POST" && r.status()===201);
+  await page.getByRole("combobox",{name:"Follow-up stage"}).selectOption({label:renamed});
+  await page.getByRole("textbox",{name:"Follow-up Note"}).fill("Moved to the reviewed stage");
+  await page.getByRole("button",{name:"Log follow-up"}).click();
   await savedStage;
-  await expect(page.getByRole("combobox",{name:"Change prospect stage"})).toHaveValue(/.+/);
+  await expect(page.getByRole("combobox",{name:"Follow-up stage"})).toHaveValue(/.+/);
   await page.goto("/prospects/stages");
   await expect(page.locator(".pipeline-stage-row").filter({hasText:renamed})
     .locator(".pipeline-stage-count")).toHaveText("1 prospects");
@@ -611,9 +613,11 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(person);
   await page.getByRole("row",{name:new RegExp(person)}).getByRole("link",{name:person}).click();
-  const clearedStage=page.waitForResponse(r=>r.url().includes("/api/admin/prospects/") &&
-    r.request().method()==="PATCH" && r.status()===200);
-  await page.getByRole("combobox",{name:"Change prospect stage"}).selectOption("");
+  const clearedStage=page.waitForResponse(r=>r.url().includes("/followups") &&
+    r.request().method()==="POST" && r.status()===201);
+  await page.getByRole("combobox",{name:"Follow-up stage"}).selectOption({label:"New Inquiry"});
+  await page.getByRole("textbox",{name:"Follow-up Note"}).fill("Returned to New Inquiry");
+  await page.getByRole("button",{name:"Log follow-up"}).click();
   await clearedStage;
   await page.goto("/prospects/stages");
   await page.getByRole("button",{name:"Delete stage "+renamed}).click();
