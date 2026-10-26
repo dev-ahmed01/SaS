@@ -406,6 +406,10 @@ def test_resend_confirmation_requires_approved_worker_and_definite_original_stat
     path = "/v1/collections/" + collection_id + "/resend-confirmation"
     input_data = {"request_id": str(uuid.uuid4()), "confirmation": "RESEND"}
     assert client.post(path, json=input_data).status_code == 403
+    monkeypatch.setattr("app.collections.get_settings", lambda: SimpleNamespace(
+        messaging_delivery_enabled=False, messaging_sender_approved=False,
+        messaging_enable_after=None,
+    ))
     assert client.post(path, headers=csrf, json=input_data).status_code == 503
 
     monkeypatch.setattr("app.collections.get_settings", lambda: SimpleNamespace(
