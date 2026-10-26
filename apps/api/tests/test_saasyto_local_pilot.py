@@ -402,7 +402,7 @@ def test_readiness_identifies_wrong_pilot_number_despite_one_eligible(
     assert data["eligible_count"] == 1
     assert data["permitted_phone"] == "+919899009999"
     assert "+919899001001" not in diagnosis.text
-    assert "+919899009999" not in diagnosis.text
+    assert "+919899009999" in diagnosis.text
     assert excluded["mobile_number"] not in diagnosis.text
     failed = client.post(base + "/saasyto", headers=csrf, json={
         "preparation_id": prepared.json()["id"],
