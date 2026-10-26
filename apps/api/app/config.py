@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     otp_delivery_enabled: bool = False
     # Single allowlisted WhatsApp pilot, never a production OTP sender.
     otp_local_pilot_enabled: bool = False
+    # Explicit Saasyto OTP transport for registered prospect numbers on an
+    # approved production sender. Separate from the one-number localhost pilot
+    # and the optional Meta Cloud API transport.
+    otp_saasyto_enabled: bool = False
     # Optional one-time Saasyto acknowledgement after successful OTP activation.
     otp_activation_notice_enabled: bool = False
     otp_secret: str | None = None
@@ -142,6 +146,21 @@ class Settings(BaseSettings):
                 and not self.otp_delivery_enabled
             ):
                 raise ValueError("Local OTP requires approved one-number Saasyto pilot only")
+            if not self.otp_secret or len(self.otp_secret) < 32:
+                raise ValueError("OTP_SECRET of 32+ characters is required")
+        if self.otp_saasyto_enabled:
+            if (
+                self.app_env != "production"
+                or self.saasyto_local_test_enabled
+                or self.otp_local_pilot_enabled
+                or self.otp_delivery_enabled
+                or not self.saasyto_delivery_enabled
+                or not self.saasyto_sender_approved
+            ):
+                raise ValueError(
+                    "Saasyto production OTP requires an approved production sender, "
+                    "delivery enabled, and all local/Meta OTP modes disabled"
+                )
             if not self.otp_secret or len(self.otp_secret) < 32:
                 raise ValueError("OTP_SECRET of 32+ characters is required")
         if self.otp_activation_notice_enabled and not (
