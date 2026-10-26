@@ -607,3 +607,50 @@ def test_guarded_two_phone_pilot_otp_activates_only_selected_prospect(api, monke
     assert client.get("/v1/prospects/"+second["id"]).json()["crm_stage"] == "inactive"
     assert client.get("/v1/prospects/"+third["id"]).json()["crm_stage"] == "inactive"
     assert len(outgoing) == 2
+
+
+def test_saasyto_otp_uses_editable_template_and_real_250_multiple(api, monkeypatch):
+    from app.sponsor_otp_copy import DEFAULT_OTP_BODY
+
+    client, csrf, engine = api
+    a = _create(client, csrf, "Unit One", "+918100000085")
+    b = _create(client, csrf, "Unit Two", "+918100000086")
+    assert a["monthly_contribution_paise"] == 25_000
+    update = client.patch("/v1/prospects/"+b["id"], headers=csrf, json={
+        "version": b["version"], "monthly_contribution_paise": 50_000,
+    })
+    assert update.status_code == 200, update.text
+    body = DEFAULT_OTP_BODY.replace("Thank you for taking this step", "JazakAllahu Khairan")
+    saved = client.post("/v1/communication/otp-template", headers=csrf, json={
+        "version": 0, "body": body,
+    })
+    assert saved.status_code == 200, saved.text
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_saasyto_enabled=True,
+        otp_local_pilot_enabled=False, otp_secret=SECRET,
+    ))
+    sent = []
+
+    def fake_send(_cfg, *, phone, message):
+        sent.append((phone, message))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.send_text", fake_send)
+    for person in (a,b):
+        response = client.post("/v1/prospects/"+person["id"]+"/otp/request", headers=csrf)
+        assert response.status_code == 200, response.text
+        assert "code" not in response.json()
+    assert len(sent) == 2
+    assert sent[0][0] == a["mobile_number"]
+    assert sent[1][0] == b["mobile_number"]
+    assert "₹250 per month" in sent[0][1]
+    assert "₹500 per month (2 units at ₹250 each)" in sent[1][1]
+    assert "JazakAllahu Khairan" in sent[0][1]
+    assert "by the 7th" in sent[1][1]
+    assert "{{code}}" not in sent[0][1]
+    with Session(engine) as db:
+        records = db.scalars(select(SponsorOtpChallenge)).all()
+        assert len(records) == 2
+        for number, message in sent:
+            assert number not in [str(record.code_digest) for record in records]
+            assert message not in str(records)
