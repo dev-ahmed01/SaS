@@ -8,6 +8,7 @@ import { formatCRMDate } from "../../lib/crm-dates";
 type Payment = {
   id: string;
   sponsor_name: string;
+  sponsor_mobile: string;
   amount_paise: number;
   received_on: string;
   period_month: string;
@@ -66,7 +67,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
   useEffect(()=>{
     const controller=new AbortController();
     const params=new URLSearchParams({limit:"20",offset:String(offset)});
-    if(month)params.set("period_month",month+"-01");
+    if(month)params.set(activeOnly?"received_month":"period_month",month+"-01");
     // This-month receipts include all sponsors, not only currently Active CRM sponsors.
     const key="/api/admin/collections?"+params;
     const cached=recentSnapshot<Page>(key);
@@ -133,7 +134,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
         <h2>{activeOnly?"Received this month":"Collection history"}</h2>
       </div>
       <label className="field review-month">
-        <span className="field-label">{activeOnly?"Collection month":"Filter by month"}</span>
+        <span className="field-label">{activeOnly?"Date paid month":"Sponsorship month"}</span>
         <input type="month" aria-label="Filter collection history by month" value={month}
           onChange={e=>{setMonth(e.target.value);setOffset(0);}}/>
       </label>
@@ -149,7 +150,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
         <tbody>{loading&&!data?<tr><td colSpan={7}>Loading collection history…</td></tr>
           :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
-            <td><strong className="table-name">{row.sponsor_name}</strong></td>
+            <td><strong className="table-name">{row.sponsor_name}</strong><span className="table-subtitle">{row.sponsor_mobile}</span></td>
             <td>{rupees(row.amount_paise)}</td>
             <td>{formatCRMDate(row.period_month)}</td>
             <td>{row.reference_mask}</td>
