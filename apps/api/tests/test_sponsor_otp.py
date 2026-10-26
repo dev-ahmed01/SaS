@@ -62,7 +62,7 @@ def test_success_and_replay_without_crm_or_consent_side_effects(api, monkeypatch
     assert "code" not in challenge
     assert len(sent) == 1
     assert sent[0][0] == person["mobile_number"]
-    assert len(sent[0][1]) == 6
+    assert len(sent[0][1]) == 4
     with Session(engine) as db:
         record = db.get(SponsorOtpChallenge, uuid.UUID(challenge["challenge_id"]))
         assert record is not None
@@ -76,8 +76,8 @@ def test_success_and_replay_without_crm_or_consent_side_effects(api, monkeypatch
     )
     assert wrong_person.status_code == 400
     wrong = client.post(url + "/verify", headers=csrf, json={
-        "challenge_id": challenge["challenge_id"], "code": "000000"
-        if sent[0][1] != "000000" else "999999",
+        "challenge_id": challenge["challenge_id"], "code": "0000"
+        if sent[0][1] != "0000" else "9999",
     })
     assert wrong.status_code == 400
     valid = client.post(url + "/verify", headers=csrf, json={
@@ -117,7 +117,7 @@ def test_cooldown_and_lockout(api, monkeypatch):
     for _ in range(5):
         response = client.post(url + "/verify", headers=csrf, json={
             "challenge_id": first.json()["challenge_id"],
-            "code": "111111" if sent[0][1] != "111111" else "222222",
+            "code": "1111" if sent[0][1] != "1111" else "2222",
         })
         assert response.status_code == 400
     valid_after_lock = client.post(url + "/verify", headers=csrf, json={
@@ -177,7 +177,7 @@ def test_first_activation_and_reactivation_are_otp_gated(api, monkeypatch):
     challenge = request.json()["challenge_id"]
     wrong = client.post(root + "/otp/activate", headers=csrf, json={
         "version": person["version"], "challenge_id": challenge,
-        "code": "000000" if sent[-1][1] != "000000" else "111111",
+        "code": "0000" if sent[-1][1] != "0000" else "1111",
     })
     assert wrong.status_code == 400
     assert client.get(root).json()["crm_stage"] == "inactive"
@@ -266,7 +266,7 @@ def test_local_otp_uses_allowlisted_phone_only_and_does_not_claim_delivery(monke
     assert len(sent) == 1 and sent[0][0] == allowed
     assert "123456" in sent[0][1]
     with pytest.raises(ValueError, match="allowlisted"):
-        _deliver(config, "+918100000011", "654321")
+        _deliver(config, "+918100000011", "6543")
     assert len(sent) == 1
     monkeypatch.setattr(
         "app.sponsor_otp.send_text",
