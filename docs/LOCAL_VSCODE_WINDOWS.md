@@ -41,6 +41,29 @@ docker compose ps
 
 Docker Compose creates the `sas_dev` database using the repository's local-only default password. If an older `sas_postgres` volume already exists with a different password, reconcile its connection settings rather than deleting real data. **Never run `docker compose down -v` on a database with records you need.**
 
+## Recover the localhost username and password
+
+When switching to a fresh disposable PostgreSQL session, the old Admin is
+not copied with it. Do **not** delete the original database or reinitialize Git
+to fix login. Only after the API `.env` passes the
+`get_settings()` validation and Alembic migrations have run, execute from
+`apps/api`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.local_demo_admin --reset
+```
+
+Enter your **chosen localhost-only password** twice when prompted; it will
+not appear in terminal output or source control. Sign in with username
+`Admin`. The command creates the local Admin if the disposable DB is empty,
+or changes the *single existing demo Admin* to the `Admin` alias and new
+hashed password without deleting any prospective test records. Existing
+sessions are revoked. It refuses production/staging and multi-Admin
+databases; it requires `APP_ENV=development`,
+`LOCAL_DEMO_LOGIN_ENABLED=true`, loopback-only `sas_dev` DB, and an
+`AUTH_SECRET` of at least 32 characters. Use a strong password in any
+hosted installation; this demo alias is never a production login.
+
 ## 3. Backend, migrations and local Admin setup — Terminal 1
 
 ```powershell
