@@ -207,3 +207,47 @@ schema and matching fields are proven with a controlled provider fixture.
 **Separate concern:** The existing Meta Cloud API OTP implementation is *not*
 wired to Saasyto's QR-instance API. OTP templates require their own approved
 business sender and should not be treated as ordinary promotional text.
+
+
+## Resetting all campaign plans and sending results
+
+The authenticated Admin can open **Communication → Campaigns → Delete all campaigns**,
+review the current count, and type `DELETE ALL CAMPAIGNS` to confirm. This
+permanently removes **all** campaigns in that organization (not only the first
+100 displayed), plus their preparations, recipient eligibility snapshots,
+Saasyto approvals, and recipient send-result rows.
+
+Deletion blocks with HTTP 409 if a WhatsApp sending attempt is still
+`claimed`; review its outcome first. Queued messages are cancelled as part
+of deletion and cannot be submitted by the dispatcher afterward. Already
+submitted messages cannot be recalled. Prospect, promoter, payment, and
+documented communication-consent records remain intact, as do separate,
+append-only Admin audit events. The final purge action records summary counts
+without numbers or message text.
+
+The API requires an authenticated Admin session, valid CSRF token, exact
+confirmation phrase, and the current **full** campaign count; stale requests
+must refresh. Only the signed-in organization's records are modified.
+This is not an `.env` flag. Pull updated code, restart the CRM, then use
+the Admin confirmation to act on the database actually connected to your API.
+
+## Group WhatsApp delivery and promoters who sponsor themselves
+
+The existing production batch dispatcher can approve and attempt one message
+per eligible contact (the multi-recipient run is already regression-tested).
+`SAASYTO_LOCAL_TEST_ENABLED=true` is intentionally restricted to **one**
+consented authorized phone; it cannot be used to test a bulk campaign.
+Production batch sending requires separate validated sender configuration,
+explicit Admin approval, documented WhatsApp permission, and fresh per-recipient
+consent/opt-out checks. The same phone appearing as Promoter and Prospect
+is de-duplicated in a combined campaign.
+
+An active promoter may also register as a prospect with the same phone. This
+creates **two separate role records** and supports self-assignment via
+Promoter Details → Prospects → **Find promoter's own prospect record** → Assign.
+Within each role, existing phone uniqueness safeguards still apply.
+
+CRM Active status alone does not grant WhatsApp marketing permission. The
+registration attestation captures existing permission once; later campaigns
+reuse that documented record and do not request it again. A recipient's
+opt-out always takes precedence, including on subsequent campaigns.
