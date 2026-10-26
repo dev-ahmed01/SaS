@@ -251,6 +251,7 @@ def test_campaign_results_include_excluded_contacts_and_full_numbers(dispatch_sy
     record = detail.json()
     assert record["summary"]["run_status"] == "not_approved"
     assert record["summary"]["submitted_unverified"] == 0
+    assert record["summary"]["last_attempt_at"] is None
     assert record["summary"]["delivered"] is None
     assert record["summary"]["read"] is None
     assert record["excluded_reasons"] == {"no_whatsapp_consent": 1}
@@ -285,6 +286,7 @@ def test_campaign_results_distinguish_submission_rejection_unknown_and_no_webhoo
     ] == 1
     detail = client.get("/v1/communication/campaigns/"+cid+"/results").json()
     assert detail["summary"]["rejected"] == 1
+    assert detail["summary"]["last_attempt_at"] is not None
     assert detail["summary"]["submitted_unverified"] == 0
     assert detail["summary"]["delivered"] is None
     assert detail["summary"]["read"] is None
@@ -294,6 +296,7 @@ def test_campaign_results_distinguish_submission_rejection_unknown_and_no_webhoo
     row = next(x for x in client.get("/v1/communication/campaigns/results").json()
                if x["campaign_id"] == cid)
     assert row["rejected"] == 1 and row["read"] is None
+    assert row["last_attempt_at"] == detail["summary"]["last_attempt_at"]
 
     cid2, _ = _approved(client, csrf, "Provider unknown test")
     monkeypatch.setattr("app.saasyto_campaigns.send_text",
@@ -303,6 +306,7 @@ def test_campaign_results_distinguish_submission_rejection_unknown_and_no_webhoo
     ] == 1
     unknown = client.get("/v1/communication/campaigns/"+cid2+"/results").json()
     assert unknown["summary"]["unknown"] == 1
+    assert unknown["summary"]["last_attempt_at"] is not None
     assert unknown["summary"]["rejected"] == 0
     assert unknown["summary"]["delivered"] is None
     assert unknown["recipients"][0]["status"] == "unknown"
