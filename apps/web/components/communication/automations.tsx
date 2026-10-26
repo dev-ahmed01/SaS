@@ -5,6 +5,7 @@ import {
   apiGet, apiWrite, audienceOptions, segmentOptions, triggerOptions,
 } from "./types";
 import type { Audience, Rule, Segment, Template } from "./types";
+import { OtpCopyEditor } from "./otp-copy-editor";
 
 export function CommunicationAutomations({revision=0}:{revision?:number}){
   const [templates,setTemplates]=useState<Template[]>([]);
@@ -103,11 +104,12 @@ export function CommunicationAutomations({revision=0}:{revision?:number}){
     </section>
     <section className="comm-panel">
       <div className="comm-panel-header"><h2>Saved workflows</h2>
-        <span className="comm-muted">{rules.length} workflows</span></div>
-      {!rules.length?<div className="comm-empty">
-        No automation definitions yet. Configure a trigger to reuse it later.</div>:
-        <div className="comm-stack">
-          {rules.map(r=><article className="comm-list-card" key={r.id}>
+        <span className="comm-muted">{rules.length+1} workflows</span></div>
+      <div className="comm-stack">
+        <OtpCopyEditor/>
+        {!rules.length&&<p className="comm-muted">
+          No additional workflows yet. Configure a trigger to add one.</p>}
+        {rules.map(r=><article className="comm-list-card" key={r.id}>
             <div className="comm-list-card-text"><strong>{r.name}</strong>
               <span>{triggerOptions.find(x=>x[0]===r.trigger_kind)?.[1]??r.trigger_kind}</span>
               <p>{r.audience} · {r.segment}</p>
@@ -116,7 +118,7 @@ export function CommunicationAutomations({revision=0}:{revision?:number}){
             <button type="button" className="comm-text-button"
               onClick={()=>remove(r)}>Remove</button>
           </article>)}
-        </div>}
+      </div>
       <p className="comm-muted comm-history-footnote">
         Existing monthly reminders remain governed by the Foundation&apos;s
         5th/20th IST policy. These new rules do not run until a reviewed
