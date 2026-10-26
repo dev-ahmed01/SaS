@@ -8,6 +8,7 @@ Saasyto's public JSON example documents the request fields but not the reply
 schema or idempotency guarantees. HTTP 2xx is only submission at the gateway;
 it is NOT evidence of a WhatsApp delivery or recipient read.
 """
+import hmac
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -28,6 +29,22 @@ class Submission:
     reason: str | None = None  # Constant diagnostic; never raw provider JSON.
 
 
+def local_pilot_phones(cfg: Settings) -> tuple[str, ...]:
+    """Explicitly authorized test contacts; never derive from the CRM audience."""
+    first = getattr(cfg, "saasyto_local_test_phone", None)
+    second = getattr(cfg, "saasyto_local_test_phone_2", None)
+    return tuple(phone for phone in (first, second) if phone)
+
+
+def local_pilot_permits(cfg: Settings, phone: str) -> bool:
+    """Check exact, normalized E.164 digits without substring matching."""
+    actual = phone.lstrip("+")
+    return any(
+        hmac.compare_digest(actual, allowed.lstrip("+"))
+        for allowed in local_pilot_phones(cfg)
+    )
+
+
 def send_text(cfg: Settings, *, phone: str, message: str) -> Submission:
     """Submit one approved text, never automatically retry timeouts or errors.
 
@@ -41,8 +58,7 @@ def send_text(cfg: Settings, *, phone: str, message: str) -> Submission:
     if not PHONE.fullmatch(phone):
         raise ValueError("Recipient number must be E.164 with a country code")
     if getattr(cfg, "saasyto_local_test_enabled", False):
-        allowed = (cfg.saasyto_local_test_phone or "").lstrip("+")
-        if not allowed or phone.lstrip("+") != allowed:
+        if not local_pilot_permits(cfg, phone):
             raise ValueError("Local pilot recipient is not allowlisted")
     if not message or len(message) > 1200:
         raise ValueError("Invalid outgoing message length")
