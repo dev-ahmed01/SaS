@@ -1,4 +1,4 @@
-"""Promoter assignment lists must agree with read-only IST financial status.
+"""Promoter CRM tabs reflect activation while rows show read-only IST financial status.
 
 All fixtures are synthetic and tenant-scoped; no real payment or message is sent.
 """
@@ -69,6 +69,12 @@ def test_promoter_tabs_use_ist_live_status_and_keep_reads_side_effect_free(api, 
     for person in (overdue, received):
         _enrol_since(engine, person, date(2026, 9, 1))
         _assigned(client, csrf, promoter, person)
+    # A person who completed sponsor OTP belongs in Sponsors even if their
+    # financial lifecycle projection later changes; unactivated prospects do not.
+    activation = activate_with_test_otp(
+        client, csrf, client.get("/v1/prospects/" + received["id"]).json()
+    )
+    assert activation.status_code == 200, activation.text
 
     with Session(engine) as db:
         sponsor = db.get(Prospect, uuid.UUID(received["id"]))
@@ -99,19 +105,17 @@ def test_promoter_tabs_use_ist_live_status_and_keep_reads_side_effect_free(api, 
     assert sponsor_tab["items"][0]["prospect_id"] == received["id"]
     assert sponsor_tab["items"][0]["lifecycle_status"] == "active"
 
-    # Exactly at midnight IST, both September and October are completed
-    # unpaid months for the first record. It must move tabs automatically.
+    # Exactly at midnight IST, the unactivated record's payment lifecycle
+    # becomes inactive, but it remains in Prospects rather than Sponsors.
     monkeypatch.setattr(
         "app.prospects.utc_now",
         lambda: datetime(2026, 10, 31, 18, 30, tzinfo=UTC),
     )
-    assert _view(client, promoter, "prospects")["total"] == 0
-    page1 = _view(client, promoter, "sponsors", limit=1, offset=0)
-    page2 = _view(client, promoter, "sponsors", limit=1, offset=1)
-    assert page1["total"] == page2["total"] == 2
-    assert {page1["items"][0]["prospect_id"], page2["items"][0]["prospect_id"]} == {
-        overdue["id"], received["id"],
-    }
+    prospect_page = _view(client, promoter, "prospects")
+    sponsor_page = _view(client, promoter, "sponsors")
+    assert prospect_page["total"] == sponsor_page["total"] == 1
+    assert prospect_page["items"][0]["prospect_id"] == overdue["id"]
+    assert sponsor_page["items"][0]["prospect_id"] == received["id"]
     all_rows = _view(client, promoter)
     status = {x["prospect_id"]: x["lifecycle_status"] for x in all_rows["items"]}
     assert status == {overdue["id"]: "inactive", received["id"]: "active"}
