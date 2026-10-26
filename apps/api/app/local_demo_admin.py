@@ -14,7 +14,12 @@ from sqlalchemy.orm import Session
 from app.bootstrap_admin import provision_admin
 from app.config import get_settings
 from app.db import get_engine
-from app.models import AdminLoginAttempt, AdminSession, AdminUser, AuditEvent
+from app.models import (
+    AdminLoginAttempt,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+)
 from app.security import PASSWORD_HASHER, utc_now
 
 
