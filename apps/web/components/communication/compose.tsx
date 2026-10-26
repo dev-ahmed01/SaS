@@ -19,7 +19,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const [audiencePreview,setAudiencePreview]=useState<Preview|null>(null);
   const [subject,setSubject]=useState("");
   const [body,setBody]=useState("");
-  const [providerTemplate,setProviderTemplate]=useState("");
   const [timing,setTiming]=useState<"now"|"planned">("now");
   const [plannedFor,setPlannedFor]=useState(()=>istLocalInput(new Date(Date.now()+3600000)));
   const [error,setError]=useState("");
@@ -48,7 +47,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
     if(template){
       setCategory(template.category);
       setBody(template.body);setSubject(template.subject??"");
-      setProviderTemplate(template.provider_template_id??"");
     }
   }
   async function submit(event:FormEvent<HTMLFormElement>){
@@ -70,10 +68,11 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         request_id:requestId.current,title:title.trim(),template_id:selectedTemplate||null,
         channel,audience,segment,category,
         subject:channel==="email"?subject.trim():null,body:body.trim(),
-        provider_template_id:providerTemplate.trim()||null,planned_for:schedule,
+        provider_template_id:selectedTemplate
+          ?templates.find(item=>item.id===selectedTemplate)?.provider_template_id??null
+          :null,planned_for:schedule,
       });
       requestId.current=null;
-      setNotice("Campaign created. No message has been sent or queued for delivery.");
       onSaved();
       router.push("/communication/campaigns#campaign-"+campaign.id);
     }catch(e){setError(e instanceof Error?e.message:"Unable to save message.");}
@@ -83,7 +82,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
     <section className="comm-panel" aria-label="Compose message">
       <div className="comm-panel-header">
         <h2>New message</h2>
-        <span className="comm-channel-tag">Create campaign</span>
       </div>
       <form onSubmit={submit}>
         <div className="comm-form-section">
@@ -112,20 +110,11 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
                   <option value={value} key={value}>{label}</option>)}
               </select></label>
           </div>
-          <p className="comm-muted" role="status">
+          <div className="comm-audience-count" role="status">
             {audiencePreview
-              ? audiencePreview.eligible_count+" of "+audiencePreview.candidate_count+
-                " current CRM contacts eligible for "+channel+"."
-              : "Checking eligible contacts in CRM…"}
-            {" "}Only contacts with the applicable documented permission can receive messages.
-          </p>
-          <p className="comm-muted">
-            {segment==="active"
-              ? "Active includes contacts marked Active in the CRM. Newly registered prospects start Inactive until activated."
-              : segment==="all"
-                ? "All contacts includes newly registered prospects, subject to documented messaging permission."
-                : "Contacts are selected from the live CRM, not a pre-seeded phone list."}
-          </p>
+              ? <><strong>{audiencePreview.eligible_count}</strong> eligible recipients</>
+              : "Checking recipients…"}
+          </div>
         </div>
         <div className="comm-form-section">
           <h3>Message</h3>
@@ -158,13 +147,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
                 placeholder={"Assalamu Alaikum {{name}},\n\nWe have an update to share with you."}/>
               <span className="comm-muted">Use {"{{name}}"} or {"{{month}}"} for personalization.</span>
             </label>
-            {channel==="whatsapp"&&<label className="field comm-full">
-              <span className="field-label">Approved WhatsApp template ID</span>
-              <input aria-label="Approved WhatsApp template ID"
-                maxLength={160} value={providerTemplate}
-                onChange={e=>{setProviderTemplate(e.target.value);invalidate();}}
-                placeholder="Provider-approved template reference"/>
-            </label>}
           </div>
         </div>
         <div className="comm-form-section">
@@ -185,7 +167,6 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
         {error&&<p className="form-error" role="alert">{error}</p>}
         {notice&&<p className="form-success" role="status">{notice}</p>}
         <div className="comm-actions">
-          <span className="comm-muted">Sending requires a fresh recipient check and explicit approval. Creating a campaign does not send it; the private production worker processes approved messages.</span>
           <button className="btn btn-primary" type="submit" disabled={saving}>
             {saving?"Saving…":timing==="planned"?"Plan for later":"Continue to recipient review"}
           </button>

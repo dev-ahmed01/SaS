@@ -37,6 +37,7 @@ class CampaignResultSummary(BaseModel):
     run_status: Literal["not_approved", "approved", "cancelled", "completed"]
     planned: int
     submitted_unverified: int
+    last_attempt_at: datetime | None = None
     rejected: int
     unknown: int
     queued: int
@@ -116,12 +117,14 @@ def _recipient(row, lookup) -> RecipientResult:
 
 
 def _summary(campaign_id: uuid.UUID, run: SaasytoCampaignRun | None,
-             states: Counter, excluded_in_review: int = 0) -> CampaignResultSummary:
+             states: Counter, excluded_in_review: int = 0,
+             last_attempt_at: datetime | None = None) -> CampaignResultSummary:
     return CampaignResultSummary(
         campaign_id=campaign_id,
         run_status=run.status if run else "not_approved",
         planned=run.eligible_count if run else 0,
         submitted_unverified=states["accepted_unverified"],
+        last_attempt_at=last_attempt_at,
         rejected=states["rejected"],
         unknown=states["unknown"],
         queued=states["queued"],
@@ -156,15 +159,21 @@ def campaign_summaries(
         ),
     )}
     totals = defaultdict(Counter)
+    last_attempts: dict[uuid.UUID, datetime] = {}
     run_ids = [row.id for row in runs.values()]
     if run_ids:
-        for run_id, state in db.execute(select(
+        for run_id, state, finished_at in db.execute(select(
             SaasytoCampaignRecipient.run_id, SaasytoCampaignRecipient.status,
+            SaasytoCampaignRecipient.finished_at,
         ).where(
             SaasytoCampaignRecipient.organization_id == org,
             SaasytoCampaignRecipient.run_id.in_(run_ids),
         )):
             totals[run_id][state] += 1
+            if finished_at is not None and (
+                run_id not in last_attempts or finished_at > last_attempts[run_id]
+            ):
+                last_attempts[run_id] = finished_at
     # Show pre-approval failures too, not only worker-run failures.
     # Latest snapshot per campaign, not an accumulated total of rechecks.
     latest = {}
@@ -180,7 +189,8 @@ def campaign_summaries(
     return [
         _summary(c.id, runs.get(c.id),
                  totals[runs[c.id].id] if c.id in runs else Counter(),
-                 latest.get(c.id, 0))
+                 latest.get(c.id, 0),
+                 last_attempts.get(runs[c.id].id) if c.id in runs else None)
         for c in campaigns
     ]
 
@@ -237,8 +247,12 @@ def campaign_detail(
         audience=campaign.audience, segment=campaign.segment,
         category=campaign.category, channel=campaign.channel,
         planned_for=campaign.planned_for, created_at=campaign.created_at,
-        summary=_summary(campaign.id, run, counts,
-                         preflight.suppressed_count if preflight else 0),
+        summary=_summary(
+            campaign.id, run, counts,
+            preflight.suppressed_count if preflight else 0,
+            max((row.finished_at for row in queue if row.finished_at is not None),
+                default=None),
+        ),
         latest_review_at=preflight.evaluated_at if preflight else None,
         eligible_in_review=preflight.eligible_count if preflight else 0,
         excluded_in_review=preflight.suppressed_count if preflight else 0,
