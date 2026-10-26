@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
 import { FollowUpLog } from "./followup-log";
@@ -19,6 +19,7 @@ function Tile({label,children}:{label:string;children:React.ReactNode}){
 }
 export function ProspectDetails({id}:{id:string}){
   const [record,setRecord]=useState<Prospect|null>(null);
+  const loadedId=useRef<string|null>(null);
   const [activity,setActivity]=useState<Activity[]>([]);
   const [filter,setFilter]=useState("all");
   const [loading,setLoading]=useState(true);
@@ -38,13 +39,19 @@ export function ProspectDetails({id}:{id:string}){
   },[id]);
   useEffect(()=>{
     const controller=new AbortController();
-    setLoading(true);setError("");
+    // Keep the same person's view mounted while refreshing after edits.
+    // Switching to a different person still hides stale private data.
+    if(loadedId.current!==id){setLoading(true);setRecord(null);}
+    setError("");
     Promise.all([
       load(controller.signal),
       fetch("/api/admin/prospects/"+id+"/activity",{cache:"no-store",signal:controller.signal})
         .then(async r=>{if(!r.ok)throw Error("Activity timeline unavailable.");return r.json() as Promise<Activity[]>;}),
     ]).then(([person,events])=>{
-      if(!controller.signal.aborted){setRecord(person);setActivity(events);}
+      if(!controller.signal.aborted){
+        loadedId.current=id;
+        setRecord(person);setActivity(events);
+      }
     }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load details.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
