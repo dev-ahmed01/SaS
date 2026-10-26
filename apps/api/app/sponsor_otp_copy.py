@@ -27,6 +27,13 @@ DEFAULT_OTP_BODY = (
 TOKEN = re.compile(r"{{\s*([a-z_]+)\s*}}")
 UNKNOWN = re.compile(r"{{.*?}}", re.DOTALL)
 ALLOWED = {"name", "code", "sponsorship", "sponsorship_amount", "sponsorship_units"}
+MAX_OUTBOUND_LENGTH = 1200
+# The CRM limits full_name to 160 chars; each template token may repeat.
+# Allow generous room for legacy amounts and descriptive subscription labels.
+WORST_CASE_REPLACEMENT_LENGTH = {
+    "name": 160, "code": 4, "sponsorship": 64,
+    "sponsorship_amount": 28, "sponsorship_units": 20,
+}
 
 
 def validate_otp_body(body: str) -> str:
@@ -42,6 +49,12 @@ def validate_otp_body(body: str) -> str:
         raise ValueError("Include {{sponsorship}} or {{sponsorship_amount}}")
     if any(token not in ALLOWED for token in tokens) or UNKNOWN.search(TOKEN.sub("", body)):
         raise ValueError("Unsupported message variable")
+    largest_render = TOKEN.sub(
+        lambda match: "X" * WORST_CASE_REPLACEMENT_LENGTH[match.group(1)],
+        body,
+    )
+    if len(largest_render) > MAX_OUTBOUND_LENGTH:
+        raise ValueError("Activation message is too long after personalization")
     return body
 
 
@@ -57,18 +70,27 @@ def template_body(db: Session, org: uuid.UUID) -> str:
 def render_otp(body: str, prospect: Prospect, code: str) -> str:
     """No default/fallback name or contribution: use the selected CRM record."""
     amount = prospect.monthly_contribution_paise
-    if amount <= 0 or amount % SPONSORSHIP_STEP_PAISE:
-        raise ValueError("Prospect has no valid monthly sponsorship commitment")
-    units = amount // SPONSORSHIP_STEP_PAISE
-    money = f"₹{amount // 100:,}"
+    if amount <= 0:
+        raise ValueError("Prospect has no monthly sponsorship commitment")
+    # Legacy agreements may not be a multiple of the new ₹250 tier. Preserve
+    # their actual amount; never block activation or silently reprice a donor.
+    tiered = amount % SPONSORSHIP_STEP_PAISE == 0
+    units = amount // SPONSORSHIP_STEP_PAISE if tiered else None
+    rupees, paise = divmod(amount, 100)
+    money = f"₹{rupees:,}" + (f".{paise:02d}" if paise else "")
     replacements = {
         "name": prospect.first_name or prospect.full_name,
         "code": code,
         "sponsorship_amount": money,
-        "sponsorship_units": str(units),
+        "sponsorship_units": str(units) if units is not None else "Not applicable",
         "sponsorship": (
             money + " per month" +
-            (f" ({units} units at ₹250 each)" if units > 1 else "")
+            (f" ({units} units at ₹250 each)" if units is not None and units > 1 else "")
         ),
     }
-    return TOKEN.sub(lambda match: replacements[match.group(1)], validate_otp_body(body))
+    message = TOKEN.sub(
+        lambda match: replacements[match.group(1)], validate_otp_body(body),
+    )
+    if len(message) > MAX_OUTBOUND_LENGTH:
+        raise ValueError("Rendered activation message is too long")
+    return message
