@@ -45,6 +45,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   }|null>(null);
   const [purgeConfirmation,setPurgeConfirmation]=useState("");
   const [purgeBusy,setPurgeBusy]=useState(false);
+  const [cancelling,setCancelling]=useState<string|null>(null);
 
   useEffect(()=>{
     const sync=()=>{
@@ -69,6 +70,15 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     return()=>{active=false;};
   },[revision,reload]);
 
+  async function cancelPlan(item:Campaign){
+    if(cancelling||!window.confirm("Cancel this campaign plan?"))return;
+    setCancelling(item.id);setError("");
+    try{
+      await apiWrite("/campaigns/"+item.id+"/cancel","POST",{});
+      setReload(n=>n+1);
+    }catch(e){setError(e instanceof Error?e.message:"Could not cancel campaign.");}
+    finally{setCancelling(null);}
+  }
   async function openCampaignPurge(){
     setPurgeBusy(true);setError("");
     try{
@@ -174,9 +184,15 @@ export function CommunicationCampaigns({revision}:{revision:number}){
              <span><strong>{summary?.rejected??0}</strong> Failed</span>
              <span><strong>{notSent}</strong> Not sent</span>
            </div>
-           <Link className="comm-campaign-open"
-             href={"/communication/campaigns#campaign-"+item.id}
-             onClick={()=>setSelectedId(item.id)}>View details</Link>
+           <div className="comm-campaign-item-actions">
+             <Link className="comm-campaign-open"
+               href={"/communication/campaigns#campaign-"+item.id}
+               onClick={()=>setSelectedId(item.id)}>View details</Link>
+             {state==="Awaiting approval"||state==="Planned"?
+               <button type="button" className="comm-text-button"
+                 disabled={cancelling===item.id}
+                 onClick={()=>void cancelPlan(item)}>Cancel plan</button>:null}
+           </div>
          </article>;
        })}
     </div>
