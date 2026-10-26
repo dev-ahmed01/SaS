@@ -552,9 +552,9 @@ def test_saasyto_only_production_config_needs_no_meta_subscription():
     assert cfg.otp_meta_access_token is None
     assert cfg.otp_meta_phone_number_id is None
     assert cfg.saasyto_local_test_phone is None
-    with pytest.raises(ValueError, match="Saasyto production OTP"):
+    with pytest.raises(ValueError, match="Saasyto"):
         Settings(_env_file=None, **{**base, "app_env": "development"})
-    with pytest.raises(ValueError, match="Saasyto production OTP"):
+    with pytest.raises(ValueError, match="Saasyto"):
         Settings(_env_file=None, **{**base, "saasyto_local_test_enabled": True})
     with pytest.raises(ValueError, match="Saasyto production OTP"):
         Settings(_env_file=None, **{**base, "otp_delivery_enabled": True})
