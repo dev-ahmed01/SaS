@@ -55,7 +55,7 @@ export function ProspectDetails({id}:{id:string}){
     }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load details.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
-  },[load,revision]);
+  },[load,revision,id]);
   async function archive(){
     if(!record||busy)return;
     setBusy(true);setError("");
