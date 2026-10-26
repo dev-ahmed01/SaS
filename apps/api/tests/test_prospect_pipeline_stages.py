@@ -196,3 +196,89 @@ def test_stage_assignment_never_crosses_tenant_boundary(system):
         "pipeline_stage_id": stage["id"],
     })
     assert cross.status_code == 422
+
+
+def test_registration_stage_keeps_same_uuid_after_name_change_and_bulk_import(system):
+    client, engine = system
+    csrf = login(client)
+    first = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Initial Registration",
+        "mobile_number": "+919711110101",
+    })
+    assert first.status_code == 201, first.text
+    initial = first.json()
+    default_id = initial["pipeline_stage_id"]
+    stages = client.get("/v1/prospect-stages").json()
+    selected = next(stage for stage in stages if stage["id"] == default_id)
+    assert selected["is_registration_default"] is True
+    renamed = client.patch("/v1/prospect-stages/" + default_id, headers=csrf, json={
+        "version": selected["version"], "name": "New Donor Enquiry",
+    })
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["is_registration_default"] is True
+    second = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "After Renaming",
+        "mobile_number": "+919711110102",
+    })
+    assert second.status_code == 201, second.text
+    assert second.json()["pipeline_stage_id"] == default_id
+    assert second.json()["pipeline_stage_name"] == "New Donor Enquiry"
+
+    import_id = str(uuid.uuid4())
+    source = {
+        "batch_id": import_id,
+        "rows": [{"full_name": "Bulk After Rename",
+                  "mobile_number": "+919711110103"}],
+    }
+    preview = client.post("/v1/prospects/bulk", headers=csrf, json=source)
+    assert preview.status_code == 200, preview.text
+    preview_data = preview.json()
+    committed = client.post("/v1/prospects/bulk", headers=csrf, json={
+        **source, "commit": True,
+        "expected_month": preview_data["default_start_month"],
+        "expected_default_amount_paise": preview_data["default_amount_paise"],
+    })
+    assert committed.status_code == 200, committed.text
+    bulk_id = committed.json()["rows"][0]["prospect_id"]
+    bulk = client.get("/v1/prospects/" + bulk_id).json()
+    assert bulk["pipeline_stage_id"] == default_id
+    assert bulk["crm_stage"] == "inactive"
+    assert len(client.get("/v1/prospect-stages").json()) == 1
+
+    # Protect the registration identity even when the stage has no assignments.
+    alternative = client.post("/v1/prospect-stages", headers=csrf, json={
+        "name": "Follow-up", "color": "#155e75",
+    }).json()
+    for person_id in (initial["id"], second.json()["id"], bulk_id):
+        current = client.get("/v1/prospects/" + person_id).json()
+        moved = client.patch("/v1/prospects/" + person_id, headers=csrf, json={
+            "version": current["version"], "pipeline_stage_id": alternative["id"],
+        })
+        assert moved.status_code == 200, moved.text
+    cannot_delete = client.delete(
+        "/v1/prospect-stages/" + default_id,
+        headers={**csrf, "If-Match": str(renamed.json()["version"])},
+    )
+    assert cannot_delete.status_code == 409
+    with Session(engine) as db:
+        default = db.get(ProspectStageDefinition, uuid.UUID(default_id))
+        assert default.system_key == "registration_new_inquiry"
+
+
+def test_legacy_renamed_default_with_original_description_is_reused(system):
+    client, engine = system
+    csrf = login(client)
+    candidate = client.post("/v1/prospect-stages", headers=csrf, json={
+        "name": "Renamed First Contact",
+        "description": "Awaiting first documented follow-up",
+    })
+    assert candidate.status_code == 201, candidate.text
+    original_id = candidate.json()["id"]
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Legacy Default Test", "mobile_number": "+919711110105",
+    })
+    assert created.status_code == 201, created.text
+    assert created.json()["pipeline_stage_id"] == original_id
+    with Session(engine) as db:
+        stage = db.get(ProspectStageDefinition, uuid.UUID(original_id))
+        assert stage.system_key == "registration_new_inquiry"
