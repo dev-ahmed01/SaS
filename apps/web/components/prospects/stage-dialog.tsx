@@ -261,11 +261,14 @@ export function StageDialog({prospect,onClose,onChanged}:{
                     autoComplete={index===0?"one-time-code":"off"} maxLength={4}
                     aria-label={"OTP digit "+(index+1)}
                     value={digit} disabled={busy} onPaste={paste}
+                    onFocus={e=>e.currentTarget.select()}
                     onKeyDown={e=>keyDown(e,index)}
                     onChange={e=>{
                       const raw=e.target.value.replace(/\D/g,"");
                       if(!raw){setDigits(old=>old.map((v,i)=>i===index?"":v));return;}
-                      applyDigits(index,raw);
+                      const corrected=raw.length===2&&digit&&raw[0]===digit
+                        ?raw[1]:raw;
+                      applyDigits(index,corrected);
                     }}/>)}
                 </div>
                 <p className="sas-otp-timer" role="timer" aria-live="off">
