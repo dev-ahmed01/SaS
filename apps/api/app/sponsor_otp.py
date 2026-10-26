@@ -201,6 +201,17 @@ def request_otp(
             status_code=403,
             detail="Local OTP pilot permits only explicitly configured test phones",
         )
+    message_copy = template_body(database, admin.organization_id)
+    if (getattr(cfg, "otp_saasyto_enabled", False)
+            or getattr(cfg, "otp_local_pilot_enabled", False)):
+        # Reject invalid/oversized expanded copy before saving or consuming
+        # the OTP issuance quota. Four-digit codes have constant length.
+        try:
+            render_otp(message_copy, person, "0000")
+        except ValueError:
+            raise HTTPException(
+                status_code=503, detail="Activation message cannot be prepared"
+            ) from None
     now = utc_now()
     phone_digest = _digest(cfg.otp_secret, number)
     # Rate-limit the actual phone across records as well as this sponsor.
@@ -241,8 +252,7 @@ def request_otp(
     database.commit()
     # In a timeout, the provider may have received the request. Do not auto-retry.
     try:
-        _deliver(cfg, number, code, person,
-                 template_body(database, admin.organization_id))
+        _deliver(cfg, number, code, person, message_copy)
     except (httpx.TimeoutException, OtpDeliveryUnconfirmed):
         record.status = "unknown"
         database.commit()
