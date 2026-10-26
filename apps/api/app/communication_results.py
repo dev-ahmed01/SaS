@@ -51,7 +51,7 @@ class RecipientResult(BaseModel):
     recipient_kind: Literal["prospect", "promoter"]
     recipient_id: uuid.UUID
     name: str
-    phone_masked: str
+    phone: str
     status: str
     reason: str | None = None
     finished_at: datetime | None = None
@@ -81,10 +81,9 @@ class CampaignResultDetail(BaseModel):
     )
 
 
-def _masked(number: str | None) -> str:
-    """Never include full donor phone numbers in campaign analytics responses."""
-    digits = "".join(ch for ch in (number or "") if ch.isdigit())
-    return "•••• " + digits[-4:] if len(digits) >= 4 else "Not available"
+def _display_number(number: str | None) -> str:
+    """Admin-only results show the current complete recipient phone number."""
+    return number or "Not available"
 
 
 def _people(db: Session, org: uuid.UUID, pairs: set[tuple[str, uuid.UUID]]):
@@ -111,7 +110,7 @@ def _recipient(row, lookup) -> RecipientResult:
     return RecipientResult(
         recipient_kind=row.recipient_kind, recipient_id=row.recipient_id,
         name=person.full_name if person else "Contact no longer available",
-        phone_masked=_masked(number), status=row.status, reason=row.reason,
+        phone=_display_number(number), status=row.status, reason=row.reason,
         finished_at=row.finished_at,
     )
 
@@ -251,7 +250,7 @@ def campaign_detail(
                 name=(person.full_name if (person := lookup.get(
                     (row.recipient_kind, row.recipient_id)
                 )) else "Contact no longer available"),
-                phone_masked=_masked(
+                phone=_display_number(
                     person.whatsapp_number or person.mobile_number
                     if person else None
                 ),
@@ -264,7 +263,7 @@ def campaign_detail(
                 name=(lookup.get((row.recipient_kind, row.recipient_id)).full_name
                       if lookup.get((row.recipient_kind, row.recipient_id))
                       else "Contact no longer available"),
-                phone_masked=_masked(
+                phone=_display_number(
                     (person.whatsapp_number or person.mobile_number)
                     if (person := lookup.get((row.recipient_kind, row.recipient_id)))
                     else None
