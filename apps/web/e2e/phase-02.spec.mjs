@@ -1392,3 +1392,46 @@ test("Dashboard browser endpoint rejects unsupported query and cannot record mon
   });
   expect([404,405]).toContain(rejected.status());
 });
+
+
+test("Prospect bulk import previews before atomically saving two unique contacts",async ({page})=>{
+  const suffix=Date.now().toString().slice(-8);
+  const p1="+9190"+suffix,p2="+9191"+suffix;
+  await page.goto("/prospects");
+  await page.getByRole("link",{name:"Bulk add"}).click();
+  await expect(page.getByRole("heading",{name:"Bulk add prospects"})).toBeVisible();
+  const csv=["Name,Mobile,City,Email,Sponsorship INR,Start Month",
+    `"Bulk Test Shared",${p1},Bengaluru,,250,`,
+    `"Bulk Test Shared",${p2},Mysuru,,500,`,
+  ].join("\r\n");
+  await page.getByLabel("Prospect CSV file").setInputFiles({
+    name:"synthetic-prospects.csv",mimeType:"text/csv",buffer:Buffer.from(csv),
+  });
+  await expect(page.getByText("2 rows",{exact:false})).toBeVisible();
+  await page.getByRole("button",{name:"Preview import"}).click();
+  await expect(page.getByRole("heading",{name:"Preview results"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Confirm & add 2 prospects"})).toBeEnabled();
+  await page.getByRole("button",{name:"Confirm & add 2 prospects"}).click();
+  await expect(page.getByText("Import confirmed.",{exact:false})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Import results"})).toBeVisible();
+  await expect(page.getByRole("link",{name:"Added"})).toHaveCount(2);
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill("Bulk Test Shared");
+  await expect(page.getByRole("row").filter({hasText:p1})).toBeVisible();
+  await expect(page.getByRole("row").filter({hasText:p2})).toBeVisible();
+});
+
+test("Prospect bulk import blocks duplicate mobile before saving",async ({page})=>{
+  const number="+9192"+Date.now().toString().slice(-8);
+  await page.goto("/prospects/bulk");
+  const csv=["Name,Mobile,City,Email,Sponsorship INR,Start Month",
+    `First Person,${number},Bengaluru,,250,`,
+    `Second Person,${number},Mysuru,,250,`,
+  ].join("\n");
+  await page.getByLabel("Prospect CSV file").setInputFiles({
+    name:"synthetic-duplicate.csv",mimeType:"text/csv",buffer:Buffer.from(csv),
+  });
+  await page.getByRole("button",{name:"Preview import"}).click();
+  await expect(page.getByText("Repeated mobile number in this CSV")).toBeVisible();
+  await expect(page.getByRole("button",{name:/Confirm & add/})).toBeDisabled();
+});

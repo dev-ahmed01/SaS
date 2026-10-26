@@ -15,6 +15,9 @@ const responseHeaders = {
 
 function resolveRoute(segments: string[], method: string): string | null {
   if (segments.length === 0 && ["GET", "POST"].includes(method)) return "";
+  if (segments.length === 1 && segments[0] === "bulk" && method === "POST") {
+    return "/bulk";
+  }
   if (segments.length === 2 && UUID.test(segments[0]) &&
       segments[1] === "activity" && method === "GET") {
     return "/" + segments[0] + "/activity";
@@ -103,7 +106,8 @@ async function handle(
   let body: string | undefined;
   if (write) {
     const size = Number(request.headers.get("content-length") ?? 0);
-    if (size > 16384) {
+    const maxBody = path === "/bulk" ? 65536 : 16384;
+    if (size > maxBody) {
       return NextResponse.json({detail: "Body too large"}, {status: 413, headers: responseHeaders});
     }
     if (request.method === "POST" || request.method === "PATCH") {
@@ -113,7 +117,7 @@ async function handle(
       }
     }
     body = await request.text();
-    if (body.length > 16384) {
+    if (body.length > maxBody) {
       return NextResponse.json({detail: "Body too large"}, {status: 413, headers: responseHeaders});
     }
     if (body) headers.set("content-type", "application/json");

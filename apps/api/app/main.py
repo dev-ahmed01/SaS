@@ -23,6 +23,7 @@ from app.messaging import admin_router as messaging_admin_router
 from app.messaging import internal_router as messaging_internal_router
 from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
+from app.prospect_bulk import router as prospect_bulk_router
 from app.prospect_stages import router as prospect_stages_router
 from app.prospects import router as prospects_router
 from app.reminders import router as reminders_router
@@ -40,6 +41,7 @@ def _expected_migration_heads() -> set[str]:
     return set(ScriptDirectory.from_config(config).get_heads())
 app.include_router(auth_router)
 app.include_router(settings_router)
+app.include_router(prospect_bulk_router)
 app.include_router(prospects_router)
 app.include_router(sponsor_otp_router)
 app.include_router(prospect_stages_router)
