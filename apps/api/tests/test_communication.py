@@ -781,6 +781,7 @@ def test_sponsor_otp_template_is_admin_managed_and_isolated_from_campaign_templa
         body.replace("{{sponsorship}}", "₹250"),
         body.replace("{{name}}", "Sponsor"),
         body.replace("{{code}}", "{{password}}"),
+        body + " {{name}}" * 8,  # Template expands beyond provider limit.
     ):
         result = client.post("/v1/communication/otp-template", headers=csrf, json={
             "version": 0, "body": bad,
