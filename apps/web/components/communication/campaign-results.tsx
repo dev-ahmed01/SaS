@@ -36,12 +36,13 @@ type DeliveryRun={
   accepted_unverified:number;rejected:number;unknown:number;suppressed_after_approval:number;
 };
 type Provider={
-  delivery_enabled:boolean;local_test_mode?:boolean;
+  delivery_enabled:boolean;local_test_mode?:boolean;local_dynamic_mode?:boolean;
   activation_cutoff?:string|null;
 };
 type Readiness={
   ready:boolean;code:string;message:string;eligible_count:number;
   local_test_mode:boolean;permitted_phone:string|null;permitted_phones?:string[];
+  max_recipients?:number;
 };
 const reasons:Record<string,string>={
   no_general_consent:"General-message permission not recorded",
@@ -170,7 +171,7 @@ export function CampaignResultDetails({id,onBack}:{
     finally{setBusy(false);}
   }
   const localImmediate=Boolean(provider?.local_test_mode&&!details?.planned_for);
-  const localLimit=readiness?.permitted_phones?.length??1;
+  const localLimit=readiness?.max_recipients??readiness?.permitted_phones?.length??1;
   const futurePlan=Boolean(details?.planned_for&&
     new Date(details.planned_for).getTime()>Date.now());
   async function approve(){
@@ -284,7 +285,7 @@ export function CampaignResultDetails({id,onBack}:{
         {older&&!run&&<p className="form-error" role="status">
           This campaign predates Saasyto activation. Create a new campaign
           to obtain a valid delivery approval.</p>}
-        {provider?.local_test_mode&&!run&&details.eligible_in_review>localLimit&&
+        {provider?.local_test_mode&&!provider.local_dynamic_mode&&!run&&details.eligible_in_review>localLimit&&
           <p className="form-error" role="status">
             Local test allows at most {localLimit} authorized recipient(s). This campaign
             includes more than that.
@@ -304,7 +305,7 @@ export function CampaignResultDetails({id,onBack}:{
         {!provider?.delivery_enabled&&<p className="comm-muted">
           WhatsApp sending is disabled in backend settings. Creating a plan does not send a message.
         </p>}
-        {provider?.local_test_mode&&<p className="comm-muted">
+        {provider?.local_test_mode&&!provider.local_dynamic_mode&&<p className="comm-muted">
           Local testing is limited to {localLimit} explicitly authorized WhatsApp number(s).
           {(readiness?.permitted_phones?.length??0)>0
             ? " Configured test recipients: "+readiness?.permitted_phones?.join(", ")+"."

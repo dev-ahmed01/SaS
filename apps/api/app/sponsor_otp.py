@@ -1,8 +1,9 @@
 """Admin-mediated sponsor WhatsApp OTP, independent of marketing consent.
 
-Production may use the expressly approved Saasyto sender or the independent
-Meta AUTHENTICATION template adapter. Development Saasyto remains restricted
-to one allowlisted test phone. Provider acceptance is not delivery; plaintext
+An explicitly enabled Saasyto adapter supports approved production delivery
+and a guarded loopback demo that selects the exact CRM prospect phone. The
+older local allowlist pilot and Meta AUTHENTICATION adapter remain separate.
+Provider acceptance is not delivery; plaintext
 OTP is never persisted or returned to the browser.
 """
 import hashlib
@@ -89,8 +90,8 @@ def _enabled(cfg: Settings) -> bool:
 def _deliver(cfg: Settings, phone: str, code: str) -> None:
     """Send only to the selected prospect through the explicitly enabled adapter."""
     local_pilot = getattr(cfg, "otp_local_pilot_enabled", False)
-    saasyto_production = getattr(cfg, "otp_saasyto_enabled", False)
-    if local_pilot or saasyto_production:
+    saasyto_dynamic = getattr(cfg, "otp_saasyto_enabled", False)
+    if local_pilot or saasyto_dynamic:
         if local_pilot and not local_pilot_permits(cfg, phone):
             raise ValueError("Local OTP recipient is not allowlisted")
         submission = send_text(

@@ -145,6 +145,8 @@ class CampaignApprovalReadiness(BaseModel):
     local_test_mode: bool
     permitted_phone: str | None = None
     permitted_phones: list[str] = Field(default_factory=list)
+    local_dynamic_mode: bool = False
+    max_recipients: int = MAX_APPROVAL_RECIPIENTS
 
 
 @admin_router.get("/campaigns/{identifier}/saasyto/readiness",
@@ -164,6 +166,7 @@ def campaign_approval_readiness(
     row = _campaign(db, admin, identifier)
     now = utc_now()
     local = bool(getattr(cfg, "saasyto_local_test_enabled", False))
+    dynamic = bool(getattr(cfg, "saasyto_local_dynamic_enabled", False))
     permitted = getattr(cfg, "saasyto_local_test_phone", None) if local else None
     test_phones = local_pilot_phones(cfg) if local else ()
     preparation = db.scalars(select(CommunicationPreparation).where(
@@ -183,6 +186,8 @@ def campaign_approval_readiness(
             ready=code == "ready", code=code, message=message,
             eligible_count=count, local_test_mode=local,
             permitted_phone=permitted, permitted_phones=list(test_phones),
+            local_dynamic_mode=dynamic,
+            max_recipients=MAX_APPROVAL_RECIPIENTS if dynamic or not local else len(test_phones),
         )
 
     response.headers["Cache-Control"] = "no-store"
@@ -492,30 +497,36 @@ def send_now_local_pilot(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
     db: Annotated[Session, Depends(db_session)],
 ) -> CampaignRunRead:
-    """Explicitly dispatch up to two allowlisted local pilot recipients once.
+    """Manual, explicit local send to reviewed, consented CRM contacts, at most once.
 
-    Not available for production, future scheduled campaigns, or unrestricted
-    bulk sends. The private worker remains the production/scheduled transport.
+    Works in protected localhost allowlisted or dynamic mode only. Production
+    and future scheduled campaigns remain private-worker-only.
     """
     cfg = get_settings()
     if not (cfg.saasyto_delivery_enabled and cfg.saasyto_sender_approved):
         raise HTTPException(status_code=503, detail="Saasyto sending is disabled")
     if not (getattr(cfg, "app_env", None) == "development"
             and getattr(cfg, "local_demo_login_enabled", False)
-            and getattr(cfg, "saasyto_local_test_enabled", False)):
-        raise HTTPException(status_code=403, detail="Manual send requires local test mode")
+            and (
+                getattr(cfg, "saasyto_local_test_enabled", False)
+                or getattr(cfg, "saasyto_local_dynamic_enabled", False)
+            )):
+        raise HTTPException(status_code=403, detail="Manual send requires guarded localhost mode")
     admin = context[0]
     _campaign(db, admin, identifier)
     run = _existing_run(db, admin.organization_id, identifier)
     if run is None:
         raise HTTPException(status_code=409, detail="Approve the campaign before sending")
-    limit = len(local_pilot_phones(cfg))
+    limit = (
+        MAX_APPROVAL_RECIPIENTS if getattr(cfg, "saasyto_local_dynamic_enabled", False)
+        else len(local_pilot_phones(cfg))
+    )
     if run.status != "approved" or not 1 <= run.eligible_count <= limit:
         raise HTTPException(status_code=409, detail="Campaign exceeds local pilot limit")
     if as_utc(run.due_at) > utc_now():
         raise HTTPException(status_code=409, detail="Scheduled campaign is not yet due")
-    # Checking for exactly one queued recipient prevents this endpoint from
-    # being used as a replay/retry mechanism after a claim or rejection.
+    # Every approved recipient must still be queued. Partial/previous attempts
+    # cannot be re-submitted through this endpoint after any claim or rejection.
     states = db.scalars(select(SaasytoCampaignRecipient.status).where(
         SaasytoCampaignRecipient.organization_id == admin.organization_id,
         SaasytoCampaignRecipient.run_id == run.id,

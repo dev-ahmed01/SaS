@@ -16,6 +16,7 @@ class ProviderStatus(BaseModel):
     transport: str
     delivery_enabled: bool
     local_test_mode: bool = False
+    local_dynamic_mode: bool = False
     activation_cutoff: str | None = None
     sender_approved: bool
     credentials_configured: bool
@@ -37,7 +38,11 @@ def saasyto_status(
         provider="Saasyto",
         transport="one_text_per_recipient",
         delivery_enabled=cfg.saasyto_delivery_enabled,
-        local_test_mode=getattr(cfg, "saasyto_local_test_enabled", False),
+        local_test_mode=(
+            getattr(cfg, "saasyto_local_test_enabled", False)
+            or getattr(cfg, "saasyto_local_dynamic_enabled", False)
+        ),
+        local_dynamic_mode=getattr(cfg, "saasyto_local_dynamic_enabled", False),
         activation_cutoff=(
             cfg.saasyto_enable_after.isoformat()
             if getattr(cfg, "saasyto_enable_after", None) else None
@@ -47,6 +52,10 @@ def saasyto_status(
         webhook_verified=False,
         connection_tested=False,
         notice=(
+            "Dynamic localhost testing is enabled for explicitly reviewed and "
+            "consented CRM recipients. Provider delivery is unverified."
+            if cfg.saasyto_delivery_enabled and
+            getattr(cfg, "saasyto_local_dynamic_enabled", False) else
             "Local pilot is active for explicitly allowlisted recipients; WhatsApp delivery "
             "and webhooks are still unverified."
             if cfg.saasyto_delivery_enabled and
