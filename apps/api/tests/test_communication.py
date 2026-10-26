@@ -633,4 +633,5 @@ def test_reminder_active_contacts_are_reviewed_without_auto_opt_in(system):
     assert len(details.json()["eligible_recipients"]) == 2
     assert len(details.json()["excluded_recipients"]) == 1
     assert details.json()["excluded_recipients"][0]["name"] == "Active sponsor 2"
-    assert "987654" not in details.text
+    assert details.json()["excluded_recipients"][0]["phone"] == "+919876548002"
+    assert "987654" in details.text
