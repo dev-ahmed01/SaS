@@ -392,6 +392,12 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
   await digits.nth(1).fill("2");
   await digits.nth(2).fill("3");
   await digits.nth(3).fill("4");
+  await digits.nth(3).click();
+  await page.keyboard.type("5");
+  await expect(digits.nth(3)).toHaveValue("5");
+  await expect(digits.nth(2)).toHaveValue("3");
+  await digits.nth(3).fill("56");
+  await expect(digits.nth(3)).toHaveValue("6");
   await expect(modal.getByRole("button",{name:"Verify OTP & Activate"})).toBeEnabled();
   // This is a UI-only mocked OTP test. Do not submit fake OTP to the real API.
   await modal.getByRole("button",{name:"Close stage dialog"}).click();
