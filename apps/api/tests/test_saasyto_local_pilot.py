@@ -550,3 +550,182 @@ def test_local_two_phone_campaign_refuses_third_contact(dispatch_system, monkeyp
     }).status_code == 409
     with Session(engine) as db:
         assert db.scalar(select(func.count(SaasytoCampaignRun.id))) == 0
+
+
+def test_dynamic_local_settings_use_crm_addresses_without_env_phones():
+    valid = dict(
+        saasyto_local_test_enabled=False,
+        saasyto_local_test_phone=None,
+        saasyto_local_test_phone_2=None,
+        saasyto_local_dynamic_enabled=True,
+        saasyto_delivery_enabled=True,
+        saasyto_sender_approved=True,
+        saasyto_instance_id="authorized_instance_01",
+        saasyto_access_token=SecretStr("synthetic-valid-token-123"),
+        saasyto_runner_secret=SecretStr(RUNNER),
+        saasyto_enable_after=datetime.now(UTC)-timedelta(minutes=5),
+        otp_saasyto_enabled=True, otp_local_pilot_enabled=False,
+        otp_delivery_enabled=False,
+        otp_secret=LONG_SECRET,
+    )
+    cfg = settings(**valid)
+    assert cfg.saasyto_local_dynamic_enabled and cfg.otp_saasyto_enabled
+    assert cfg.saasyto_local_test_phone is None
+    assert cfg.saasyto_local_test_phone_2 is None
+    for override in (
+        {"local_demo_login_enabled": False},
+        {"app_env": "test"},
+        {"app_env": "production"},
+        {"saasyto_local_test_enabled": True},
+        {"saasyto_local_test_phone": LOCAL_PHONE},
+        {"saasyto_local_test_phone_2": "+919899001002"},
+        {"otp_local_pilot_enabled": True},
+        {"otp_delivery_enabled": True},
+        {"saasyto_sender_approved": False},
+    ):
+        with pytest.raises(ValidationError):
+            settings(**{**valid, **override})
+
+
+def test_dynamic_local_crm_otp_then_reminder_to_current_opted_in_active_records(
+    dispatch_system, monkeypatch,
+):
+    """Same approved setup sends individual OTPs and a reviewed reminder campaign."""
+    import re
+
+    client, _engine = dispatch_system
+    csrf = login(client)
+    people = []
+    for suffix in ("2001", "2002", "2003"):
+        response = client.post("/v1/prospects", headers=csrf, json={
+            "full_name": "Dynamic Sponsor " + suffix,
+            "mobile_number": "+91989900" + suffix,
+            "whatsapp_opt_in": True,
+            "area_city": "Bengaluru",
+        })
+        assert response.status_code == 201, response.text
+        people.append(response.json())
+    cfg = _cfg()
+    cfg.app_env = "development"
+    cfg.local_demo_login_enabled = True
+    cfg.saasyto_local_dynamic_enabled = True
+    cfg.saasyto_local_test_enabled = False
+    cfg.otp_saasyto_enabled = True
+    cfg.otp_local_pilot_enabled = False
+    cfg.otp_delivery_enabled = False
+    cfg.otp_secret = LONG_SECRET
+    cfg.otp_activation_notice_enabled = False
+    cfg.saasyto_local_test_phone = None
+    cfg.saasyto_local_test_phone_2 = None
+    otp_sends = []
+    campaign_sends = []
+
+    def record_otp(_cfg, *, phone, message):
+        match = re.search(r"activation code is ([0-9]{4})", message)
+        assert match
+        otp_sends.append((phone, match.group(1)))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.sponsor_otp.send_text", record_otp)
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    for person in people[:2]:
+        root = "/v1/prospects/" + person["id"]
+        requested = client.post(root + "/otp/request", headers=csrf)
+        assert requested.status_code == 200, requested.text
+        assert otp_sends[-1][0] == person["mobile_number"]
+        assert len(otp_sends[-1][1]) == 4
+        activated = client.post(root + "/otp/activate", headers=csrf, json={
+            "version": person["version"],
+            "challenge_id": requested.json()["challenge_id"],
+            "code": otp_sends[-1][1],
+        })
+        assert activated.status_code == 200, activated.text
+    assert len(otp_sends) == 2
+    assert {row[0] for row in otp_sends} == {
+        people[0]["mobile_number"], people[1]["mobile_number"],
+    }
+    assert client.get("/v1/prospects/"+people[2]["id"]).json()["crm_stage"] == "inactive"
+
+    for person in people[:2]:
+        latest = client.get("/v1/prospects/" + person["id"]).json()
+        _consent(client, csrf, latest, "opted_in")
+
+    response = create_campaign(
+        client, csrf, title="Dynamic CRM active reminder",
+        category="reminder", segment="active", audience="prospects",
+        body="Test reminder for {{name}} — no payment requested.",
+    )
+    assert response.status_code == 201, response.text
+    base = "/v1/communication/campaigns/" + response.json()["id"]
+    prepared = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert prepared.status_code == 201, prepared.text
+    assert prepared.json()["eligible_count"] == 2
+    readiness = client.get(base + "/saasyto/readiness").json()
+    assert readiness["ready"] is True
+    assert readiness["local_dynamic_mode"] is True
+    assert readiness["permitted_phones"] == []
+    assert readiness["max_recipients"] == 500
+    approved = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": prepared.json()["id"],
+        "expected_eligible": 2, "confirm_send": True,
+    })
+    assert approved.status_code == 201, approved.text
+
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.send_text",
+        lambda _cfg, *, phone, message:
+        campaign_sends.append((phone, message)) or Submission("accepted_unverified"),
+    )
+    submitted = client.post(base + "/saasyto/send-now", headers=csrf, json={})
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "completed"
+    assert submitted.json()["accepted_unverified"] == 2
+    assert {phone for phone, _ in campaign_sends} == {
+        people[0]["mobile_number"], people[1]["mobile_number"],
+    }
+    assert not any(people[2]["mobile_number"] == p for p, _ in campaign_sends)
+    assert client.post(base + "/saasyto/send-now", headers=csrf, json={}).status_code == 409
+    assert len(campaign_sends) == 2
+
+
+def test_dynamic_local_reminder_respects_opt_out_after_review(
+    dispatch_system, monkeypatch,
+):
+    client, _engine = dispatch_system
+    csrf = login(client)
+    first = _person(client, csrf, "1001")
+    second = _person(client, csrf, "1002")
+    _consent(client, csrf, first, "opted_in")
+    _consent(client, csrf, second, "opted_in")
+    cfg = _cfg()
+    cfg.app_env = "development"
+    cfg.local_demo_login_enabled = True
+    cfg.saasyto_local_dynamic_enabled = True
+    cfg.saasyto_local_test_enabled = False
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    cid = create_campaign(client, csrf, title="Respect opt-out dynamically",
+                          category="reminder", segment="active").json()["id"]
+    base = "/v1/communication/campaigns/" + cid
+    review = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    }).json()
+    assert review["eligible_count"] == 2
+    assert client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": review["id"], "expected_eligible": 2,
+        "confirm_send": True,
+    }).status_code == 201
+    _consent(client, csrf, second, "opted_out")
+    submitted_to = []
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.send_text",
+        lambda _cfg, *, phone, message:
+        submitted_to.append(phone) or Submission("accepted_unverified"),
+    )
+    outcome = client.post(base + "/saasyto/send-now", headers=csrf, json={})
+    assert outcome.status_code == 200
+    assert outcome.json()["accepted_unverified"] == 1
+    assert outcome.json()["suppressed_after_approval"] == 1
+    assert submitted_to == [first["mobile_number"]]
