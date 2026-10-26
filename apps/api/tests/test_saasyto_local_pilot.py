@@ -496,7 +496,8 @@ def test_local_two_person_campaign_send_now_once_only(dispatch_system, monkeypat
     cfg = _manual_pilot()
     cfg.saasyto_local_test_phone_2 = "+919899001002"
     monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
-    cid = create_campaign(client, csrf, title="Two authorized recipients").json()["id"]
+    cid = create_campaign(client, csrf, title="Two authorized reminders",
+                          category="reminder").json()["id"]
     base = "/v1/communication/campaigns/" + cid
     prepared = client.post(base + "/preparations", headers=csrf, json={
         "request_id": str(uuid.uuid4()), "simulation_only": True,
