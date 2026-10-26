@@ -38,12 +38,18 @@ from app.models import (
 )
 from app.saasyto_client import local_pilot_permits, local_pilot_phones, send_text
 from app.security import as_utc, utc_now
+from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE
 
 admin_router = APIRouter(prefix="/v1/communication", tags=["Saasyto campaigns"])
 internal_router = APIRouter(prefix="/internal/saasyto", tags=["Saasyto private runner"])
 MAX_PER_RUN = 10
 MAX_APPROVAL_RECIPIENTS = 500
-VALID_TEMPLATE = re.compile(r"{{\s*(name|month)\s*}}")
+VALID_TEMPLATE = re.compile(
+    r"{{\s*(name|month|sponsorship|sponsorship_amount|sponsorship_units)\s*}}"
+)
+SPONSOR_TOKENS = re.compile(
+    r"{{\s*(sponsorship|sponsorship_amount|sponsorship_units)\s*}}"
+)
 UNKNOWN_TOKEN = re.compile(r"{{.*?}}")
 
 
@@ -209,6 +215,9 @@ def campaign_approval_readiness(
     if UNKNOWN_TOKEN.search(VALID_TEMPLATE.sub("", row.body)):
         return result("invalid_template",
                       "Message contains an unsupported {{placeholder}}.")
+    if SPONSOR_TOKENS.search(row.body) and row.audience != "prospects":
+        return result("sponsorship_prospects_only",
+                      "Sponsorship details can only be sent to Prospects.")
     if preparation is None:
         return result("no_recipient_check", "Click Check recipients before sending.")
     if as_utc(preparation.evaluated_at) < now - timedelta(minutes=15):
@@ -263,6 +272,10 @@ def approve_campaign(
         raise HTTPException(status_code=409, detail="Campaign already approved or completed")
     if UNKNOWN_TOKEN.search(VALID_TEMPLATE.sub("", row.body)):
         raise HTTPException(status_code=422, detail="Unsupported message placeholder")
+    if SPONSOR_TOKENS.search(row.body) and row.audience != "prospects":
+        raise HTTPException(
+            status_code=422, detail="Sponsorship details require Prospects audience"
+        )
     prep = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == admin.organization_id,
         CommunicationPreparation.campaign_id == row.id,
@@ -360,10 +373,27 @@ def cancel_campaign_run(
 
 def _render(body: str, person: Prospect | Promoter, now: datetime) -> str:
     month = now.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%B %Y")
-    return VALID_TEMPLATE.sub(
-        lambda match: person.full_name if match.group(1) == "name" else month,
-        body,
-    )
+    amount = person.monthly_contribution_paise if isinstance(person, Prospect) else None
+    units = amount // SPONSORSHIP_STEP_PAISE if amount is not None else None
+    replacements = {"name": person.full_name, "month": month}
+    if amount is not None and units is not None:
+        formatted = f"₹{amount // 100:,}"
+        replacements.update({
+            "sponsorship_amount": formatted,
+            "sponsorship_units": str(units),
+            "sponsorship": (
+                f"{formatted} per month" +
+                (f" ({units} units at ₹250 each)" if units > 1 else "")
+            ),
+        })
+
+    def replace(match: re.Match[str]) -> str:
+        token = match.group(1)
+        if token not in replacements:
+            raise ValueError("Sponsorship tokens require a prospect record")
+        return replacements[token]
+
+    return VALID_TEMPLATE.sub(replace, body)
 
 
 def _eligible_live(db: Session, run: SaasytoCampaignRun,
@@ -404,6 +434,8 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     if not hmac.compare_digest(
         item.approved_phone_digest, _phone_digest(cfg, phone)
     ):
+        return None
+    if SPONSOR_TOKENS.search(row.body) and not isinstance(person, Prospect):
         return None
     message = _render(row.body, person, now)
     return phone, message
