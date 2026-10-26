@@ -182,6 +182,7 @@ class Prospect(Base):
     registration_request_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     registration_payload_hash: Mapped[str | None] = mapped_column(String(64))
     next_followup_on: Mapped[date | None] = mapped_column(Date)
+    next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_contact_on: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(String(1500))
     whatsapp_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -257,7 +258,9 @@ class ProspectFollowUp(Base):
     occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
     outcome: Mapped[str] = mapped_column(String(32), nullable=False)
     notes: Mapped[str] = mapped_column(String(500), nullable=False)
+    pipeline_stage_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     next_followup_on: Mapped[date | None] = mapped_column(Date)
+    next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
