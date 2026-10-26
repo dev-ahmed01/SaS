@@ -255,6 +255,7 @@ class ProspectRead(BaseModel):
     whatsapp_opt_in: bool
     lifecycle_status: Literal["new", "active", "inactive"]
     last_verified_payment_at: datetime | None
+    total_contribution_paise: int
     start_month: date | None
     created_at: datetime
     updated_at: datetime
@@ -337,7 +338,8 @@ def _upi_list(prospect: Prospect) -> list[UpiRead]:
 
 
 def _read(prospect: Prospect, status_override: str | None = None,
-          *, db: Session | None = None) -> ProspectRead:
+          *, db: Session | None = None,
+          contribution_total: int | None = None) -> ProspectRead:
     promoter = None
     if db is not None:
         promoter = db.execute(select(PromoterAssignment.promoter_id, Promoter.full_name).join(
@@ -355,6 +357,12 @@ def _read(prospect: Prospect, status_override: str | None = None,
                      if prospect.crm_stage == "inactive" and changed_at else None)
     pipeline = (db.get(ProspectStageDefinition, prospect.pipeline_stage_id)
                 if db is not None and prospect.pipeline_stage_id else None)
+    if contribution_total is None:
+        contribution_total = (
+            sum(row.amount_paise for row in effective_credits(
+                db, prospect.organization_id, sponsor_id=prospect.id
+            )) if db is not None else 0
+        )
     return ProspectRead(
         id=prospect.id,
         full_name=prospect.full_name,
@@ -386,6 +394,7 @@ def _read(prospect: Prospect, status_override: str | None = None,
         whatsapp_opt_in=prospect.whatsapp_opt_in,
         lifecycle_status=status_override or prospect.lifecycle_status,
         last_verified_payment_at=prospect.last_verified_payment_at,
+        total_contribution_paise=contribution_total,
         start_month=prospect.start_month,
         created_at=prospect.created_at,
         updated_at=prospect.updated_at,
@@ -516,8 +525,15 @@ def list_prospects(
         .order_by(Prospect.created_at.desc(), Prospect.id.desc())
     ).all()
     fresh = _project_statuses(database, admin, results)
+    # Net verified contributions exclude reversed manual receipts.
+    # Aggregate once for the page; never query a person's receipts per table row.
+    contribution_totals: dict[uuid.UUID, int] = defaultdict(int)
+    if results:
+        for credit in effective_credits(database, admin.organization_id):
+            contribution_totals[credit.prospect_id] += credit.amount_paise
     matching = [
-        _read(p, fresh.get(p.id), db=database)
+        _read(p, fresh.get(p.id), db=database,
+              contribution_total=contribution_totals[p.id])
         for p in results
         if status is None or fresh.get(p.id, p.lifecycle_status) == status
     ]
