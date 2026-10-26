@@ -273,6 +273,7 @@ class ProspectStageDefinition(Base):
         UniqueConstraint("organization_id", "id", name="uq_stage_definition_org_id"),
         UniqueConstraint("organization_id", "name_key", name="uq_stage_definition_org_name"),
         Index("ix_stage_definitions_org_sort", "organization_id", "sort_order", "name_key"),
+        Index("uq_stage_system_key", "organization_id", "system_key", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -281,6 +282,7 @@ class ProspectStageDefinition(Base):
     )
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     name_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    system_key: Mapped[str | None] = mapped_column(String(48))
     description: Mapped[str | None] = mapped_column(String(300))
     color: Mapped[str] = mapped_column(String(7), nullable=False)
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
