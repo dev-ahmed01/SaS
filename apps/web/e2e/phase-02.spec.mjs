@@ -402,7 +402,8 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
   await page.getByRole("button",{name:/Mark Active/}).click();
   const modal=page.getByRole("dialog",{name:"Activate prospect"});
   await expect(modal.getByText(phone,{exact:false})).toBeVisible();
-  await expect(modal.getByText("OTP valid for the next 2 minutes.")).toBeVisible();
+  await expect(modal.getByText("Code requested for")).toBeVisible();
+  await expect(modal.getByText("A correct OTP activates this person.",{exact:false})).toHaveCount(0);
   const digits=modal.locator(".sas-otp-digit");
   await expect(digits).toHaveCount(4);
   await expect(modal.getByRole("timer")).toContainText("01:");
@@ -418,9 +419,41 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
   await digits.nth(3).fill("56");
   await expect(digits.nth(3)).toHaveValue("6");
   await expect(modal.getByRole("button",{name:"Verify OTP & Activate"})).toBeEnabled();
-  // This is a UI-only mocked OTP test. Do not submit fake OTP to the real API.
-  await modal.getByRole("button",{name:"Close stage dialog"}).click();
+  // UI-only success: simulate the OTP validation response without contacting a provider.
+  let submitted=null;
+  await page.route("**/api/admin/prospects/*/otp/activate",async route=>{
+    submitted=route.request().postDataJSON();
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+      status:"active",reactivation:false,activation_notice:"disabled",
+    })});
+  });
+  await modal.getByRole("button",{name:"Verify OTP & Activate"}).click();
   await expect(modal).toHaveCount(0);
+  expect(submitted).toMatchObject({
+    challenge_id:pendingId,code:"1236",
+  });
+});
+
+test("OTP activation POST passes through prospect API gateway instead of a 404",async ({page})=>{
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill("Gateway OTP Candidate");
+  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(uniqueProspectMobile());
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  const prospectId=page.url().split("/").at(-1);
+  const session=await page.request.get("/api/admin/session");
+  expect(session.status()).toBe(200);
+  const {csrf_token}=await session.json();
+  // CI has the OTP provider disabled, so the actual FastAPI endpoint responds
+  // 503. Before the fix Next.js returned 404 without reaching FastAPI.
+  const response=await page.request.post(
+    "/api/admin/prospects/"+prospectId+"/otp/activate",{
+      headers:{"Origin":"http://localhost:3002","X-CSRF-Token":csrf_token},
+      data:{version:1,challenge_id:crypto.randomUUID(),code:"1234"},
+    },
+  );
+  expect(response.status()).toBe(503);
+  expect((await response.json()).detail).toContain("not configured");
 });
 
 test("Same-name prospects require different mobile numbers across registrations and edits",async ({page})=>{
