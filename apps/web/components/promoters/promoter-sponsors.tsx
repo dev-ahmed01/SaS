@@ -113,6 +113,13 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
     </div>}
     {promoter.is_active&&kind==="prospects"&&<div className="promoter-assign-search">
       <h3>Assign a prospect</h3>
+      <p className="panel-description">Promoters can also sponsor a Salah themselves.
+        Register them in Prospects using their existing phone number, then assign
+        their prospect record here.</p>
+      <button type="button" className="btn btn-secondary" disabled={busy}
+        onClick={()=>setSearch(promoter.mobile_number)}>
+        Find promoter&apos;s own prospect record
+      </button>
       <label className="field"><span className="field-label">Search registered prospects</span>
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search name, phone or city" aria-label="Find sponsor"/></label>

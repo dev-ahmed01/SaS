@@ -71,6 +71,25 @@ test.beforeEach(async ({page}) => {
   await logIn(page);
 });
 
+test("Admin campaign purge preview route works and POST requires CSRF",async ({page})=>{
+  const preview=await page.request.get("/api/admin/communication/campaigns/purge-preview");
+  expect(preview.status()).toBe(200);
+  const summary=await preview.json();
+  expect(summary).toMatchObject({
+    campaign_count:expect.any(Number),
+    in_flight_attempts:expect.any(Number),
+  });
+  // The endpoint is intentionally not invoked with valid CSRF in this test.
+  const rejected=await page.request.post("/api/admin/communication/campaigns/purge-all",{
+    headers:{"Origin":"http://localhost:3002"},
+    data:{confirm:"DELETE ALL CAMPAIGNS",expected_campaigns:summary.campaign_count},
+  });
+  expect([401,403]).toContain(rejected.status());
+  const unchanged=await page.request.get("/api/admin/communication/campaigns/purge-preview");
+  expect(unchanged.status()).toBe(200);
+  expect((await unchanged.json()).campaign_count).toBe(summary.campaign_count);
+});
+
 test("login password can be revealed and hidden without submitting",async ({page})=>{
   await page.context().clearCookies();
   await page.goto("/login");

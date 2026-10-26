@@ -14,6 +14,7 @@ from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
     AdminUser,
+    AuditEvent,
     Base,
     CommunicationCampaign,
     CommunicationConsentEvent,
@@ -635,3 +636,127 @@ def test_reminder_active_contacts_are_reviewed_without_auto_opt_in(system):
     assert details.json()["excluded_recipients"][0]["name"] == "Active sponsor 2"
     assert details.json()["excluded_recipients"][0]["phone"] == "+919876548002"
     assert "987654" in details.text
+
+
+def test_admin_purge_clears_all_campaigns_and_reviews_only(system):
+    client, engine = system
+    csrf = login(client)
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Purge Isolated Sponsor", "mobile_number": "+919876543988",
+        "area_city": "Bengaluru", "whatsapp_opt_in": True,
+    })
+    assert person.status_code == 201, person.text
+    campaigns = [create_campaign(client, csrf, title="Delete synthetic "+str(i)).json()
+                 for i in range(2)]
+    for campaign in campaigns:
+        result = client.post(
+            "/v1/communication/campaigns/"+campaign["id"]+"/preparations",
+            headers=csrf,
+            json={"request_id": str(uuid.uuid4()), "simulation_only": True},
+        )
+        assert result.status_code == 201, result.text
+    root = "/v1/communication/campaigns"
+    preview = client.get(root+"/purge-preview")
+    assert preview.status_code == 200
+    assert preview.json() == {"campaign_count": 2, "in_flight_attempts": 0}
+    assert client.post(root+"/purge-all", json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 2,
+    }).status_code in (401, 403)
+    assert client.post(root+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 1,
+    }).status_code == 409
+    assert client.post(root+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE", "expected_campaigns": 2,
+    }).status_code == 422
+    cleared = client.post(root+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 2,
+    })
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["deleted_campaigns"] == 2
+    assert cleared.json()["deleted_preparations"] == 2
+    assert client.get(root).json() == []
+    assert client.get(root+"/purge-preview").json()["campaign_count"] == 0
+    assert client.get("/v1/prospects/"+person.json()["id"]).status_code == 200
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(CommunicationCampaign.id))) == 0
+        assert db.scalar(select(func.count(CommunicationPreparation.id))) == 0
+        assert db.scalar(select(func.count(CommunicationRecipientSnapshot.id))) == 0
+        assert db.scalar(select(func.count(CommunicationConsentEvent.id))) >= 1
+        assert db.scalar(select(func.count(AuditEvent.id)).where(
+            AuditEvent.action == "communication.campaigns_purged",
+        )) == 1
+    assert client.post(root+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 0,
+    }).json()["deleted_campaigns"] == 0
+
+
+def test_campaign_purge_is_tenant_scoped(system):
+    client, engine = system
+    csrf = login(client)
+    own = create_campaign(client, csrf, title="Owner org").json()
+    with Session(engine) as db:
+        other = Organization(name="Other Foundation")
+        db.add(other)
+        db.flush()
+        other_campaign = CommunicationCampaign(
+            organization_id=other.id, request_id=uuid.uuid4(),
+            title="Other organization's campaign", channel="whatsapp",
+            audience="prospects", segment="active", category="reminder",
+            body="Other organization's update", status="draft",
+            candidate_snapshot=0, eligible_snapshot=0,
+        )
+        db.add(other_campaign)
+        db.commit()
+        other_id = other_campaign.id
+    assert client.get("/v1/communication/campaigns/purge-preview").json()[
+        "campaign_count"
+    ] == 1
+    reply = client.post("/v1/communication/campaigns/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 1,
+    })
+    assert reply.status_code == 200, reply.text
+    with Session(engine) as db:
+        assert db.get(CommunicationCampaign, uuid.UUID(own["id"])) is None
+        assert db.get(CommunicationCampaign, other_id) is not None
+
+
+def test_promoter_as_own_prospect_receives_one_message_in_combined_audience(system):
+    """A person with both CRM roles is one WhatsApp address, not two sends."""
+    client, _ = system
+    csrf = login(client)
+    phone = "+919876543989"
+    promoter = client.post("/v1/promoters", headers=csrf, json={
+        "full_name": "Self Sponsor", "mobile_number": phone,
+        "area_city": "Bengaluru", "whatsapp_opt_in": True,
+    })
+    assert promoter.status_code == 201, promoter.text
+    prospect = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Self Sponsor", "mobile_number": phone,
+        "area_city": "Bengaluru", "whatsapp_opt_in": True,
+    })
+    assert prospect.status_code == 201, prospect.text
+    active = activate_for_communication(client, csrf, prospect.json())
+    assert active["crm_stage"] == "active"
+    grant = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "promoter", "recipient_id": promoter.json()["id"],
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "signed self-sponsor permission",
+        "evidence_reference": "synthetic-two-role-permission",
+    })
+    assert grant.status_code == 201, grant.text
+    result = create_campaign(
+        client, csrf, audience="both", segment="active", category="update",
+        title="One person, two roles",
+    )
+    assert result.status_code == 201, result.text
+    assert result.json()["candidate_snapshot"] == 2
+    assert result.json()["eligible_snapshot"] == 1
+    check = client.post(
+        "/v1/communication/campaigns/"+result.json()["id"]+"/preparations",
+        headers=csrf,
+        json={"request_id": str(uuid.uuid4()), "simulation_only": True},
+    )
+    assert check.status_code == 201, check.text
+    assert check.json()["eligible_count"] == 1
+    assert check.json()["suppressed_count"] == 1
+    assert check.json()["exclusion_reasons"] == {"duplicate_address": 1}

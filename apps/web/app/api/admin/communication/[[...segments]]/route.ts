@@ -19,6 +19,11 @@ function allowed(parts:string[],method:string):string|null{
     ["GET","POST"].includes(method))return "/active-consent-review";
   if(parts.length===1&&["templates","campaigns","rules"].includes(name)&&
     ["GET","POST"].includes(method))return "/"+name;
+  // Explicit literal routes; never proxy arbitrary campaign paths.
+  if(parts.length===2&&name==="campaigns"&&id==="purge-preview"&&method==="GET")
+    return "/campaigns/purge-preview";
+  if(parts.length===2&&name==="campaigns"&&id==="purge-all"&&method==="POST")
+    return "/campaigns/purge-all";
   if(parts.length===2&&name==="campaigns"&&id==="results"&&method==="GET")
     return "/campaigns/results";
   if(parts.length===3&&name==="campaigns"&&UUID.test(id)&&
