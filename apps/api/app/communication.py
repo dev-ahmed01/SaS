@@ -749,6 +749,8 @@ def update_template(
     row = _template(database, admin, identifier, lock=True)
     if row.name_key == OTP_TEMPLATE_KEY:
         raise HTTPException(status_code=404, detail="Template not found")
+    if payload.name.casefold() == OTP_TEMPLATE_KEY:
+        raise HTTPException(status_code=422, detail="Reserved system template")
     if row.version != payload.version:
         raise HTTPException(status_code=409, detail="Template changed; refresh")
     changed = []
