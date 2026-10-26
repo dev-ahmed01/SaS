@@ -6,6 +6,7 @@ import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
 import { formatCRMDate } from "../../lib/crm-dates";
 import type { Prospect,ProspectPage } from "./prospects-types";
+import { reasonLabel } from "./prospects-types";
 
 const money=(paise:number)=>(paise/100).toLocaleString("en-IN",{
   style:"currency",currency:"INR",maximumFractionDigits:0,
