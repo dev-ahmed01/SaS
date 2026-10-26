@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -352,3 +353,106 @@ def test_next_otp_differs_and_invalidates_previous(api, monkeypatch):
     })
     assert current.status_code == 200, current.text
     assert current.json()["status"] == "active"
+
+
+def test_meta_otp_payload_is_addressed_to_selected_prospect_only(monkeypatch):
+    """Official AUTHENTICATION delivery uses the current recipient, not a test allowlist."""
+    sent = []
+    real_client = httpx.Client
+
+    def handler(request):
+        assert request.method == "POST"
+        assert request.url == "https://graph.facebook.com/v23.0/1122334455/messages"
+        assert request.headers["Authorization"] == "Bearer "+("synthetic-meta-token-"+"x"*24)
+        payload = __import__("json").loads(request.content)
+        sent.append(payload)
+        return httpx.Response(200, json={"messages": [{"id": "wamid.synthetic"}]})
+
+    monkeypatch.setattr("app.sponsor_otp.httpx.Client", lambda **kwargs:
+                        real_client(transport=httpx.MockTransport(handler), **kwargs))
+    monkeypatch.setattr("app.sponsor_otp.send_text", lambda *_a, **_kw:
+                        (_ for _ in ()).throw(AssertionError("Meta OTP may not use Saasyto")))
+    cfg = SimpleNamespace(
+        otp_local_pilot_enabled=False,
+        otp_meta_access_token="synthetic-meta-token-"+"x"*24,
+        otp_meta_phone_number_id="1122334455",
+        otp_meta_template_name="sponsor_activation_code",
+        otp_meta_template_language="en_US",
+        otp_meta_graph_version="v23.0",
+    )
+    for number, code in (
+        ("+918100000021", "1042"),
+        ("+918100000022", "2356"),
+        ("+918100000023", "9812"),
+    ):
+        _deliver(cfg, number, code)
+
+    assert [item["to"] for item in sent] == [
+        "918100000021", "918100000022", "918100000023",
+    ]
+    for payload, code in zip(sent, ("1042", "2356", "9812"), strict=True):
+        assert payload["messaging_product"] == "whatsapp"
+        assert payload["type"] == "template"
+        assert payload["template"]["name"] == cfg.otp_meta_template_name
+        components = payload["template"]["components"]
+        assert components[0]["parameters"] == [{"type": "text", "text": code}]
+        assert components[1]["parameters"] == [{"type": "text", "text": code}]
+        assert components[1]["sub_type"] == "url"
+
+
+@pytest.mark.parametrize("http_status,receipt", [
+    (403, {"error": {"message": "invalid token"}}),
+    (200, {"messages": []}),
+    (200, {"messages": [{}]}),
+])
+def test_meta_otp_never_claims_acceptance_for_invalid_reply(
+    monkeypatch, http_status, receipt,
+):
+    real_client = httpx.Client
+    monkeypatch.setattr("app.sponsor_otp.httpx.Client", lambda **kwargs:
+                        real_client(transport=httpx.MockTransport(
+                            lambda _request: httpx.Response(http_status, json=receipt)
+                        ), **kwargs))
+    cfg = SimpleNamespace(
+        otp_local_pilot_enabled=False,
+        otp_meta_access_token="synthetic-meta-token-"+"x"*24,
+        otp_meta_phone_number_id="1122334455",
+        otp_meta_template_name="sponsor_activation_code",
+        otp_meta_template_language="en_US", otp_meta_graph_version="v23.0",
+    )
+    with pytest.raises(ValueError, match="provider|acceptance"):
+        _deliver(cfg, "+918100000021", "5732")
+
+
+def test_production_meta_sender_requires_independent_credentials():
+    from app.config import Settings
+
+    base = {
+        "app_env": "production",
+        "database_url": "postgresql+psycopg://user:password@db.example.org:5432/sas?sslmode=require",
+        "auth_secret": "a"*48,
+        "upi_match_secret": "b"*48,
+        "otp_secret": "c"*48,
+        "otp_meta_access_token": "synthetic-meta-token-"+"x"*24,
+        "otp_meta_phone_number_id": "1122334455",
+        "otp_meta_template_name": "sponsor_activation_code",
+        "otp_meta_template_language": "en_US",
+        "otp_meta_graph_version": "v23.0",
+        "otp_delivery_enabled": True,
+        "otp_local_pilot_enabled": False,
+        "saasyto_delivery_enabled": False,
+        "saasyto_local_test_enabled": False,
+        "local_demo_login_enabled": False,
+    }
+    cfg = Settings(_env_file=None, **base)
+    assert cfg.otp_delivery_enabled is True
+    assert cfg.saasyto_delivery_enabled is False
+    assert cfg.saasyto_local_test_phone is None
+    # An official Meta OTP setup never needs an allowlisted test recipient.
+    with pytest.raises(ValueError, match="Meta WhatsApp OTP access token required"):
+        Settings(_env_file=None, **{**base, "otp_meta_access_token": ""})
+    with pytest.raises(ValueError, match="Local OTP requires approved"):
+        Settings(_env_file=None, **{**base, "otp_local_pilot_enabled": True})
+    # Enabling Saasyto production campaigns is a separately reviewed switch.
+    with pytest.raises(ValueError, match="Saasyto"):
+        Settings(_env_file=None, **{**base, "saasyto_delivery_enabled": True})
