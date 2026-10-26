@@ -14,7 +14,6 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
   const [category,setCategory]=useState<Category>("update");
   const [subject,setSubject]=useState("");
   const [body,setBody]=useState("");
-  const [providerId,setProviderId]=useState("");
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [saving,setSaving]=useState(false);
@@ -27,13 +26,13 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
   },[revision]);
   function reset(){
     setEdit(null);setName("");setChannel("whatsapp");
-    setCategory("update");setSubject("");setBody("");setProviderId("");
+    setCategory("update");setSubject("");setBody("");
     setError("");
   }
   function start(row:Template){
     setEdit(row);setName(row.name);setChannel(row.channel);
     setCategory(row.category);setSubject(row.subject??"");
-    setBody(row.body);setProviderId(row.provider_template_id??"");
+    setBody(row.body);
     setError("");setNotice("");
     document.getElementById("comm-template-name")?.focus();
   }
@@ -44,7 +43,8 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
       await apiWrite("/templates"+(edit?"/"+edit.id:""),edit?"PATCH":"POST",{
         ...(edit?{version:edit.version}:{}),name,channel,category,body,
         subject:channel==="email"?subject||null:null,
-        provider_template_id:channel==="whatsapp"?providerId||null:null,
+        provider_template_id:channel==="whatsapp"&&edit
+          ?edit.provider_template_id:null,
       });
       setNotice(edit?"Template updated.":"Template saved.");
       reset();setRevision(x=>x+1);onChanged();
@@ -66,7 +66,7 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
   return <div className="comm-two-column">
     <section className="comm-panel">
       <div className="comm-panel-header"><div><h2>{edit?"Edit template":"New template"}</h2>
-        <p>Save once, reuse across campaigns.</p></div></div>
+</div></div>
       <form onSubmit={save} className="comm-template-form">
         <label className="field"><span className="field-label">Template name *</span>
           <input id="comm-template-name" required minLength={2} maxLength={100}
@@ -94,10 +94,6 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
             value={body} onChange={e=>setBody(e.target.value)}
             placeholder={"Assalamu Alaikum {{name}},\n\nYour Foundation update…"}/>
         </label>
-        {channel==="whatsapp"&&<label className="field">
-          <span className="field-label">Provider-approved template ID</span>
-          <input maxLength={160} value={providerId} onChange={e=>setProviderId(e.target.value)}
-            placeholder="Approved template identifier"/></label>}
         {error&&<p className="form-error" role="alert">{error}</p>}
         {notice&&<p className="form-success" role="status">{notice}</p>}
         <div className="comm-actions">
