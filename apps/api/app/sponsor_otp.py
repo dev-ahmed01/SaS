@@ -1,8 +1,9 @@
 """Admin-mediated sponsor WhatsApp OTP, independent of marketing consent.
 
-Production uses approved Meta AUTHENTICATION templates. An explicit, single-
-number development pilot may use Saasyto; never as a production OTP sender.
-Provider acceptance is not delivery. Plaintext OTP is never persisted.
+Production may use the expressly approved Saasyto sender or the independent
+Meta AUTHENTICATION template adapter. Development Saasyto remains restricted
+to one allowlisted test phone. Provider acceptance is not delivery; plaintext
+OTP is never persisted or returned to the browser.
 """
 import hashlib
 import hmac
@@ -79,16 +80,21 @@ def _load(db: Session, admin: AdminUser, prospect_id: uuid.UUID) -> Prospect:
 
 def _enabled(cfg: Settings) -> bool:
     return bool(
-        cfg.otp_delivery_enabled or getattr(cfg, "otp_local_pilot_enabled", False)
+        cfg.otp_delivery_enabled
+        or getattr(cfg, "otp_saasyto_enabled", False)
+        or getattr(cfg, "otp_local_pilot_enabled", False)
     )
 
 
 def _deliver(cfg: Settings, phone: str, code: str) -> None:
-    """Deliver only through approved Meta, or one allowlisted local pilot phone."""
-    if getattr(cfg, "otp_local_pilot_enabled", False):
-        allowed = cfg.saasyto_local_test_phone or ""
-        if not allowed or not hmac.compare_digest(phone, allowed):
-            raise ValueError("Local OTP recipient is not the allowlisted test phone")
+    """Send only to the selected prospect through the explicitly enabled adapter."""
+    local_pilot = getattr(cfg, "otp_local_pilot_enabled", False)
+    saasyto_production = getattr(cfg, "otp_saasyto_enabled", False)
+    if local_pilot or saasyto_production:
+        if local_pilot:
+            allowed = cfg.saasyto_local_test_phone or ""
+            if not allowed or not hmac.compare_digest(phone, allowed):
+                raise ValueError("Local OTP recipient is not the allowlisted test phone")
         submission = send_text(
             cfg, phone=phone,
             message=(
@@ -97,9 +103,9 @@ def _deliver(cfg: Settings, phone: str, code: str) -> None:
             ),
         )
         if submission.state == "unknown":
-            raise OtpDeliveryUnconfirmed("Local OTP submission outcome unknown")
+            raise OtpDeliveryUnconfirmed("Saasyto OTP submission outcome unknown")
         if submission.state != "accepted_unverified":
-            raise ValueError("Local OTP provider declined the request")
+            raise ValueError("Saasyto OTP provider declined the request")
         return
     payload = {
         "messaging_product": "whatsapp",
