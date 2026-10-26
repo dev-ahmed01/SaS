@@ -20,7 +20,6 @@ from app.models import (
     AdminUser,
     AuditEvent,
     Prospect,
-    ProspectFollowUp,
     ProspectStageDefinition,
 )
 from app.prospect_defaults import REGISTRATION_STAGE_KEY
@@ -229,14 +228,6 @@ def delete_stage(
         raise HTTPException(status_code=409, detail="Stage changed; reload and retry")
     if stage.system_key == REGISTRATION_STAGE_KEY:
         raise HTTPException(status_code=409, detail="Registration default cannot be deleted")
-    historical = database.scalar(select(func.count(ProspectFollowUp.id)).where(
-        ProspectFollowUp.organization_id == admin.organization_id,
-        ProspectFollowUp.pipeline_stage_id == stage.id,
-    )) or 0
-    if historical:
-        raise HTTPException(
-            status_code=409, detail="A recorded follow-up references this stage"
-        )
     assigned = database.scalar(select(func.count(Prospect.id)).where(
         Prospect.organization_id == admin.organization_id,
         Prospect.pipeline_stage_id == stage.id,
