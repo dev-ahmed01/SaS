@@ -1718,7 +1718,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 /* Built-in sponsor verification is an expandable row within Saved workflows. */
 .comm-activation-workflow {flex-wrap:wrap;align-items:center;}
 .comm-activation-workflow .comm-list-card-text p {margin:0;}
-.comm-activation-editor {flex:0 0 100%;min-width:0;border-top:1px solid var(--line);padding-top:15px;}
+.comm-activation-editor {flex:none;width:100%;min-width:0;border-top:1px solid var(--line);padding-top:15px;}
 .comm-activation-editor-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px;}
 .comm-activation-editor form {display:grid;gap:13px;}
 .comm-activation-editor textarea {min-height:180px;line-height:1.7;}
