@@ -488,7 +488,10 @@ def read_activation_notice_status(
         None,
     )
     if result is None:
-        claimed = next(row for row in matching if row.action == "prospect.activation_notice_claimed")
+        claimed = next(
+            row for row in matching
+            if row.action == "prospect.activation_notice_claimed"
+        )
         return {"status": "unconfirmed", "attempted_at": claimed.occurred_at.isoformat()}
     state = (result.after_data or {}).get("status")
     permitted = {
