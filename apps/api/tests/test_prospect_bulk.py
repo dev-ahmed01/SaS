@@ -3,9 +3,9 @@ import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from test_prospects import login
 
 from app.models import AuditEvent, Prospect, SponsorshipRate
-from test_prospects import login
 
 pytest_plugins = ("test_prospects",)
 
