@@ -448,7 +448,7 @@ test("OTP activation POST passes through prospect API gateway instead of a 404",
   // 503. Before the fix Next.js returned 404 without reaching FastAPI.
   const response=await page.request.post(
     "/api/admin/prospects/"+prospectId+"/otp/activate",{
-      headers:{"Origin":"http://localhost:3002","X-CSRF-Token":csrf_token},
+      headers:{"Origin":new URL(page.url()).origin,"X-CSRF-Token":csrf_token},
       data:{version:1,challenge_id:crypto.randomUUID(),code:"1234"},
     },
   );
