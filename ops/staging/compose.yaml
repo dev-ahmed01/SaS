@@ -61,6 +61,7 @@ services:
     restart: unless-stopped
     environment:
       STAGING_HOST: ${STAGING_HOST:?Set STAGING_HOST in ops/staging/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in ops/staging/.env}
     ports:
       - "80:80"
       - "443:443"
