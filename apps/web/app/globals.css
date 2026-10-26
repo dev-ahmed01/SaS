@@ -1723,3 +1723,29 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .comm-otp-copy-preview {white-space:pre-wrap;max-width:660px;background:#f3f9f5;
   border:1px solid #d6eadd;border-radius:13px;padding:22px 25px;
   color:#284638;font:400 13px/1.75 var(--font-body);}
+
+/* Fathom Oct 26 — keep high-frequency follow-ups prominent and profile data tucked away. */
+.crm-overview-total {grid-column:1/-1;}
+.crm-profile-disclosure {margin-top:16px;border-top:1px solid var(--line);padding-top:14px;}
+.crm-profile-disclosure summary {cursor:pointer;color:var(--forest);font-weight:600;margin-bottom:12px;}
+.crm-profile-disclosure .crm-overview-grid {margin-top:12px;}
+.crm-profile-disclosure .crm-overview-grid .crm-summary-tile {background:var(--canvas);}
+.prospects-table input[type="checkbox"] {width:16px;height:16px;accent-color:var(--forest);cursor:pointer;}
+/* Sponsor and billing month on row one; payment details on row two. */
+.collection-entry-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;align-items:start;}
+.collection-entry-grid .collection-sponsor {grid-column:span 3;min-width:0;}
+.collection-entry-grid .collection-month {grid-column:span 1;min-width:0;}
+.collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
+.collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;min-width:0;}
+.collection-entry-grid input,.collection-entry-grid select {max-width:100%;}
+@media(max-width:1000px){
+  .collection-entry-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .collection-entry-grid .collection-sponsor {grid-column:span 2;}
+  .collection-entry-grid .collection-month {grid-column:span 2;}
+}
+@media(max-width:600px){
+  .collection-entry-grid {grid-template-columns:minmax(0,1fr);}
+  .collection-entry-grid .collection-sponsor,.collection-entry-grid .collection-month,
+  .collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
+  .collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;}
+}
