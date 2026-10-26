@@ -1721,11 +1721,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .comm-personalization-chip:hover {background:#e5f4eb;border-color:#8abb9c;}
 .comm-personalization-chip:focus-visible {outline:2px solid var(--forest);outline-offset:2px;}
 .comm-personalization small {color:#758d7e;font:400 11px var(--font-body);}
-.comm-otp-editor {display:block;}
-.comm-otp-editor .comm-panel-header {align-items:flex-start;}
-.comm-otp-editor form {display:grid;gap:13px;margin-top:16px;}
-.comm-otp-editor textarea {min-height:190px;line-height:1.7;}
-.comm-otp-editor .comm-actions {justify-content:flex-end;border-top:1px solid var(--line);padding-top:15px;}
+/* Built-in sponsor verification is an expandable row within Saved workflows. */
+.comm-activation-workflow {flex-wrap:wrap;align-items:center;}
+.comm-activation-workflow .comm-list-card-text p {margin:0;}
+.comm-activation-editor {flex:none;width:100%;min-width:0;border-top:1px solid var(--line);padding-top:15px;}
+.comm-activation-editor-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px;}
+.comm-activation-editor form {display:grid;gap:13px;}
+.comm-activation-editor textarea {min-height:180px;line-height:1.7;}
+.comm-activation-editor .comm-actions {justify-content:flex-end;border-top:1px solid var(--line);padding-top:15px;}
+@media(max-width:650px){.comm-activation-editor-heading {align-items:flex-start;flex-direction:column;}}
 .comm-otp-copy-preview {white-space:pre-wrap;max-width:660px;background:#f3f9f5;
   border:1px solid #d6eadd;border-radius:13px;padding:22px 25px;
   color:#284638;font:400 13px/1.75 var(--font-body);}

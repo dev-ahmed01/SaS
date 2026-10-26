@@ -1139,10 +1139,16 @@ test("Communication is a full-width, preview-free CRM composer",async ({page})=>
   await page.goto("/communication/automations");
   await expect(page).toHaveURL(/\/communication\/templates$/);
   await expect(page.getByRole("heading",{name:"New template"})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"Sponsorship activation message"})).toBeVisible();
-  await expect(page.getByRole("textbox",{name:"WhatsApp activation message"}))
-    .toContainText("{{code}}");
   await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Saved workflows"})).toBeVisible();
+  const activation=page.getByRole("article",{name:"Sponsorship activation workflow"});
+  await expect(activation).toBeVisible();
+  // Activation copy lives in a saved workflow, not another standalone panel.
+  await expect(page.locator(".comm-otp-editor")).toHaveCount(0);
+  await expect(activation.getByRole("textbox",{name:"WhatsApp activation message"})).toHaveCount(0);
+  await activation.getByRole("button",{name:"Edit message"}).click();
+  await expect(activation.getByRole("textbox",{name:"WhatsApp activation message"}))
+    .toContainText("{{code}}");
 });
 
 test("Sponsor personalization variables are visible without provider template IDs",async ({page})=>{
@@ -1155,12 +1161,15 @@ test("Sponsor personalization variables are visible without provider template ID
     .toHaveCount(0);
   await page.goto("/communication/templates");
   await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
-  await expect(page.getByRole("button",{name:"Preview"})).toBeVisible();
-  await page.getByRole("button",{name:"Preview"}).click();
-  await expect(page.getByLabel("Example activation message")).toContainText("₹500");
-  await expect(page.getByLabel("Example activation message")).not.toContainText("{{code}}");
-  await page.getByRole("button",{name:"Edit message"}).click();
-  await expect(page.getByRole("textbox",{name:"WhatsApp activation message"})).toBeVisible();
+  const activation=page.getByRole("article",{name:"Sponsorship activation workflow"});
+  await expect(activation).toBeVisible();
+  await activation.getByRole("button",{name:"Edit message"}).click();
+  await activation.getByRole("button",{name:"Preview"}).click();
+  await expect(activation.getByLabel("Example activation message")).toContainText("₹500 per month");
+  await expect(activation.getByLabel("Example activation message")).not.toContainText("units at ₹250");
+  await expect(activation.getByLabel("Example activation message")).not.toContainText("{{code}}");
+  await activation.getByRole("button",{name:"Back to editor"}).click();
+  await expect(activation.getByRole("textbox",{name:"WhatsApp activation message"})).toBeVisible();
 });
 
 test("Communication templates, campaign plans and rules persist across navigation",async ({page})=>{
