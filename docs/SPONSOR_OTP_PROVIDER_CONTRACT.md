@@ -1,5 +1,14 @@
 # Sponsor WhatsApp phone verification — implementation and provider handoff
 
+> **Current Saasyto-first deployment (26 Oct 2026):** The Foundation uses
+> Saasyto for WhatsApp, not a separately billed direct Meta API integration.
+> See [WhatsApp Production Rollout](WHATSAPP_PRODUCTION_ROLLOUT.md) for the
+> current `OTP_SAASYTO_ENABLED=true` production configuration, which sends
+> OTPs to each selected prospect's own registered number through Saasyto.
+> The previous Meta-only and single-number Saasyto statements below record
+> the initial implementation and are **not current deployment instructions**.
+
+
 ## Status (24 October 2026)
 
 **OTP-gated activation is implemented; outbound OTP delivery remains OFF by default until an approved provider is configured.**
