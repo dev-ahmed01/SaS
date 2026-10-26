@@ -8,6 +8,7 @@ type Status="not_approved"|"approved"|"cancelled"|"completed";
 type Summary={
   campaign_id:string;run_status:Status;planned:number;
   submitted_unverified:number;rejected:number;unknown:number;
+  last_attempt_at:string|null;
   queued:number;claimed:number;suppressed_after_approval:number;
   excluded_in_review:number;
   delivered:number|null;read:number|null;
@@ -87,8 +88,8 @@ function RecipientTable({title,rows}:{
   return <section className="comm-recipient-review comm-result-people"
     role="region" aria-label={title}>
     <div className="comm-review-heading"><h3>{title}</h3>
-      <span className="comm-muted">{rows.length} contacts</span></div>
-    {rows.length===0?<p className="comm-muted">No contacts yet.</p>:
+      <span className="comm-muted">{rows.length}</span></div>
+    {rows.length===0?<p className="comm-muted">None</p>:
       <ul className="comm-result-list">{rows.map(row=>
         <li key={row.recipient_kind+row.recipient_id} className="comm-result-person">
           <div className="comm-result-person-main">
@@ -119,6 +120,7 @@ export function CampaignResultDetails({id,onBack}:{
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
+  const [activeTab,setActiveTab]=useState<"results"|"review"|null>(null);
   const refresh=useCallback(async()=>{
     // Results must remain visible even if optional provider/readiness APIs
     // cannot be reached. These read failures never authorize delivery.
@@ -249,104 +251,114 @@ export function CampaignResultDetails({id,onBack}:{
     new Date(details.created_at).getTime()<new Date(provider.activation_cutoff).getTime()
   );
   const s=details?.summary;
-  return <section className="comm-panel" aria-label="Campaign results detail">
-      <div className="comm-panel-header">
-        <div><Link href="/communication/campaigns" className="back-link"
-          onClick={onBack}>
-          All campaigns</Link>
-          <h2>{details?.title??"Campaign results"}</h2>
-          {details&&<p>{details.channel==="whatsapp"?"WhatsApp":"Email"} ·
-            {" "+details.audience+" / "+details.segment} ·
-            {" Created "+istDisplay(details.created_at)}</p>}
-        </div>
+  const completed=s?.run_status==="completed";
+  const shownTab=activeTab??(completed?"results":"review");
+  return <section className="comm-panel comm-detail-page" aria-label="Campaign results detail">
+    <div className="comm-panel-header comm-detail-header">
+      <div>
+        <Link href="/communication/campaigns" className="back-link" onClick={onBack}>
+          All campaigns
+        </Link>
+        <h2>{details?.title??"Campaign details"}</h2>
+        {details&&<p>
+          {details.channel==="whatsapp"?"WhatsApp":"Email"} ·
+          {" "+details.category.replace("_"," ")} ·
+          {" "+details.audience+" / "+details.segment}
+        </p>}
+      </div>
+      <div className="comm-review-actions">
         <button type="button" className="btn btn-secondary" disabled={busy||loading}
           onClick={()=>{setError("");void refresh().catch(()=>setError("Could not refresh results."));}}>
-          Refresh results</button>
+          Refresh
+        </button>
+        <Link className="btn btn-primary" href="/communication">New campaign</Link>
       </div>
-      {loading&&<p role="status">Loading campaign results…</p>}
-      {error&&<p role="alert" className="form-error">{error}</p>}
-      {notice&&<p role="status" className="form-success">{notice}</p>}
-      {details&&s&&<>
-        <p className="comm-muted">
-          {details.planned_for?"Planned "+istDisplay(details.planned_for):"Send after approval"}
-          {" · "} {s.run_status==="not_approved"?"Not approved":s.run_status}
-        </p>
-        <div className="comm-result-stats">
-          <Metric name="Accepted by Saasyto" value={s.submitted_unverified}/>
-          <Metric name="Excluded / not sent" value={
-            s.suppressed_after_approval+s.excluded_in_review}/>
-          <Metric name="Failed" value={s.rejected}/>
-          <Metric name="Pending / unknown" value={s.queued+s.claimed+s.unknown}/>
+    </div>
+    {loading&&!details&&<p role="status">Loading campaign…</p>}
+    {error&&<p role="alert" className="form-error">{error}</p>}
+    {notice&&<p role="status" className="form-success">{notice}</p>}
+    {details&&s&&<>
+      <div className="comm-detail-overview">
+        <div className="comm-detail-overview-title">
+          <span className={"comm-state comm-state-"+s.run_status.replaceAll("_","-")}>
+            {s.run_status==="not_approved"?"Awaiting approval":
+              s.run_status==="approved"?"Approved":
+              s.run_status==="completed"?"Completed":"Cancelled"}
+          </span>
+          <span className="comm-detail-trust">Delivery/read unverified</span>
         </div>
-        <p className="comm-muted" role="status">
-          Delivered and read: <strong>Not verified</strong>. Saasyto accepting
-          a message does not mean it reached the recipient.
-        </p>
-        {older&&!run&&<p className="form-error" role="status">
-          This campaign predates Saasyto activation. Create a new campaign
-          to obtain a valid delivery approval.</p>}
-        {provider?.local_test_mode&&!provider.local_dynamic_mode&&!run&&details.eligible_in_review>localLimit&&
-          <p className="form-error" role="status">
-            Local test allows at most {localLimit} authorized recipient(s). This campaign
-            includes more than that.
-          </p>}
-        {run?.status==="approved"&&<p className="comm-muted" role="status">
-          {futurePlan
-            ? "Scheduled for later. The private dispatcher submits eligible contacts when due."
-            : "Approved and queued. The private worker submits eligible contacts in batches."}
-          {" "}{s.queued} waiting · {s.claimed} claimed. Results refresh automatically while pending.
-          {provider?.local_test_mode
-            ? " For guarded local testing, use Send pending WhatsApp now instead."
-            : " Confirm the production worker is running; approval alone does not send."}
+        <div className="comm-detail-dates">
+          <div><span>Created</span><strong>{istDisplay(details.created_at)}</strong></div>
+          {details.planned_for&&<div><span>Planned</span>
+            <strong>{istDisplay(details.planned_for)}</strong></div>}
+          {s.last_attempt_at&&<div><span>Last attempt</span>
+            <strong>{istDisplay(s.last_attempt_at)}</strong></div>}
+        </div>
+      </div>
+      <div className="comm-result-stats">
+        <Metric name="Submitted" value={s.submitted_unverified}/>
+        <Metric name="Failed" value={s.rejected}/>
+        <Metric name="Not sent" value={s.suppressed_after_approval+s.excluded_in_review}/>
+        <Metric name="Pending / unknown" value={s.queued+s.claimed+s.unknown}/>
+      </div>
+      {older&&!run&&<p role="alert" className="form-error">
+        This campaign predates sending activation. Create a new campaign.
+      </p>}
+      {provider?.local_test_mode&&!provider.local_dynamic_mode&&!run&&
+        details.eligible_in_review>localLimit&&<p className="form-error" role="alert">
+          This local pilot permits at most {localLimit} recipients.
         </p>}
-        {run?.status==="completed"&&<p className="comm-muted">
-          Sending attempt finished. To send a different message, create a new campaign.
+      {!run&&readiness&&!readiness.ready&&<p className="form-error" role="alert">
+        {readiness.message}
+      </p>}
+      {!run&&!readiness&&provider?.delivery_enabled&&
+        <p className="form-error" role="alert">
+          Sending requirements could not be verified. Refresh.
         </p>}
-        {!provider?.delivery_enabled&&<p className="comm-muted">
-          WhatsApp sending is disabled in backend settings. Creating a plan does not send a message.
-        </p>}
-        {provider?.local_test_mode&&!provider.local_dynamic_mode&&<p className="comm-muted">
-          Local testing is limited to {localLimit} explicitly authorized WhatsApp number(s).
-          {(readiness?.permitted_phones?.length??0)>0
-            ? " Configured test recipients: "+readiness?.permitted_phones?.join(", ")+"."
-            : readiness?.permitted_phone
-              ? " Configured test recipient: "+readiness.permitted_phone+"."
-              : ""}
-        </p>}
-        {!run&&readiness&&!readiness.ready&&
-          <p className="form-error" role="alert">
-            <strong>Cannot send yet: </strong>{readiness.message}
-          </p>}
-        {!run&&!readiness&&provider?.delivery_enabled&&
-          <p className="form-error" role="alert">
-            Approval requirements could not be checked. Refresh results.
-          </p>}
-        <div className="comm-recipient-review" role="region" aria-label="Recipient approval">
+      <div className="comm-detail-tabs" role="group" aria-label="Campaign detail views">
+        <button type="button" className={shownTab==="results"?"active":""}
+          aria-pressed={shownTab==="results"} onClick={()=>setActiveTab("results")}>
+          Sending results <span>{details.recipients.length}</span>
+        </button>
+        <button type="button" className={shownTab==="review"?"active":""}
+          aria-pressed={shownTab==="review"} onClick={()=>setActiveTab("review")}>
+          Recipient review <span>{details.eligible_in_review+details.excluded_in_review}</span>
+        </button>
+      </div>
+      {shownTab==="results"?<div className="comm-detail-section">
+        <RecipientTable title="Sending results by contact" rows={details.recipients}/>
+        {!details.recipients.length&&
+          <p className="comm-muted">Check recipients and approve to begin sending.</p>}
+      </div>:<div className="comm-detail-section">
+        <section className="comm-recipient-review comm-detail-review" role="region"
+          aria-label="Recipient approval">
           <div className="comm-review-heading">
-            <h3>Recipient review</h3>
-            <span className="comm-muted">
-              {review?istDisplay(review.evaluated_at):"Not checked yet"}
-            </span>
+            <h3>Recipient check</h3>
+            {review&&<span className="comm-muted">
+              {istDisplay(review.evaluated_at)}</span>}
           </div>
           <div className="comm-review-counts">
             <span><strong>{details.eligible_in_review}</strong> Eligible</span>
             <span><strong>{details.excluded_in_review}</strong> Excluded</span>
           </div>
-
           {Object.keys(details.excluded_reasons).length>0&&
-            <p className="comm-muted">Excluded: {Object.entries(
-              details.excluded_reasons).map(([key,count])=>
+            <p className="comm-muted">Excluded: {Object.entries(details.excluded_reasons)
+              .map(([key,count])=>
                 (reasons[key]??key.replaceAll("_"," "))+" ("+count+")"
               ).join(" · ")}</p>}
+          {run?.status==="approved"&&<p className="comm-muted" role="status">
+            {s.queued} pending · {s.claimed} processing
+            {futurePlan?" · Scheduled for later":""}
+          </p>}
           <div className="comm-review-footer">
-            <span className="comm-muted">Review only; no messages sent yet.</span>
             {!run&&<button type="button" className="btn btn-secondary"
               disabled={busy} onClick={()=>void checkRecipients()}>
-              {busy?"Working…":"Check recipients"}</button>}
-            {run?.status==="approved"&&run.queued>0&&run.queued<=localLimit&&provider?.local_test_mode&&
-              provider.delivery_enabled&&!futurePlan&&<button type="button"
-              className="btn btn-primary" disabled={busy}
-              onClick={()=>void sendPendingLocal()}>
+              {busy?"Checking…":"Check recipients"}
+            </button>}
+            {run?.status==="approved"&&run.queued>0&&run.queued<=localLimit&&
+              provider?.local_test_mode&&provider.delivery_enabled&&!futurePlan&&
+              <button type="button" className="btn btn-primary" disabled={busy}
+                onClick={()=>void sendPendingLocal()}>
                 {busy?"Sending…":"Send pending WhatsApp now"}
               </button>}
             {!run&&provider?.delivery_enabled&&<button type="button"
@@ -354,17 +366,16 @@ export function CampaignResultDetails({id,onBack}:{
                 busy||older||!review||!readiness?.ready||review.eligible_count===0||
                 Boolean(provider.local_test_mode&&review.eligible_count>localLimit)
               } onClick={()=>void approve()}>
-                {busy?"Working…":localImmediate?"Send WhatsApp now":"Approve WhatsApp delivery"}
+                {busy?"Working…":localImmediate?"Send WhatsApp now":"Approve sending"}
               </button>}
             {run?.status==="approved"&&<button type="button" className="btn btn-secondary"
-              disabled={busy} onClick={()=>void cancel()}>Stop pending sends</button>}
+              disabled={busy} onClick={()=>void cancel()}>Stop pending</button>}
           </div>
-        </div>
-        <RecipientTable title="Sending results by contact" rows={details.recipients}/>
-        {!run&&<RecipientTable title="Eligible contacts (latest recipient check)"
-          rows={details.eligible_recipients}/>}
-        <RecipientTable title="Excluded before sending (latest review)"
-          rows={details.excluded_recipients}/>
-      </>}
+        </section>
+        {!run&&<RecipientTable title="Eligible contacts" rows={details.eligible_recipients}/>}
+        {!!details.excluded_recipients.length&&
+          <RecipientTable title="Excluded contacts" rows={details.excluded_recipients}/>}
+      </div>}
+    </>}
   </section>;
 }
