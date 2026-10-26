@@ -61,6 +61,11 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   const [consentConfirmed,setConsentConfirmed]=useState(false);
   const [consentBusy,setConsentBusy]=useState(false);
   const [consentNotice,setConsentNotice]=useState("");
+  const [purgePreview,setPurgePreview]=useState<{
+    campaign_count:number;in_flight_attempts:number
+  }|null>(null);
+  const [purgeConfirmation,setPurgeConfirmation]=useState("");
+  const [purgeBusy,setPurgeBusy]=useState(false);
   const [run,setRun]=useState<SaasytoRun|null>(null);
   const [runBusy,setRunBusy]=useState(false);
   const [reviewId,setReviewId]=useState<string|null>(null);
@@ -208,14 +213,53 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     }catch(e){setError(e instanceof Error?e.message:"Could not cancel.");}
     finally{setBusy("");}
   }
+  async function openCampaignPurge(){
+    setError("");setPurgeBusy(true);
+    try{
+      const preview=await apiGet<{campaign_count:number;in_flight_attempts:number}>(
+        "/campaigns/purge-preview"
+      );
+      setPurgePreview(preview);setPurgeConfirmation("");
+    }catch{setError("Could not verify which campaigns would be deleted.");}
+    finally{setPurgeBusy(false);}
+  }
+  async function purgeCampaigns(){
+    if(!purgePreview||purgeBusy||purgeConfirmation!=="DELETE ALL CAMPAIGNS"||
+      purgePreview.in_flight_attempts>0)return;
+    setPurgeBusy(true);setError("");
+    try{
+      const result=await apiWrite<{deleted_campaigns:number}>(
+        "/campaigns/purge-all","POST",{
+          confirm:"DELETE ALL CAMPAIGNS",
+          expected_campaigns:purgePreview.campaign_count,
+        },
+      );
+      setPurgePreview(null);setPurgeConfirmation("");
+      setItems([]);setResults({});setReviewId(null);setRun(null);setCheck(null);
+      // Do not use a cached campaign snapshot after permanent deletion.
+      rememberSnapshot("/api/admin/communication/campaigns",[]);
+      setReload(n=>n+1);
+      setNotice(result.deleted_campaigns+" campaigns and their sending histories deleted. "+
+        "Prospects, promoters, consent records, payments and audit records were retained.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"Could not delete campaigns. Refresh and retry.");
+      setPurgePreview(null);setPurgeConfirmation("");
+    }finally{setPurgeBusy(false);}
+  }
+
   if(selectedId)return <CampaignResultDetails id={selectedId}
     onBack={()=>setSelectedId(null)}/>;
   return <section className="comm-panel" aria-label="Communication campaigns">
     <div className="comm-panel-header"><div><h2>Campaigns</h2>
       <p>Open any campaign to see its recipient checks, failed submissions and
         sending outcomes.</p></div>
-      <button type="button" className="btn btn-secondary" onClick={()=>setReload(x=>x+1)}>
-        Refresh</button>
+      <div className="comm-review-actions">
+        <button type="button" className="btn btn-secondary" onClick={()=>setReload(x=>x+1)}>
+          Refresh</button>
+        <button type="button" className="btn btn-secondary crm-danger-btn"
+          disabled={purgeBusy} onClick={()=>void openCampaignPurge()}>
+          Delete all campaigns</button>
+      </div>
     </div>
     <div className="comm-provider-status" role="status">
       <strong>WhatsApp delivery · Saasyto</strong>
@@ -380,6 +424,37 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             }}>{checking?"Checking…":"Check recipients"}</button>
         </div>
       </section>}
+    {purgePreview&&<div className="crm-dialog-scrim" role="presentation">
+      <section className="crm-dialog" role="dialog" aria-modal="true"
+        aria-label="Delete all campaigns">
+        <div className="crm-dialog-head"><h2>Delete all campaigns?</h2>
+          <button type="button" className="text-action"
+            onClick={()=>setPurgePreview(null)} disabled={purgeBusy}>Close</button>
+        </div>
+        <p><strong>{purgePreview.campaign_count}</strong> campaign(s) will be deleted,
+          including their recipient reviews and Saasyto sending results.</p>
+        <p className="crm-dialog-help">Prospects, promoters, payments, communication permissions,
+          and audit events will remain. Messages already submitted cannot be recalled.</p>
+        {purgePreview.in_flight_attempts>0?<p className="form-error" role="alert">
+          {purgePreview.in_flight_attempts} sending attempt(s) are still in progress.
+          Wait until they finish and refresh before deleting.
+        </p>:<label className="field"><span className="field-label">
+          Type DELETE ALL CAMPAIGNS to confirm</span>
+          <input type="text" autoComplete="off" value={purgeConfirmation}
+            onChange={e=>setPurgeConfirmation(e.target.value)}
+            placeholder="DELETE ALL CAMPAIGNS" /></label>}
+        <div className="form-actions">
+          <button type="button" className="btn btn-secondary" disabled={purgeBusy}
+            onClick={()=>setPurgePreview(null)}>Cancel</button>
+          <button type="button" className="btn btn-primary crm-danger-btn"
+            disabled={purgeBusy||purgePreview.in_flight_attempts>0||
+              purgeConfirmation!=="DELETE ALL CAMPAIGNS"}
+            onClick={()=>void purgeCampaigns()}>
+            {purgeBusy?"Deleting…":"Permanently delete campaigns"}
+          </button>
+        </div>
+      </section>
+    </div>}
     <p className="comm-muted comm-history-footnote">
       Submitted means accepted by Saasyto, not delivered or read. "Not sent" above
       includes the latest recipient-check exclusions plus people suppressed
