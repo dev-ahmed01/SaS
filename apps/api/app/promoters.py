@@ -470,12 +470,14 @@ def assigned_sponsors(
     fresh = _project_statuses(
         database, context[0], [prospect for _, prospect in assignments],
     )
+    # The promoter's Sponsors and Prospects sections describe CRM activation,
+    # not whether a historical contribution exists. A WhatsApp-verified active
+    # sponsor may still be awaiting their first monthly payment.
     visible = [
         (assignment, prospect)
         for assignment, prospect in assignments
         if kind is None or (
-            (fresh.get(prospect.id, prospect.lifecycle_status) == "new")
-            == (kind == "prospects")
+            prospect.crm_stage == ("active" if kind == "sponsors" else "inactive")
         )
     ]
     response.headers["Cache-Control"] = "no-store"
