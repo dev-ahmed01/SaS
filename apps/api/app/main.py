@@ -23,8 +23,8 @@ from app.messaging import admin_router as messaging_admin_router
 from app.messaging import internal_router as messaging_internal_router
 from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
-from app.prospect_stages import router as prospect_stages_router
 from app.prospect_bulk import router as prospect_bulk_router
+from app.prospect_stages import router as prospect_stages_router
 from app.prospects import router as prospects_router
 from app.reminders import router as reminders_router
 from app.saasyto import router as saasyto_router
