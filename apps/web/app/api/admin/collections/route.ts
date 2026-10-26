@@ -24,7 +24,7 @@ async function handle(request:NextRequest){
   if(!backend)return NextResponse.json({detail:"API unavailable"},{status:503,headers:meta});
   const params=new URLSearchParams();
   if(!write)for(const [key,value] of request.nextUrl.searchParams){
-    if(!["period_month","limit","offset"].includes(key)||params.has(key)||value.length>50)
+    if(!["period_month","received_month","limit","offset"].includes(key)||params.has(key)||value.length>50)
       return NextResponse.json({detail:"Bad query"},{status:400,headers:meta});
     params.set(key,value);
   }
