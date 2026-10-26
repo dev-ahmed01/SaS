@@ -110,11 +110,11 @@ class Settings(BaseSettings):
                 )
         if self.saasyto_local_dynamic_enabled:
             if not (self.app_env == "development" and self.local_demo_login_enabled):
-                raise ValueError("Dynamic Saasyto local sending requires protected loopback demo mode")
+                raise ValueError("Dynamic Saasyto local sending requires loopback demo mode")
             if self.saasyto_local_test_enabled or self.otp_local_pilot_enabled:
-                raise ValueError("Dynamic Saasyto local sending cannot combine with allowlisted pilot")
+                raise ValueError("Dynamic local sending cannot combine with allowlisted pilot")
             if self.saasyto_local_test_phone or self.saasyto_local_test_phone_2:
-                raise ValueError("Dynamic Saasyto local sending must not configure recipient phone numbers")
+                raise ValueError("Dynamic local mode cannot configure recipient phone numbers")
         if self.saasyto_local_test_enabled:
             import re
 
