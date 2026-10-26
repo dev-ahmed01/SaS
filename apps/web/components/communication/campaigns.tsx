@@ -1,232 +1,87 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CampaignResultDetails } from "./campaign-results";
 import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 
-type CampaignSummary={
+type Summary={
   campaign_id:string;run_status:"not_approved"|"approved"|"cancelled"|"completed";
-  planned:number;submitted_unverified:number;rejected:number;unknown:number;
+  submitted_unverified:number;rejected:number;unknown:number;
   queued:number;claimed:number;suppressed_after_approval:number;
-  excluded_in_review:number;
-  delivered:number|null;read:number|null;
+  excluded_in_review:number;last_attempt_at:string|null;
 };
-type BulkConsentReview={
-  active:number;already_documented:number;needs_confirmation:number;
-  opted_out:number;no_number:number;review_fingerprint:string;
-};
-type SaasytoRun={
-  id:string;campaign_id:string;status:"approved"|"cancelled"|"completed";
-  due_at:string;eligible_count:number;suppressed_count:number;
-  queued:number;claimed:number;accepted_unverified:number;
-  rejected:number;unknown:number;suppressed_after_approval:number;notice:string;
-};
-type SaasytoStatus={
-  provider:string;transport:string;delivery_enabled:boolean;
-  local_test_mode?:boolean;activation_cutoff?:string|null;
-  sender_approved:boolean;credentials_configured:boolean;
-  webhook_verified:boolean;connection_tested:boolean;notice:string;
-};
-type RecipientCheck={
-  id:string;campaign_id:string;eligible_count:number;suppressed_count:number;
-  evaluated_at:string;exclusion_reasons?:Record<string,number>;
-  delivery_activated:false;
-};
+type Filter="all"|"completed"|"pending"|"planned";
 
-const reasonLabels:Record<string,string>={
-  missing_address:"Missing WhatsApp/mobile number",
-  opted_out:"Recipient opted out",
-  inactive_reminder:"Inactive for reminders",
-  no_email_consent:"No documented email permission",
-  no_whatsapp_consent:"WhatsApp permission checkbox is off",
-  no_general_consent:"No recorded Communication opt-in with evidence",
-  duplicate_address:"Duplicate WhatsApp number in the audience",
-};
+function campaignState(item:Campaign,summary?:Summary){
+  if(item.status==="cancelled"||summary?.run_status==="cancelled")return "Cancelled";
+  if(summary?.run_status==="completed")return "Completed";
+  if(summary?.run_status==="approved")return "Approved";
+  if(item.planned_for)return "Planned";
+  return "Awaiting approval";
+}
+function activity(item:Campaign,summary?:Summary){
+  if(summary?.run_status==="completed"&&summary.last_attempt_at){
+    return {label:"Last attempt",date:summary.last_attempt_at};
+  }
+  if(item.planned_for)return {label:"Planned for",date:item.planned_for};
+  if(summary?.last_attempt_at)return {label:"Last attempt",date:summary.last_attempt_at};
+  return {label:"Created",date:item.created_at};
+}
 export function CommunicationCampaigns({revision}:{revision:number}){
-  const [items,setItems]=useState<Campaign[]>(()=>recentSnapshot<Campaign[]>("/api/admin/communication/campaigns")??[]);
+  const [items,setItems]=useState<Campaign[]>(()=>
+    recentSnapshot<Campaign[]>("/api/admin/communication/campaigns")??[]);
+  const [results,setResults]=useState<Record<string,Summary>>({});
   const [selectedId,setSelectedId]=useState<string|null>(null);
-  const [loading,setLoading]=useState(()=>!recentSnapshot<Campaign[]>("/api/admin/communication/campaigns"));
+  const [filter,setFilter]=useState<Filter>("all");
+  const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
-  const [busy,setBusy]=useState("");
   const [reload,setReload]=useState(0);
-  const [provider,setProvider]=useState<SaasytoStatus|null>(null);
-  const [results,setResults]=useState<Record<string,CampaignSummary>>({});
-  const [consentReview,setConsentReview]=useState<BulkConsentReview|null>(null);
-  const [consentSource,setConsentSource]=useState("Existing permission register");
-  const [consentReference,setConsentReference]=useState("");
-  const [consentConfirmed,setConsentConfirmed]=useState(false);
-  const [consentBusy,setConsentBusy]=useState(false);
-  const [consentNotice,setConsentNotice]=useState("");
   const [purgePreview,setPurgePreview]=useState<{
-    campaign_count:number;in_flight_attempts:number
+    campaign_count:number;in_flight_attempts:number;
   }|null>(null);
   const [purgeConfirmation,setPurgeConfirmation]=useState("");
   const [purgeBusy,setPurgeBusy]=useState(false);
-  const [run,setRun]=useState<SaasytoRun|null>(null);
-  const [runBusy,setRunBusy]=useState(false);
-  const [reviewId,setReviewId]=useState<string|null>(null);
-  const [check,setCheck]=useState<RecipientCheck|null>(null);
-  const [checking,setChecking]=useState(false);
-  const [reviewError,setReviewError]=useState("");
+
   useEffect(()=>{
-    // A fragment is never forwarded to the server. Deep-link to a detailed
-    // campaign view without conflicting with the existing dynamic module route.
     const sync=()=>{
       const match=/^#campaign-([0-9a-f-]{36})$/i.exec(window.location.hash);
       setSelectedId(match?match[1]:null);
     };
-    sync();
-    window.addEventListener("hashchange",sync);
-    return ()=>window.removeEventListener("hashchange",sync);
+    sync();window.addEventListener("hashchange",sync);
+    return()=>window.removeEventListener("hashchange",sync);
   },[]);
   useEffect(()=>{
-    const cached=recentSnapshot<Campaign[]>("/api/admin/communication/campaigns");
-    if(cached)setItems(cached);
-    setLoading(!cached);
+    let active=true;
+    setLoading(true);setError("");
     Promise.all([
-      apiGet<Campaign[]>("/campaigns"),apiGet<CampaignSummary[]>("/campaigns/results"),
+      apiGet<Campaign[]>("/campaigns"),apiGet<Summary[]>("/campaigns/results"),
     ]).then(([rows,summaries])=>{
-      rememberSnapshot("/api/admin/communication/campaigns",rows);setItems(rows);
-      setResults(Object.fromEntries(summaries.map(item=>[item.campaign_id,item])));
-    }).catch(()=>setError("Could not load current campaign results."))
-      .finally(()=>setLoading(false));
+      if(!active)return;
+      rememberSnapshot("/api/admin/communication/campaigns",rows);
+      setItems(rows);
+      setResults(Object.fromEntries(summaries.map(row=>[row.campaign_id,row])));
+    }).catch(()=>{if(active)setError("Could not load campaigns.");})
+      .finally(()=>{if(active)setLoading(false);});
+    return()=>{active=false;};
   },[revision,reload]);
-  useEffect(()=>{
-    let mounted=true;
-    apiGet<SaasytoStatus>("/provider/saasyto")
-      .then(state=>{if(mounted)setProvider(state);})
-      .catch(()=>{if(mounted)setProvider(null);});
-    return()=>{mounted=false;};
-  },[revision,reload]);
-  async function loadConsentReview(){
-    setConsentBusy(true);setConsentNotice("");
-    setConsentReview(null);setConsentConfirmed(false);
-    try{
-      setConsentReview(await apiGet<BulkConsentReview>("/active-consent-review"));
-    }catch{
-      setConsentNotice("Could not review existing permissions.");
-    }finally{setConsentBusy(false);}
-  }
-  async function confirmExistingPermissions(){
-    if(consentBusy||!consentConfirmed||!consentReview?.needs_confirmation||
-      !consentReference.trim()||!consentSource.trim())return;
-    const count=consentReview.needs_confirmation;
-    if(!window.confirm("You are confirming you have independently verified "+
-       "existing WhatsApp opt-in for "+count+" Active contacts against "+
-       "the referenced permission register. Contacts who opted out "+
-       "will stay excluded. No messages will be sent. Continue?"))return;
-    setConsentBusy(true);setConsentNotice("");
-    try{
-      const updated=await apiWrite<BulkConsentReview>(
-        "/active-consent-review","POST",{
-          confirm:"I_HAVE_VERIFIED_EXISTING_CONSENT",
-          expected_needs_confirmation:count,
-          expected_review_fingerprint:consentReview.review_fingerprint,
-          source:consentSource.trim(),
-          evidence_reference:consentReference.trim(),
-        }
-      );
-      setConsentReview(updated);setConsentConfirmed(false);
-      setConsentNotice("Existing permissions recorded. No WhatsApp messages sent. "+
-        "Create a fresh recipient check before approving a campaign.");
-      setReload(x=>x+1);
-    }catch{
-      setConsentReview(null);setConsentConfirmed(false);
-      setConsentNotice("The audience may have changed or confirmation failed. "+
-        "Review Active prospects again before continuing.");
-    }finally{setConsentBusy(false);}
-  }
-  async function openReview(item:Campaign){
-    if(reviewId===item.id){setReviewId(null);setCheck(null);return;}
-    setReviewId(item.id);setCheck(null);setRun(null);setReviewError("");
-    setChecking(true);
-    try{
-      const history=await apiGet<RecipientCheck[]>(
-        "/campaigns/"+item.id+"/preparations"
-      );
-      setCheck(history[0]??null);
-      setRun(await apiGet<SaasytoRun|null>("/campaigns/"+item.id+"/saasyto"));
-    }catch{
-      setReviewError("Recipient checks unavailable.");
-    }finally{setChecking(false);}
-  }
-  async function runCheck(item:Campaign){
-    if(checking)return;
-    setChecking(true);setReviewError("");
-    try{
-      const result=await apiWrite<RecipientCheck>(
-        "/campaigns/"+item.id+"/preparations","POST",{
-          request_id:crypto.randomUUID(),simulation_only:true,
-        }
-      );
-      setCheck(result);
-    }catch(e){
-      setReviewError(e instanceof Error?e.message:"Recipient check failed.");
-    }finally{setChecking(false);}
-  }
-  async function approve(item:Campaign){
-    if(!check||run||runBusy||!provider?.delivery_enabled)return;
-    if(!window.confirm(
-      "Approve Saasyto delivery to "+check.eligible_count+
-      " eligible recipient(s)? This authorizes a one-attempt-only queue. "+
-      "Gateway acceptance is not confirmed WhatsApp delivery."
-    ))return;
-    setRunBusy(true);setReviewError("");
-    try{
-      const result=await apiWrite<SaasytoRun>(
-        "/campaigns/"+item.id+"/saasyto","POST",{
-          preparation_id:check.id,expected_eligible:check.eligible_count,
-          confirm_send:true,
-        }
-      );
-      setRun(result);
-      setReload(x=>x+1);
-      setNotice(provider?.local_test_mode
-        ? "Approved for local sending. Open campaign results to send now; a worker is optional."
-        : "Campaign approved for the private delivery runner; messages are not automatically sent from this browser.");
-    }catch(e){setReviewError(e instanceof Error?e.message:"Approval was not confirmed.");}
-    finally{setRunBusy(false);}
-  }
-  async function cancelRun(item:Campaign){
-    if(!run||runBusy||!window.confirm(
-      "Cancel all not-yet-claimed Saasyto messages? Messages already submitted cannot be recalled."
-    ))return;
-    setRunBusy(true);setReviewError("");
-    try{
-      setRun(await apiWrite<SaasytoRun>(
-        "/campaigns/"+item.id+"/saasyto/cancel","POST",{}
-      ));
-    }catch(e){setReviewError(e instanceof Error?e.message:"Unable to cancel dispatch.");}
-    finally{setRunBusy(false);}
-  }
-  async function cancel(item:Campaign){
-    if(!window.confirm("Cancel this communication plan? It will remain in the audit log."))return;
-    setBusy(item.id);setError("");setNotice("");
-    try{
-      await apiWrite("/campaigns/"+item.id+"/cancel","POST",{});
-      setNotice("Campaign plan cancelled. No messages were dispatched.");
-      setReload(x=>x+1);
-    }catch(e){setError(e instanceof Error?e.message:"Could not cancel.");}
-    finally{setBusy("");}
-  }
+
   async function openCampaignPurge(){
-    setError("");setPurgeBusy(true);
+    setPurgeBusy(true);setError("");
     try{
       const preview=await apiGet<{campaign_count:number;in_flight_attempts:number}>(
-        "/campaigns/purge-preview"
-      );
+        "/campaigns/purge-preview");
       setPurgePreview(preview);setPurgeConfirmation("");
-    }catch{setError("Could not verify which campaigns would be deleted.");}
+    }catch{setError("Could not check campaigns for deletion.");}
     finally{setPurgeBusy(false);}
   }
   async function purgeCampaigns(){
     if(!purgePreview||purgeBusy||purgeConfirmation!=="DELETE ALL CAMPAIGNS"||
       purgePreview.in_flight_attempts>0)return;
-    setPurgeBusy(true);setError("");
+    setPurgeBusy(true);setError("");setNotice("");
     try{
       const result=await apiWrite<{deleted_campaigns:number}>(
         "/campaigns/purge-all","POST",{
@@ -235,214 +90,118 @@ export function CommunicationCampaigns({revision}:{revision:number}){
         },
       );
       setPurgePreview(null);setPurgeConfirmation("");
-      setItems([]);setResults({});setReviewId(null);setRun(null);setCheck(null);
-      // Do not use a cached campaign snapshot after permanent deletion.
+      setItems([]);setResults({});
       rememberSnapshot("/api/admin/communication/campaigns",[]);
       setReload(n=>n+1);
-      setNotice(result.deleted_campaigns+" campaigns and their sending histories deleted. "+
-        "Prospects, promoters, consent records, payments and audit records were retained.");
+      setNotice(result.deleted_campaigns+" campaigns deleted.");
     }catch(e){
-      setError(e instanceof Error?e.message:"Could not delete campaigns. Refresh and retry.");
-      setPurgePreview(null);setPurgeConfirmation("");
+      setError(e instanceof Error?e.message:"Could not delete campaigns.");
+      setPurgePreview(null);
     }finally{setPurgeBusy(false);}
   }
-
+  const counts={
+    all:items.length,
+    completed:items.filter(item=>campaignState(item,results[item.id])==="Completed").length,
+    planned:items.filter(item=>campaignState(item,results[item.id])==="Planned").length,
+    pending:items.filter(item=>["Approved","Awaiting approval"].includes(
+      campaignState(item,results[item.id]))).length,
+  };
+  const visible=items.filter(item=>{
+    const state=campaignState(item,results[item.id]);
+    return filter==="all"||filter==="completed"&&state==="Completed"||
+      filter==="planned"&&state==="Planned"||
+      filter==="pending"&&["Approved","Awaiting approval"].includes(state);
+  });
   if(selectedId)return <CampaignResultDetails id={selectedId}
     onBack={()=>setSelectedId(null)}/>;
-  return <section className="comm-panel" aria-label="Communication campaigns">
-    <div className="comm-panel-header"><div><h2>Campaigns</h2>
-      <p>Open any campaign to see its recipient checks, failed submissions and
-        sending outcomes.</p></div>
+
+  return <section className="comm-panel comm-campaigns" aria-label="Communication campaigns">
+    <div className="comm-panel-header comm-history-header">
+      <div><h2>Campaigns</h2>
+        <p>{items.length} total · {counts.completed} completed</p></div>
       <div className="comm-review-actions">
-        <button type="button" className="btn btn-secondary" onClick={()=>setReload(x=>x+1)}>
-          Refresh</button>
-        <button type="button" className="btn btn-secondary crm-danger-btn"
-          disabled={purgeBusy} onClick={()=>void openCampaignPurge()}>
-          Delete all campaigns</button>
+        <button type="button" className="btn btn-secondary" disabled={loading}
+          onClick={()=>setReload(v=>v+1)}>{loading?"Refreshing…":"Refresh"}</button>
+        <Link className="btn btn-primary" href="/communication">New campaign</Link>
       </div>
     </div>
-    <div className="comm-provider-status" role="status">
-      <strong>WhatsApp delivery · Saasyto</strong>
-      <span>{provider
-        ? provider.delivery_enabled
-          ? provider.local_test_mode
-            ? "Local test · explicitly permitted recipients only · delivery callbacks unverified"
-            : "Provider configuration enabled · delivery callbacks unverified"
-          : "Not connected for sending · campaigns remain drafts or plans"
-        : "Provider configuration not verified"}
-      </span>
-      <small>{provider?.notice??"No WhatsApp message is sent from this campaign screen."}</small>
+    <div className="comm-history-toolbar" role="group" aria-label="Filter campaigns">
+      {([
+        ["all","All"],["completed","Completed"],["pending","In progress"],["planned","Planned"],
+      ] as [Filter,string][]).map(([key,label])=>
+        <button type="button" key={key} className={"comm-history-filter"+(filter===key?" active":"")}
+          aria-pressed={filter===key} onClick={()=>setFilter(key)}>
+          {label} <span>{counts[key]}</span>
+        </button>)}
     </div>
-    <details className="comm-consent-batch">
-      <summary>Confirm existing WhatsApp permissions</summary>
-      <p className="comm-muted">Use only if you already have documented
-        permission for these Active prospects. Opt-outs are never overridden.</p>
-      <button type="button" className="btn btn-secondary"
-        disabled={consentBusy} onClick={()=>void loadConsentReview()}>
-        Review Active prospects</button>
-      {consentReview&&<div className="comm-consent-batch-form">
-        <p className="comm-muted">
-          {consentReview.active} Active · {consentReview.already_documented} documented ·
-          {" "+consentReview.needs_confirmation} requiring confirmation ·
-          {" "+consentReview.opted_out} opted out ·
-          {" "+consentReview.no_number} without a number
-        </p>
-        {consentReview.needs_confirmation>0&&<>
-          <label>Existing consent source
-            <input type="text" value={consentSource}
-              onChange={e=>setConsentSource(e.target.value)} maxLength={80}/></label>
-          <label>Permission record reference
-            <input type="text" value={consentReference}
-              onChange={e=>setConsentReference(e.target.value)}
-              maxLength={160}
-              placeholder="Existing signed register or consent record ID"/></label>
-          <label className="comm-consent-batch-check">
-            <input type="checkbox" checked={consentConfirmed}
-              onChange={e=>setConsentConfirmed(e.target.checked)}/>
-            I verified existing WhatsApp permission for every included contact.
-          </label>
-          <button type="button" className="btn btn-primary"
-            disabled={consentBusy||!consentConfirmed||
-              consentReference.trim().length<3||consentSource.trim().length<3}
-            onClick={()=>void confirmExistingPermissions()}>
-            Confirm {consentReview.needs_confirmation} existing permissions
-          </button>
-        </>}
-      </div>}
-      {consentNotice&&<p role="status" className="comm-muted">{consentNotice}</p>}
-    </details>
     {error&&<p className="form-error" role="alert">{error}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
-    <div className="comm-campaign-table-scroll"><table className="data-table comm-campaign-table">
-      <thead><tr>{["Campaign","Audience","Planned IST","Status","Submitted","Rejected","Not sent","Read","Details"].map(h=>
-        <th key={h} scope="col">{h}</th>)}</tr></thead>
-      <tbody>{loading&&items.length===0?<tr><td colSpan={9}>Loading campaigns…</td></tr>:!items.length?
-        <tr><td colSpan={9} className="comm-empty">No campaigns yet. Start in Compose.</td></tr>:
-        items.map(item=><tr key={item.id}>
-          <td><div className="comm-campaign-title">
-            <strong><Link href={"/communication/campaigns#campaign-"+item.id}
-              onClick={()=>setSelectedId(item.id)}>{item.title}</Link></strong>
-            <span>{item.channel==="whatsapp"?"WhatsApp":"Email"} ·
-              {" "+item.category.replace("_"," ")}</span></div></td>
-          <td>{item.audience} · {item.segment}</td>
-          <td>{item.planned_for?istDisplay(item.planned_for):"Awaiting approval"}</td>
-          <td><span className={"status-pill "+(item.status==="cancelled"?"inactive":"scheduled")}>
-            {item.status==="cancelled"?"Cancelled":
-              results[item.id]?.run_status==="completed"?"Completed":
-              results[item.id]?.run_status==="approved"?"Approved":
-              item.status==="scheduled"?"Planned":"Awaiting approval"}
-          </span></td>
-          <td>{results[item.id]?.submitted_unverified??0}</td>
-          <td>{results[item.id]?.rejected??0}</td>
-          <td>{results[item.id]
-            ?results[item.id].suppressed_after_approval+results[item.id].excluded_in_review
-            :0}</td>
-          <td>{results[item.id]?.read??"Unavailable"}</td>
-          <td className="comm-sticky-actions"><div className="comm-review-actions">
-            <Link className="comm-action-primary"
-              href={"/communication/campaigns#campaign-"+item.id}
-              onClick={()=>setSelectedId(item.id)}>
-              View results</Link>
-            {item.status!=="cancelled"&&
-              results[item.id]?.run_status!=="completed"&&
-              results[item.id]?.run_status!=="approved"&&
-              <button type="button" className="comm-text-button"
-                disabled={busy===item.id} onClick={()=>cancel(item)}>Cancel plan</button>}
-          </div></td>
-        </tr>)}</tbody>
-    </table></div>
-    {reviewId&&items.some(item=>item.id===reviewId&&item.status!=="cancelled")&&
-      <section className="comm-recipient-review" aria-label="Recipient review">
-        <div className="comm-review-heading">
-          <h3>Recipient check</h3>
-          <button className="btn btn-secondary" type="button"
-            onClick={()=>setReviewId(null)}>Close</button>
-        </div>
-        {checking&&!check?<p role="status">Checking…</p>:null}
-        {provider?.activation_cutoff&&
-          items.some(item=>item.id===reviewId&&new Date(item.created_at).getTime()<
-            new Date(provider.activation_cutoff as string).getTime())&&
-          <p className="form-error" role="status">
-            This campaign was created before WhatsApp activation. Create a new
-            campaign in Compose after activation; older drafts cannot be approved.
-          </p>}
-        {check?.exclusion_reasons&&Object.keys(check.exclusion_reasons).length>0&&
-          <div className="comm-provider-status" role="status">
-            <strong>Why recipients were excluded</strong>
-            <ul>{Object.entries(check.exclusion_reasons).map(([reason,count])=>
-              <li key={reason}>{reasonLabels[reason]??reason.replaceAll("_"," ")}: {count}</li>
-            )}</ul>
-            <small>To update a contact's permission, open their Prospect or Promoter
-              details and select Communication permissions. Only attest opt-in if
-              the recipient explicitly authorized WhatsApp messages.</small>
-          </div>}
-        {check&&<div className="comm-review-counts" aria-label="Previous recipient check">
-          <span><strong>{check.eligible_count}</strong> Eligible</span>
-          <span><strong>{check.suppressed_count}</strong> Excluded</span>
-          <span>{istDisplay(check.evaluated_at)}</span>
-        </div>}
-        {run&&<div className="comm-provider-status" aria-label="Saasyto dispatch results">
-          <strong>Saasyto · {run.status}</strong>
-          <span>Queued {run.queued} · Accepted by gateway {run.accepted_unverified} ·
-            Unknown {run.unknown} · Rejected {run.rejected} ·
-            Excluded {run.suppressed_after_approval}</span>
-          <small>Scheduled {istDisplay(run.due_at)}. {run.notice}</small>
-        </div>}
-        {run&&<button className="btn btn-secondary" type="button"
-          disabled={runBusy} onClick={()=>{
-            void apiGet<SaasytoRun>(
-              "/campaigns/"+run.campaign_id+"/saasyto"
-            ).then(result=>setRun(result))
-              .catch(()=>setReviewError("Unable to refresh the attempt status."));
-          }}>Refresh delivery attempts</button>}
-        {reviewError&&<p className="form-error" role="alert">{reviewError}</p>}
-        {!check&&!checking&&!reviewError&&<p className="comm-muted">
-          Not checked yet.</p>}
-        <div className="comm-review-footer">
-          <span className="comm-muted">{run
-            ? "Messages are queued only after approval."
-            : "Recipient check is a preview; no messages sent."}</span>
-          {run?.status==="approved"&&<button className="btn btn-secondary"
-            type="button" disabled={runBusy} onClick={()=>{
-              const item=items.find(row=>row.id===reviewId);
-              if(item)void cancelRun(item);
-            }}>{runBusy?"Working…":"Stop pending sends"}</button>}
-          {!run&&check&&provider?.delivery_enabled&&<button
-            className="btn btn-primary" type="button" disabled={
-              checking||runBusy||!check.eligible_count||
-              Boolean(provider?.activation_cutoff&&items.some(item=>
-                item.id===reviewId&&new Date(item.created_at).getTime()<
-                  new Date(provider.activation_cutoff as string).getTime()))
-            } onClick={()=>{
-              const item=items.find(row=>row.id===reviewId);
-              if(item)void approve(item);
-            }}>{runBusy?"Approving…":"Approve WhatsApp delivery"}</button>}
-          <button type="button" className="btn btn-primary"
-            disabled={checking||Boolean(run)} onClick={()=>{
-              const item=items.find(row=>row.id===reviewId);
-              if(item)void runCheck(item);
-            }}>{checking?"Checking…":"Check recipients"}</button>
-        </div>
-      </section>}
+    <div className="comm-campaign-list">
+      {loading&&!items.length?<p role="status" className="comm-empty">Loading campaigns…</p>:
+       !visible.length?<div className="comm-history-empty">
+         <h3>{items.length?"No campaigns in this view":"No campaigns yet"}</h3>
+         <Link href="/communication">Compose a message</Link>
+       </div>:
+       visible.map(item=>{
+         const summary=results[item.id];
+         const state=campaignState(item,summary);
+         const date=activity(item,summary);
+         const notSent=(summary?.excluded_in_review??0)+
+           (summary?.suppressed_after_approval??0);
+         return <article key={item.id} className="comm-campaign-item"
+           aria-label={"Campaign "+item.title}>
+           <div className="comm-campaign-item-main">
+             <div className="comm-campaign-item-heading">
+               <h3><Link href={"/communication/campaigns#campaign-"+item.id}
+                 onClick={()=>setSelectedId(item.id)}>{item.title}</Link></h3>
+               <span className={"comm-state comm-state-"+state.toLowerCase().replaceAll(" ","-")}>
+                 {state}</span>
+             </div>
+             <p className="comm-campaign-item-meta">
+               {item.channel==="whatsapp"?"WhatsApp":"Email"} ·
+               {" "+item.category.replace("_"," ")} ·
+               {" "+item.audience+" / "+item.segment}
+             </p>
+           </div>
+           <div className="comm-campaign-item-time">
+             <span>{date.label} (IST)</span>
+             <strong>{istDisplay(date.date)}</strong>
+             {item.planned_for&&state==="Completed"&&
+               <small>Planned: {istDisplay(item.planned_for)}</small>}
+           </div>
+           <div className="comm-campaign-item-metrics" aria-label="Sending summary">
+             <span><strong>{summary?.submitted_unverified??0}</strong> Submitted</span>
+             <span><strong>{summary?.rejected??0}</strong> Failed</span>
+             <span><strong>{notSent}</strong> Not sent</span>
+           </div>
+           <Link className="comm-campaign-open"
+             href={"/communication/campaigns#campaign-"+item.id}
+             onClick={()=>setSelectedId(item.id)}>View details</Link>
+         </article>;
+       })}
+    </div>
+    <div className="comm-history-bottom">
+      <span>Submitted = accepted by the gateway, not confirmed delivered.</span>
+      <button type="button" className="comm-text-button crm-danger-btn"
+        disabled={purgeBusy||!items.length} onClick={()=>void openCampaignPurge()}>
+        Delete all campaigns
+      </button>
+    </div>
     {purgePreview&&<div className="crm-dialog-scrim" role="presentation">
       <section className="crm-dialog" role="dialog" aria-modal="true"
         aria-label="Delete all campaigns">
         <div className="crm-dialog-head"><h2>Delete all campaigns?</h2>
           <button type="button" className="text-action"
-            onClick={()=>setPurgePreview(null)} disabled={purgeBusy}>Close</button>
-        </div>
-        <p><strong>{purgePreview.campaign_count}</strong> campaign(s) will be deleted,
-          including their recipient reviews and Saasyto sending results.</p>
-        <p className="crm-dialog-help">Prospects, promoters, payments, communication permissions,
-          and audit events will remain. Messages already submitted cannot be recalled.</p>
+            onClick={()=>setPurgePreview(null)} disabled={purgeBusy}>Close</button></div>
+        <p>This permanently removes {purgePreview.campaign_count} campaign(s) and
+          their results. Prospect and payment records are retained.</p>
         {purgePreview.in_flight_attempts>0?<p className="form-error" role="alert">
-          {purgePreview.in_flight_attempts} sending attempt(s) are still in progress.
-          Wait until they finish and refresh before deleting.
+          {purgePreview.in_flight_attempts} attempt(s) are in progress.
+          Refresh after they finish.
         </p>:<label className="field"><span className="field-label">
           Type DELETE ALL CAMPAIGNS to confirm</span>
           <input type="text" autoComplete="off" value={purgeConfirmation}
-            onChange={e=>setPurgeConfirmation(e.target.value)}
-            placeholder="DELETE ALL CAMPAIGNS" /></label>}
+            onChange={e=>setPurgeConfirmation(e.target.value)}/></label>}
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" disabled={purgeBusy}
             onClick={()=>setPurgePreview(null)}>Cancel</button>
@@ -450,19 +209,10 @@ export function CommunicationCampaigns({revision}:{revision:number}){
             disabled={purgeBusy||purgePreview.in_flight_attempts>0||
               purgeConfirmation!=="DELETE ALL CAMPAIGNS"}
             onClick={()=>void purgeCampaigns()}>
-            {purgeBusy?"Deleting…":"Permanently delete campaigns"}
+            {purgeBusy?"Deleting…":"Delete campaigns"}
           </button>
         </div>
       </section>
     </div>}
-    <p className="comm-muted comm-history-footnote">
-      Submitted means accepted by Saasyto, not delivered or read. "Not sent" above
-      includes the latest recipient-check exclusions plus people suppressed
-      after approval. These categories are explained individually in each
-      campaign's detailed results. Planned dates use IST.
-      Creating a campaign never sends WhatsApp messages.
-      An approved campaign requires the private dispatch worker. Local pilots
-      can send only to the numbers explicitly permitted in API settings.
-    </p>
   </section>;
 }
