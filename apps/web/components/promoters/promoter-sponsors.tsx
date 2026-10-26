@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useEffect,useState } from "react";
 import { Icon } from "../ui/icon";
-import { formatCRMDate } from "../../lib/crm-dates";
 import type { Candidate,Promoter,SponsorPage } from "./promoter-types";
 import { csrfToken } from "./promoter-types";
 
@@ -72,21 +71,17 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
       <h3><Icon name={kind==="sponsors"?"users":"user-plus"} size={19}/>
         {title} ({links?.total??"…"})</h3>
     </div>
-    <p className="panel-description">{kind==="sponsors"
-      ?"People who have made a recorded contribution"
-      :"Registered people awaiting a first contribution"}</p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {links?.items.length?<div className="promoter-assignment-scroll">
       <table className="promoter-assignment-table">
         <thead><tr><th scope="col">Name</th><th scope="col">City</th>
-          <th scope="col">Start month</th><th scope="col">Monthly</th>
+          <th scope="col">Sponsorship</th>
           <th scope="col">Status</th><th scope="col">Action</th></tr></thead>
         <tbody>{links.items.map(link=><tr key={link.assignment_id}>
           <td><Link href={"/prospects/"+link.prospect_id} className="promoter-person-link">{link.full_name}</Link>
             <small>{link.mobile_number}</small></td>
           <td>{link.area_city||"—"}</td>
-          <td>{link.start_month?formatCRMDate(link.start_month):"—"}</td>
-          <td>{money(link.monthly_contribution_paise)}</td>
+          <td>{money(link.monthly_contribution_paise)} / month</td>
           <td><span className={"status-pill "+link.crm_stage}>{link.crm_stage==="active"?"Active":"Inactive"}</span></td>
           <td><button type="button" className="text-action" disabled={busy}
             onClick={()=>change({
@@ -113,13 +108,7 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
     </div>}
     {promoter.is_active&&kind==="prospects"&&<div className="promoter-assign-search">
       <h3>Assign a prospect</h3>
-      <p className="panel-description">Promoters can also sponsor a Salah themselves.
-        Register them in Prospects using their existing phone number, then assign
-        their prospect record here.</p>
-      <button type="button" className="btn btn-secondary" disabled={busy}
-        onClick={()=>setSearch(promoter.mobile_number)}>
-        Find promoter&apos;s own prospect record
-      </button>
+      <p className="panel-description">Search a registered person to assign.</p>
       <label className="field"><span className="field-label">Search registered prospects</span>
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search name, phone or city" aria-label="Find sponsor"/></label>
