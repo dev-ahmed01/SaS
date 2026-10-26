@@ -101,7 +101,8 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
           <input required maxLength={160} value={subject}
             onChange={e=>setSubject(e.target.value)}/></label>}
         <label className="field"><span className="field-label">Message *</span>
-          <textarea ref={messageInput} required rows={6} minLength={3} maxLength={1200}
+          <textarea ref={messageInput} aria-label="Template message" required rows={6}
+            minLength={3} maxLength={1200}
             value={body} onChange={e=>setBody(e.target.value)}
             placeholder={"Assalamu Alaikum {{name}},\n\nYour Foundation update…"}/>
           <PersonalizationTokens onInsert={insertPersonalization}/>
