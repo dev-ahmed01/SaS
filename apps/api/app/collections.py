@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app import auth as auth_module
 from app.accounting import effective_credits, evaluate_status, ist_today, month_start, shift_month
 from app.auth import db_session, get_admin, require_csrf
-from app.communication_consent import address_opted_out
+from app.communication_consent import address_opted_out, evaluate_recipients
 from app.config import get_settings
 from app.models import (
     AdminSession,
@@ -578,9 +578,18 @@ def resend_collection_confirmation(
     ).with_for_update()).one_or_none()
     number = (person.whatsapp_number or person.mobile_number) if person else None
     if not person or person.archived_at or not person.whatsapp_opt_in or not number:
-        raise HTTPException(status_code=409, detail="Sponsor is not eligible for a WhatsApp receipt")
+        raise HTTPException(
+            status_code=409, detail="Sponsor is not eligible for a WhatsApp receipt"
+        )
     if address_opted_out(db, admin.organization_id, "whatsapp", number):
         raise HTTPException(status_code=409, detail="WhatsApp permission is withdrawn")
+    permission = evaluate_recipients(
+        db, admin.organization_id, [person], "whatsapp", "update",
+    )
+    if len(permission) != 1 or permission[0][2] != "eligible":
+        raise HTTPException(
+            status_code=409, detail="Documented WhatsApp update permission is required"
+        )
 
     outboxes = db.scalars(select(MessageOutbox).where(
         MessageOutbox.organization_id == admin.organization_id,
