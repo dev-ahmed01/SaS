@@ -1,11 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, ClipboardEvent, useEffect, useRef, useState } from "react";
 import type { Prospect } from "./prospects-types";
 import { reasonLabel, stageReasons } from "./prospects-types";
 
-type Challenge={challenge_id:string;expires_at:string;status:string};
-type OtpStatus={delivery_enabled:boolean;verified:boolean;verified_at:string|null};
+type Challenge={challenge_id:string;expires_at:string;status?:string};
+type OtpStatus={
+  delivery_enabled:boolean;verified:boolean;verified_at:string|null;
+  challenge_id:string|null;expires_at:string|null;
+};
+const EMPTY=["","","",""];
+const fieldClasses="sas-otp-digit";
 
 function confirmationStatus(value:string):string {
   switch(value){
@@ -25,7 +30,7 @@ async function csrf():Promise<string>{
   return (await response.json()).csrf_token as string;
 }
 
-async function post<T>(path:string, body?:Record<string,unknown>):Promise<T>{
+async function post<T>(path:string,body?:Record<string,unknown>):Promise<T>{
   const token=await csrf();
   const response=await fetch("/api/admin/prospects/"+path,{
     method:"POST",credentials:"same-origin",
@@ -41,61 +46,146 @@ async function post<T>(path:string, body?:Record<string,unknown>):Promise<T>{
   return response.json() as Promise<T>;
 }
 
+function countdown(ms:number):string{
+  const seconds=Math.max(0,Math.ceil(ms/1000));
+  return String(Math.floor(seconds/60)).padStart(2,"0")+":"+
+    String(seconds%60).padStart(2,"0");
+}
+
 export function StageDialog({prospect,onClose,onChanged}:{
   prospect:Prospect;onClose:()=>void;onChanged:(notice?:string)=>void;
 }){
   const markInactive=prospect.crm_stage==="active";
   const reactivation=!markInactive&&prospect.stage_history.some(x=>x.to_stage==="active");
+  const number=prospect.whatsapp_number||prospect.mobile_number;
   const [reason,setReason]=useState("");
   const [note,setNote]=useState("");
-  const [code,setCode]=useState("");
+  const [digits,setDigits]=useState<string[]>(EMPTY);
   const [challenge,setChallenge]=useState<Challenge|null>(null);
   const [otpReady,setOtpReady]=useState<boolean|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
+  const [now,setNow]=useState(()=>Date.now());
   const closeButton=useRef<HTMLButtonElement>(null);
+  const digitRefs=useRef<(HTMLInputElement|null)[]>([]);
+  // Avoid duplicate messages under React Strict Mode / rerenders.
+  const started=useRef(false);
+  const mounted=useRef(true);
+  const expiry=challenge?Date.parse(challenge.expires_at):0;
+  const expired=Boolean(challenge && (Number.isNaN(expiry)||now>=expiry));
+  const code=digits.join("");
 
   useEffect(()=>{
+    mounted.current=true;
     const previous=document.activeElement as HTMLElement|null;
     closeButton.current?.focus();
-    function onKey(e:KeyboardEvent){
+    function onKey(e:globalThis.KeyboardEvent){
       if(e.key==="Escape"){e.preventDefault();onClose();}
     }
     window.addEventListener("keydown",onKey);
-    return ()=>{window.removeEventListener("keydown",onKey);previous?.focus();};
+    return ()=>{mounted.current=false;window.removeEventListener("keydown",onKey);previous?.focus();};
   },[onClose]);
 
   useEffect(()=>{
     if(markInactive)return;
-    const controller=new AbortController();
-    fetch("/api/admin/prospects/"+prospect.id+"/otp/status",{
-      cache:"no-store",signal:controller.signal,
-    }).then(async response=>{
-      if(!response.ok)throw Error("OTP status could not be checked.");
-      return response.json() as Promise<OtpStatus>;
-    }).then(status=>{if(!controller.signal.aborted)setOtpReady(status.delivery_enabled);})
-      .catch(()=>{if(!controller.signal.aborted)setError("OTP service is unavailable.");});
-    return ()=>controller.abort();
+    const interval=setInterval(()=>setNow(Date.now()),500);
+    return ()=>clearInterval(interval);
+  },[markInactive]);
+
+  useEffect(()=>{
+    if(!challenge||expired)return;
+    digitRefs.current[0]?.focus();
+  },[challenge?.challenge_id,expired]);
+
+  useEffect(()=>{
+    if(markInactive||started.current)return;
+    started.current=true;
+    let active=true;
+    // Resume an existing unexpired challenge when a dialog is reopened.
+    // Otherwise request exactly once upon the administrator clicking Mark Active.
+    (async()=>{
+      try{
+        const res=await fetch("/api/admin/prospects/"+prospect.id+"/otp/status",{
+          cache:"no-store",
+        });
+        if(!res.ok)throw Error("Could not check WhatsApp OTP availability.");
+        const status=await res.json() as OtpStatus;
+        if(!active)return;
+        setOtpReady(status.delivery_enabled);
+        if(!status.delivery_enabled){
+          setError("WhatsApp OTP delivery is not configured.");return;
+        }
+        if(status.challenge_id&&status.expires_at&&
+          Date.parse(status.expires_at)>Date.now()){
+          setChallenge({challenge_id:status.challenge_id,expires_at:status.expires_at});
+          setNotice("A code has already been requested for this WhatsApp number.");
+          return;
+        }
+        setBusy(true);
+        const issued=await post<Challenge>(prospect.id+"/otp/request");
+        if(active){
+          setChallenge(issued);
+          setNow(Date.now());
+          setNotice("OTP requested from WhatsApp provider. Delivery is not yet confirmed.");
+        }
+      }catch(e){
+        if(active)setError(e instanceof Error?e.message:"Could not request OTP.");
+      }finally{if(active)setBusy(false);}
+    })();
+    return ()=>{active=false;};
   },[markInactive,prospect.id]);
 
   async function requestCode(){
-    if(busy||otpReady!==true)return;
+    if(busy||otpReady!==true||!expired&&!error&&!(!challenge))return;
     setBusy(true);setError("");setNotice("");
     try{
       const response=await post<Challenge>(prospect.id+"/otp/request");
-      setChallenge(response);
-      setNotice("Code requested. Ask the sponsor for the six-digit code sent to their WhatsApp.");
-    }catch(e){setError(e instanceof Error?e.message:"Could not request OTP.");}
-    finally{setBusy(false);}
+      if(!mounted.current)return;
+      setChallenge(response);setDigits(EMPTY);setNow(Date.now());
+      setNotice("New OTP requested. Delivery is not yet confirmed.");
+    }catch(e){if(mounted.current)setError(e instanceof Error?e.message:"Could not request OTP.");}
+    finally{if(mounted.current)setBusy(false);}
+  }
+
+  function applyDigits(index:number,raw:string){
+    const incoming=raw.replace(/\D/g,"");
+    if(!incoming)return;
+    const next=[...digits];
+    for(let i=0;i<incoming.length&&index+i<4;i++)next[index+i]=incoming[i];
+    setDigits(next);
+    digitRefs.current[Math.min(3,index+incoming.length)]?.focus();
+  }
+
+  function keyDown(event:KeyboardEvent<HTMLInputElement>,index:number){
+    if(event.key==="Backspace"){
+      event.preventDefault();
+      const next=[...digits];
+      const target=next[index]?index:Math.max(0,index-1);
+      next[target]="";setDigits(next);digitRefs.current[target]?.focus();
+    }else if(event.key==="ArrowLeft"&&index>0){
+      event.preventDefault();digitRefs.current[index-1]?.focus();
+    }else if(event.key==="ArrowRight"&&index<3){
+      event.preventDefault();digitRefs.current[index+1]?.focus();
+    }
+  }
+
+  function paste(event:ClipboardEvent<HTMLInputElement>){
+    event.preventDefault();
+    const pasted=event.clipboardData.getData("text").replace(/\D/g,"").slice(0,4);
+    if(pasted){
+      setDigits([...pasted.split(""),...EMPTY].slice(0,4));
+      digitRefs.current[Math.min(3,pasted.length)]?.focus();
+    }
   }
 
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(busy)return;
     if(markInactive&&!reason){setError("Select a reason for deactivation.");return;}
-    if(!markInactive&&(!challenge||!/^[0-9]{6}$/.test(code))){
-      setError("Request and enter the six-digit OTP first.");return;
+    if(!markInactive&&(!challenge||expired||!/^\d{4}$/.test(code))){
+      setError(expired?"This OTP expired. Request a new code.":"Enter all four OTP digits.");
+      return;
     }
     if(reactivation&&note.trim().length<3){
       setError("Explain why this sponsor is being reactivated.");return;
@@ -116,7 +206,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
       }
       onChanged(confirmation);
     }catch(e){setError(e instanceof Error?e.message:"Could not change active status.");}
-    finally{setBusy(false);}
+    finally{if(mounted.current)setBusy(false);}
   }
 
   return <div className="crm-dialog-scrim" role="presentation"
@@ -150,22 +240,46 @@ export function StageDialog({prospect,onClose,onChanged}:{
                 placeholder="Reason for reactivation"/>
             </label>
           </>}
-          <p className="crm-dialog-help">A new WhatsApp OTP is required before activation.
-            This verifies the sponsor&apos;s number; existing communication permissions stay unchanged.</p>
-          {otpReady===null?<p className="crm-muted">Checking OTP service…</p>:
+          <div className="sas-otp-summary">
+            <p className="crm-dialog-help">Your verification code has been requested on WhatsApp:</p>
+            <strong>{number}</strong>
+            <p className="crm-dialog-help">OTP valid for the next 2 minutes.</p>
+          </div>
+          {otpReady===null?<p className="crm-muted">Preparing WhatsApp verification…</p>:
             otpReady===false?
-              <p role="alert" className="form-error">WhatsApp OTP is not configured.
-                Activation is unavailable until an approved OTP provider is connected.</p>:
-              !challenge?
+              <p role="alert" className="form-error">WhatsApp OTP delivery is not configured.
+                Activation is unavailable until a provider is connected.</p>:
+            challenge&&!expired?
+              <div className="sas-otp-entry">
+                <div className="field-label" id="sas-otp-label">Enter the 4-digit OTP</div>
+                <div className="sas-otp-inputs" role="group" aria-labelledby="sas-otp-label">
+                  {digits.map((digit,index)=><input key={index} ref={el=>{digitRefs.current[index]=el;}}
+                    className={fieldClasses} type="text" inputMode="numeric"
+                    autoComplete={index===0?"one-time-code":"off"} maxLength={4}
+                    aria-label={"OTP digit "+(index+1)}
+                    value={digit} disabled={busy} onPaste={paste}
+                    onKeyDown={e=>keyDown(e,index)}
+                    onChange={e=>{
+                      const raw=e.target.value.replace(/\D/g,"");
+                      if(!raw){setDigits(old=>old.map((v,i)=>i===index?"":v));return;}
+                      applyDigits(index,raw);
+                    }}/>)}
+                </div>
+                <p className="sas-otp-timer" role="timer" aria-live="off">
+                  Expires in <strong>{countdown(expiry-now)}</strong>
+                </p>
+              </div>:
+              <div className="sas-otp-entry">
+                <p role="status" className="crm-dialog-help">
+                  {expired?"This OTP has expired. Request a new code.":
+                  busy?"Requesting the verification code…":
+                  "No active verification code. Request a new one."}
+                </p>
                 <button type="button" className="btn btn-secondary" disabled={busy}
-                  onClick={requestCode}>{busy?"Requesting…":"Send WhatsApp OTP"}</button>:
-                <label className="field">
-                  <span className="field-label">Six-digit WhatsApp OTP *</span>
-                  <input required inputMode="numeric" autoComplete="one-time-code"
-                    pattern="[0-9]{6}" maxLength={6} placeholder="000000"
-                    value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))}/>
-                </label>}
-          {challenge&&<p className="crm-muted">Code valid for 10 minutes. A new code is required for every activation.</p>}
+                  onClick={()=>void requestCode()}>{busy?"Requesting…":"Send new OTP"}</button>
+              </div>}
+          <p className="crm-dialog-help">A correct OTP activates this person.
+            Communication permission and payment records remain separate.</p>
         </>}
         {notice&&<p role="status" className="crm-muted">{notice}</p>}
         {error&&<p className="form-error" role="alert">{error}</p>}
@@ -173,7 +287,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
           <button type="button" className="btn btn-secondary" onClick={onClose}
             disabled={busy}>Cancel</button>
           <button type="submit" className="btn btn-primary"
-            disabled={busy||(markInactive?!reason:!challenge||code.length!==6||
+            disabled={busy||(markInactive?!reason:!challenge||expired||code.length!==4||
               (reactivation&&note.trim().length<3))}>
             {busy?"Checking…":markInactive?"Confirm Inactive":"Verify OTP & Activate"}
           </button>
