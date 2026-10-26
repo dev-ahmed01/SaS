@@ -718,3 +718,45 @@ def test_campaign_purge_is_tenant_scoped(system):
     with Session(engine) as db:
         assert db.get(CommunicationCampaign, uuid.UUID(own["id"])) is None
         assert db.get(CommunicationCampaign, other_id) is not None
+
+
+def test_promoter_as_own_prospect_receives_one_message_in_combined_audience(system):
+    """A person with both CRM roles is one WhatsApp address, not two sends."""
+    client, _ = system
+    csrf = login(client)
+    phone = "+919876543989"
+    promoter = client.post("/v1/promoters", headers=csrf, json={
+        "full_name": "Self Sponsor", "mobile_number": phone,
+        "area_city": "Bengaluru", "whatsapp_opt_in": True,
+    })
+    assert promoter.status_code == 201, promoter.text
+    prospect = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Self Sponsor", "mobile_number": phone,
+        "area_city": "Bengaluru", "whatsapp_opt_in": True,
+    })
+    assert prospect.status_code == 201, prospect.text
+    active = activate_for_communication(client, csrf, prospect.json())
+    assert active["crm_stage"] == "active"
+    grant = client.post("/v1/communication/consent-events", headers=csrf, json={
+        "recipient_kind": "promoter", "recipient_id": promoter.json()["id"],
+        "channel": "whatsapp", "decision": "opted_in",
+        "source": "signed self-sponsor permission",
+        "evidence_reference": "synthetic-two-role-permission",
+    })
+    assert grant.status_code == 201, grant.text
+    result = create_campaign(
+        client, csrf, audience="both", segment="active", category="update",
+        title="One person, two roles",
+    )
+    assert result.status_code == 201, result.text
+    assert result.json()["candidate_snapshot"] == 2
+    assert result.json()["eligible_snapshot"] == 1
+    check = client.post(
+        "/v1/communication/campaigns/"+result.json()["id"]+"/preparations",
+        headers=csrf,
+        json={"request_id": str(uuid.uuid4()), "simulation_only": True},
+    )
+    assert check.status_code == 201, check.text
+    assert check.json()["eligible_count"] == 1
+    assert check.json()["suppressed_count"] == 1
+    assert check.json()["exclusion_reasons"] == {"duplicate_address": 1}
