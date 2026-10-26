@@ -83,10 +83,8 @@ def render_otp(body: str, prospect: Prospect, code: str) -> str:
         "code": code,
         "sponsorship_amount": money,
         "sponsorship_units": str(units) if units is not None else "Not applicable",
-        "sponsorship": (
-            money + " per month" +
-            (f" ({units} units at ₹250 each)" if units is not None and units > 1 else "")
-        ),
+        # State the actual monthly amount; never append ₹250 unit breakdowns.
+        "sponsorship": money + " per month",
     }
     message = TOKEN.sub(
         lambda match: replacements[match.group(1)], validate_otp_body(body),
