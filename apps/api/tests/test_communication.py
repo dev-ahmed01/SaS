@@ -797,6 +797,20 @@ def test_sponsor_otp_template_is_admin_managed_and_isolated_from_campaign_templa
     # template and its {{code}} placeholder cannot leak through generic messages.
     assert client.get("/v1/communication/templates").json() == []
     assert create_template(client, csrf, name="__system_sponsor_otp__").status_code == 422
+    with Session(_engine) as db:
+        reserved = db.scalars(select(CommunicationTemplate).where(
+            CommunicationTemplate.name_key == "__system_sponsor_otp__",
+        )).one()
+        reserved_id = str(reserved.id)
+    assert client.patch("/v1/communication/templates/"+reserved_id, headers=csrf, json={
+        "version": 1, "name": "Spoofed OTP", "channel": "whatsapp",
+        "category": "other", "subject": None, "body": "Bad modified verification",
+        "provider_template_id": None,
+    }).status_code == 404
+    assert client.delete(
+        "/v1/communication/templates/"+reserved_id+"?version=1",
+        headers=csrf,
+    ).status_code == 404
     assert client.post("/v1/communication/otp-template", headers=csrf, json={
         "version": 0, "body": body,
     }).status_code == 409
