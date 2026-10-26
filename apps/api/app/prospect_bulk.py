@@ -176,64 +176,65 @@ def import_prospects(
         )
 
     added = 0
-    if payload.commit and ready:
-        inquiry = db.scalars(select(ProspectStageDefinition).where(
-            ProspectStageDefinition.organization_id == admin.organization_id,
-            ProspectStageDefinition.name_key == "new inquiry",
-        )).one_or_none()
-        if inquiry is None:
-            inquiry = ProspectStageDefinition(
-                organization_id=admin.organization_id, name="New Inquiry",
-                name_key="new inquiry", color="#64748b", sort_order=0, version=1,
-                description="Awaiting first documented follow-up",
-            )
-            db.add(inquiry)
-            db.flush()
-        now = utc_now()
-        for index, row in enumerate(payload.rows):
-            if results[index].status != "ready":
-                continue
-            amount = row.monthly_contribution_paise or default_amount
-            beginning = row.start_month or month
-            person = Prospect(
-                organization_id=admin.organization_id,
-                full_name=row.full_name, mobile_number=row.mobile_number,
-                whatsapp_number=row.mobile_number, area_city=row.area_city,
-                email=str(row.email) if row.email else None,
-                monthly_contribution_paise=amount, start_month=beginning,
-                lifecycle_status="new", crm_stage="inactive",
-                crm_stage_changed_at=now, pipeline_stage_id=inquiry.id,
-                whatsapp_opt_in=False, version=1, registration_request_id=ids[index],
-                registration_payload_hash=_row_hash(row),
-            )
-            db.add(person)
-            db.flush()
-            db.add(SponsorshipRate(
-                organization_id=admin.organization_id, prospect_id=person.id,
-                effective_month=beginning, amount_paise=amount,
-            ))
-            db.add(AuditEvent(
-                organization_id=admin.organization_id, actor_admin_id=admin.id,
-                action="prospect.bulk_created", entity_type="prospect",
-                entity_id=str(person.id), before_data=None,
-                after_data={"batch_id": str(payload.batch_id), "row": index + 1,
-                            "status": "new", "version": 1},
-            ))
-            results[index].status = "added"
-            results[index].prospect_id = person.id
-            added += 1
-        try:
+    try:
+        if payload.commit and ready:
+            inquiry = db.scalars(select(ProspectStageDefinition).where(
+                ProspectStageDefinition.organization_id == admin.organization_id,
+                ProspectStageDefinition.name_key == "new inquiry",
+            )).one_or_none()
+            if inquiry is None:
+                inquiry = ProspectStageDefinition(
+                    organization_id=admin.organization_id, name="New Inquiry",
+                    name_key="new inquiry", color="#64748b", sort_order=0, version=1,
+                    description="Awaiting first documented follow-up",
+                )
+                db.add(inquiry)
+                db.flush()
+            now = utc_now()
+            for index, row in enumerate(payload.rows):
+                if results[index].status != "ready":
+                    continue
+                amount = row.monthly_contribution_paise or default_amount
+                beginning = row.start_month or month
+                person = Prospect(
+                    organization_id=admin.organization_id,
+                    full_name=row.full_name, mobile_number=row.mobile_number,
+                    whatsapp_number=row.mobile_number, area_city=row.area_city,
+                    email=str(row.email) if row.email else None,
+                    monthly_contribution_paise=amount, start_month=beginning,
+                    lifecycle_status="new", crm_stage="inactive",
+                    crm_stage_changed_at=now, pipeline_stage_id=inquiry.id,
+                    whatsapp_opt_in=False, version=1, registration_request_id=ids[index],
+                    registration_payload_hash=_row_hash(row),
+                )
+                db.add(person)
+                db.flush()
+                db.add(SponsorshipRate(
+                    organization_id=admin.organization_id, prospect_id=person.id,
+                    effective_month=beginning, amount_paise=amount,
+                ))
+                db.add(AuditEvent(
+                    organization_id=admin.organization_id, actor_admin_id=admin.id,
+                    action="prospect.bulk_created", entity_type="prospect",
+                    entity_id=str(person.id), before_data=None,
+                    after_data={"batch_id": str(payload.batch_id), "row": index + 1,
+                                "status": "new", "version": 1},
+                ))
+                results[index].status = "added"
+                results[index].prospect_id = person.id
+                added += 1
             db.commit()
-        except IntegrityError as exc:
-            db.rollback()
-            raise HTTPException(
-                status_code=409,
-                detail="Another registration changed during import. Preview again.",
-            ) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Another registration changed during import. Preview again.",
+        ) from exc
 
     response.headers["Cache-Control"] = "no-store"
     return BulkResponse(
-        preview_only=not payload.commit, total=len(results), ready=ready if not payload.commit else 0,
+        preview_only=not payload.commit, total=len(results),
+        ready=ready if not payload.commit else 0,
         already_imported=replayed, added=added, blocked=blocked,
         default_amount_paise=default_amount, default_start_month=month, rows=results,
     )
