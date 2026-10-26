@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
     saasyto_local_test_enabled: bool = False
+    # Explicit localhost-only rehearsal with dynamic CRM recipients, never
+    # an implicit bypass or a setting for the production environment.
+    saasyto_local_dynamic_enabled: bool = False
     saasyto_local_test_phone: str | None = None
     # Optional second explicitly authorized recipient for an isolated local test.
     saasyto_local_test_phone_2: str | None = None
@@ -105,6 +108,13 @@ class Settings(BaseSettings):
                     "Staging and production DATABASE_URL must enable PostgreSQL TLS "
                     "with sslmode=require, verify-ca or verify-full"
                 )
+        if self.saasyto_local_dynamic_enabled:
+            if not (self.app_env == "development" and self.local_demo_login_enabled):
+                raise ValueError("Dynamic Saasyto local sending requires protected loopback demo mode")
+            if self.saasyto_local_test_enabled or self.otp_local_pilot_enabled:
+                raise ValueError("Dynamic Saasyto local sending cannot combine with allowlisted pilot")
+            if self.saasyto_local_test_phone or self.saasyto_local_test_phone_2:
+                raise ValueError("Dynamic Saasyto local sending must not configure recipient phone numbers")
         if self.saasyto_local_test_enabled:
             import re
 
@@ -124,7 +134,9 @@ class Settings(BaseSettings):
         if self.saasyto_delivery_enabled:
             import re
 
-            local_pilot = self.app_env == "development" and self.saasyto_local_test_enabled
+            local_pilot = self.app_env == "development" and (
+                self.saasyto_local_test_enabled or self.saasyto_local_dynamic_enabled
+            )
             if self.app_env not in ("production", "test") and not local_pilot:
                 raise ValueError("Saasyto delivery requires approved production or local pilot")
             if not self.saasyto_enable_after or not self.saasyto_enable_after.tzinfo:
@@ -159,7 +171,7 @@ class Settings(BaseSettings):
                 raise ValueError("OTP_SECRET of 32+ characters is required")
         if self.otp_saasyto_enabled:
             if (
-                self.app_env != "production"
+                self.app_env != "production" and not self.saasyto_local_dynamic_enabled
                 or self.saasyto_local_test_enabled
                 or self.otp_local_pilot_enabled
                 or self.otp_delivery_enabled
