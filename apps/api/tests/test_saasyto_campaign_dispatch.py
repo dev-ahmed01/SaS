@@ -13,7 +13,15 @@ from test_communication import activate_for_communication, create_campaign, logi
 
 from app.bootstrap_admin import provision_admin
 from app.main import app
-from app.models import Base, Prospect, SaasytoCampaignRecipient, SaasytoCampaignRun
+from app.models import (
+    Base,
+    CommunicationCampaign,
+    CommunicationPreparation,
+    CommunicationRecipientSnapshot,
+    Prospect,
+    SaasytoCampaignRecipient,
+    SaasytoCampaignRun,
+)
 from app.saasyto_client import Submission
 from app.security import utc_now
 
@@ -453,3 +461,68 @@ def test_production_batch_uses_multiple_registered_contacts_and_honors_late_opto
     assert summary.json()["suppressed_after_approval"] == 1
     with Session(engine) as db:
         assert db.scalar(select(func.count(SaasytoCampaignRecipient.id))) == 3
+
+
+def test_delete_all_campaigns_removes_queued_runs_and_results(
+    dispatch_system, monkeypatch,
+):
+    client, engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "2701")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "Purge queued campaign")
+    assert approved["queued"] == 1
+    api = "/v1/communication/campaigns"
+    assert client.get(api+"/purge-preview").json() == {
+        "campaign_count": 1, "in_flight_attempts": 0,
+    }
+    removed = client.post(api+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 1,
+    })
+    assert removed.status_code == 200, removed.text
+    data = removed.json()
+    assert data["deleted_campaigns"] == 1
+    assert data["deleted_saasyto_runs"] == 1
+    assert data["deleted_delivery_recipients"] == 1
+    assert data["deleted_preparations"] == 1
+    with Session(engine) as db:
+        for model in (CommunicationCampaign, SaasytoCampaignRun,
+                      SaasytoCampaignRecipient, CommunicationPreparation,
+                      CommunicationRecipientSnapshot):
+            assert db.scalar(select(func.count()).select_from(model)) == 0
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", lambda *_a, **_kw:
+                        (_ for _ in ()).throw(AssertionError("purged send must not run")))
+    assert client.post("/internal/saasyto/dispatch", headers={
+        "X-Saasyto-Runner-Token": RUNNER,
+    }).json() == {}
+    assert client.get(api+"/"+cid+"/results").status_code == 404
+
+
+def test_delete_all_refuses_unsettled_claimed_send(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "2702")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "Unsettled active send")
+    with Session(engine) as db:
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        item.status = "claimed"
+        db.commit()
+    api = "/v1/communication/campaigns"
+    assert client.get(api+"/purge-preview").json()["in_flight_attempts"] == 1
+    refused = client.post(api+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 1,
+    })
+    assert refused.status_code == 409
+    assert "in progress" in refused.json()["detail"]
+    assert client.get(api+"/"+cid+"/results").status_code == 200
+    with Session(engine) as db:
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        item.status = "unknown"
+        db.commit()
+    okay = client.post(api+"/purge-all", headers=csrf, json={
+        "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 1,
+    })
+    assert okay.status_code == 200, okay.text
