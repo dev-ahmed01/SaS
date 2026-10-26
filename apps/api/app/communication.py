@@ -791,6 +791,31 @@ def create_campaign(
     return _campaign_read(row)
 
 
+class CampaignPurgePreview(BaseModel):
+    campaign_count: int
+    in_flight_attempts: int
+
+
+@router.get("/campaigns/purge-preview", response_model=CampaignPurgePreview)
+def campaign_purge_preview(
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+) -> CampaignPurgePreview:
+    org = context[0].organization_id
+    count = database.scalar(select(func.count(CommunicationCampaign.id)).where(
+        CommunicationCampaign.organization_id == org,
+    )) or 0
+    in_flight = database.scalar(select(func.count(SaasytoCampaignRecipient.id)).where(
+        SaasytoCampaignRecipient.organization_id == org,
+        SaasytoCampaignRecipient.status == "claimed",
+    )) or 0
+    response.headers["Cache-Control"] = "no-store"
+    return CampaignPurgePreview(
+        campaign_count=count, in_flight_attempts=in_flight,
+    )
+
+
 class PurgeAllCampaigns(BaseModel):
     """Require a deliberate tenant-scoped acknowledgement for permanent cleanup."""
 
