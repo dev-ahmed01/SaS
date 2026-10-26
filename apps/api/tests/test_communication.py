@@ -760,3 +760,66 @@ def test_promoter_as_own_prospect_receives_one_message_in_combined_audience(syst
     assert check.json()["eligible_count"] == 1
     assert check.json()["suppressed_count"] == 1
     assert check.json()["exclusion_reasons"] == {"duplicate_address": 1}
+
+
+def test_sponsor_otp_template_is_admin_managed_and_isolated_from_campaign_templates(system):
+    client, _engine = system
+    assert client.get("/v1/communication/otp-template").status_code == 401
+    csrf = login(client)
+    current = client.get("/v1/communication/otp-template")
+    assert current.status_code == 200
+    assert current.headers["cache-control"] == "no-store"
+    assert current.json()["version"] == 0
+    body = current.json()["body"]
+    assert all(token in body for token in ("{{name}}", "{{sponsorship}}", "{{code}}"))
+    assert client.post("/v1/communication/otp-template", json={
+        "version": 0, "body": body,
+    }).status_code == 403
+    for bad in (
+        body.replace("{{code}}", "1234"),
+        body.replace("{{code}}", "{{code}} and {{code}}"),
+        body.replace("{{sponsorship}}", "₹250"),
+        body.replace("{{name}}", "Sponsor"),
+        body.replace("{{code}}", "{{password}}"),
+        body + " {{name}}" * 8,  # Template expands beyond provider limit.
+    ):
+        result = client.post("/v1/communication/otp-template", headers=csrf, json={
+            "version": 0, "body": bad,
+        })
+        assert result.status_code == 422, result.text
+    updated = body.replace("Thank you for taking this step", "JazakAllahu Khairan")
+    response = client.post("/v1/communication/otp-template", headers=csrf, json={
+        "version": 0, "body": updated,
+    })
+    assert response.status_code == 200, response.text
+    assert response.json() == {"body": updated, "version": 1}
+    assert client.get("/v1/communication/otp-template").json()["body"] == updated
+    # The sensitive registration copy cannot become an ordinary sendable campaign
+    # template and its {{code}} placeholder cannot leak through generic messages.
+    assert client.get("/v1/communication/templates").json() == []
+    assert create_template(client, csrf, name="__system_sponsor_otp__").status_code == 422
+    with Session(_engine) as db:
+        reserved = db.scalars(select(CommunicationTemplate).where(
+            CommunicationTemplate.name_key == "__system_sponsor_otp__",
+        )).one()
+        reserved_id = str(reserved.id)
+    assert client.patch("/v1/communication/templates/"+reserved_id, headers=csrf, json={
+        "version": 1, "name": "Spoofed OTP", "channel": "whatsapp",
+        "category": "other", "subject": None, "body": "Bad modified verification",
+        "provider_template_id": None,
+    }).status_code == 404
+    assert client.delete(
+        "/v1/communication/templates/"+reserved_id+"?version=1",
+        headers=csrf,
+    ).status_code == 404
+    assert client.post("/v1/communication/otp-template", headers=csrf, json={
+        "version": 0, "body": body,
+    }).status_code == 409
+    ordinary = create_template(client, csrf, name="Regular sponsor update")
+    assert ordinary.status_code == 201, ordinary.text
+    assert len(client.get("/v1/communication/templates").json()) == 1
+    with Session(_engine) as db:
+        assert db.scalars(select(CommunicationTemplate)).all().__len__() == 2
+        assert db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "communication.otp_template_updated"
+        )).one().actor_admin_id is not None

@@ -1704,3 +1704,22 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .comm-campaign-item-metrics,.comm-campaign-item-actions {grid-column:1;grid-row:auto;}
   .comm-history-filter {padding:8px 10px;}
 }
+
+/* Communication personalization and editable activation copy */
+.comm-personalization {display:grid;gap:8px;margin-top:11px;}
+.comm-personalization-label {color:#506f5e;font:600 12px var(--font-body);}
+.comm-personalization-actions {display:flex;flex-wrap:wrap;gap:8px;}
+.comm-personalization-chip {border:1px solid #bcd9c9;background:#f5faf7;color:#1c6146;
+  border-radius:100px;padding:6px 12px;cursor:pointer;min-height:32px;
+  font:500 12px var(--font-body);}
+.comm-personalization-chip:hover {background:#e5f4eb;border-color:#8abb9c;}
+.comm-personalization-chip:focus-visible {outline:2px solid var(--forest);outline-offset:2px;}
+.comm-personalization small {color:#758d7e;font:400 11px var(--font-body);}
+.comm-otp-editor {display:block;}
+.comm-otp-editor .comm-panel-header {align-items:flex-start;}
+.comm-otp-editor form {display:grid;gap:13px;margin-top:16px;}
+.comm-otp-editor textarea {min-height:190px;line-height:1.7;}
+.comm-otp-editor .comm-actions {justify-content:flex-end;border-top:1px solid var(--line);padding-top:15px;}
+.comm-otp-copy-preview {white-space:pre-wrap;max-width:660px;background:#f3f9f5;
+  border:1px solid #d6eadd;border-radius:13px;padding:22px 25px;
+  color:#284638;font:400 13px/1.75 var(--font-body);}

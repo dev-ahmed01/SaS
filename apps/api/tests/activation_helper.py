@@ -18,7 +18,7 @@ def activate_with_test_otp(client, csrf, person, *, reason=None):
     with (
         patch("app.sponsor_otp.get_settings", return_value=config),
         patch("app.sponsor_otp._deliver",
-              side_effect=lambda _cfg, phone, code: delivered.append(code)),
+              side_effect=lambda _cfg, phone, code, *_extra: delivered.append(code)),
         patch("app.sponsor_otp.COOLDOWN_SECONDS", 0),
     ):
         issued = client.post(base + "/otp/request", headers=csrf)

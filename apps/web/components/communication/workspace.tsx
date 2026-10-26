@@ -7,6 +7,7 @@ import { CommunicationCompose } from "./compose";
 import { CommunicationTemplates } from "./templates";
 import { CommunicationCampaigns } from "./campaigns";
 import { CommunicationAutomations } from "./automations";
+import { OtpCopyEditor } from "./otp-copy-editor";
 
 type View="compose"|"campaigns"|"templates";
 const tabs=[
@@ -30,6 +31,7 @@ export function CommunicationWorkspace({view}:{view:View}){
       {view==="compose"?<CommunicationCompose onSaved={()=>setRevision(x=>x+1)}/>:
         view==="campaigns"?<CommunicationCampaigns revision={revision}/>:
         <div className="comm-stacked-sections">
+          <OtpCopyEditor/>
           <CommunicationTemplates onChanged={()=>setRevision(x=>x+1)}/>
           <CommunicationAutomations revision={revision}/>
         </div>}

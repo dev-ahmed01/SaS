@@ -621,7 +621,7 @@ def test_dynamic_local_crm_otp_then_reminder_to_current_opted_in_active_records(
     campaign_sends = []
 
     def record_otp(_cfg, *, phone, message):
-        match = re.search(r"activation code is ([0-9]{4})", message)
+        match = re.search(r"authentication code to register this sponsorship: ([0-9]{4})", message)
         assert match
         otp_sends.append((phone, match.group(1)))
         return Submission("accepted_unverified")

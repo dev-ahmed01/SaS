@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiGet, apiWrite, categoryOptions } from "./types";
 import type { Category, Channel, Template } from "./types";
+import { PersonalizationTokens } from "./personalization";
 
 export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void}){
   const [items,setItems]=useState<Template[]>([]);
@@ -17,6 +18,7 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [saving,setSaving]=useState(false);
+  const messageInput=useRef<HTMLTextAreaElement|null>(null);
 
   useEffect(()=>{
     setLoading(true);
@@ -24,6 +26,15 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
       .catch(()=>setError("Unable to load templates."))
       .finally(()=>setLoading(false));
   },[revision]);
+  function insertPersonalization(token:string){
+    const input=messageInput.current;
+    const start=input?.selectionStart??body.length;
+    const end=input?.selectionEnd??body.length;
+    setBody(body.slice(0,start)+token+body.slice(end));
+    requestAnimationFrame(()=>{
+      input?.focus();input?.setSelectionRange(start+token.length,start+token.length);
+    });
+  }
   function reset(){
     setEdit(null);setName("");setChannel("whatsapp");
     setCategory("update");setSubject("");setBody("");
@@ -90,9 +101,11 @@ export function CommunicationTemplates({onChanged=()=>{}}:{onChanged?:()=>void})
           <input required maxLength={160} value={subject}
             onChange={e=>setSubject(e.target.value)}/></label>}
         <label className="field"><span className="field-label">Message *</span>
-          <textarea required rows={6} minLength={3} maxLength={1200}
+          <textarea ref={messageInput} aria-label="Template message" required rows={6}
+            minLength={3} maxLength={1200}
             value={body} onChange={e=>setBody(e.target.value)}
             placeholder={"Assalamu Alaikum {{name}},\n\nYour Foundation update…"}/>
+          <PersonalizationTokens onInsert={insertPersonalization}/>
         </label>
         {error&&<p className="form-error" role="alert">{error}</p>}
         {notice&&<p className="form-success" role="status">{notice}</p>}

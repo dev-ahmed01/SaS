@@ -1126,7 +1126,28 @@ test("Communication is a full-width, preview-free CRM composer",async ({page})=>
   await page.goto("/communication/automations");
   await expect(page).toHaveURL(/\/communication\/templates$/);
   await expect(page.getByRole("heading",{name:"New template"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Sponsorship activation message"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"WhatsApp activation message"}))
+    .toContainText("{{code}}");
   await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
+});
+
+test("Sponsor personalization variables are visible without provider template IDs",async ({page})=>{
+  await page.goto("/communication");
+  await expect(page.getByRole("button",{name:"Sponsorship",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Sponsorship",exact:true}).click();
+  await expect(page.getByRole("textbox",{name:"Message body"}))
+    .toContainText("{{sponsorship}}");
+  await expect(page.getByRole("textbox",{name:/Approved WhatsApp template ID/}))
+    .toHaveCount(0);
+  await page.goto("/communication/templates");
+  await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Preview"})).toBeVisible();
+  await page.getByRole("button",{name:"Preview"}).click();
+  await expect(page.getByLabel("Example activation message")).toContainText("₹500");
+  await expect(page.getByLabel("Example activation message")).not.toContainText("{{code}}");
+  await page.getByRole("button",{name:"Edit message"}).click();
+  await expect(page.getByRole("textbox",{name:"WhatsApp activation message"})).toBeVisible();
 });
 
 test("Communication templates, campaign plans and rules persist across navigation",async ({page})=>{
@@ -1134,7 +1155,7 @@ test("Communication templates, campaign plans and rules persist across navigatio
   const name="Foundation Message "+key;
   await page.goto("/communication/templates");
   await page.getByRole("textbox",{name:"Template name"}).fill(name);
-  await page.getByRole("textbox",{name:"Message"}).fill("Assalamu Alaikum {{name}}, we have an update.");
+  await page.getByRole("textbox",{name:"Template message"}).fill("Assalamu Alaikum {{name}}, we have an update.");
   await page.getByRole("button",{name:"Save template"}).click();
   await expect(page.getByText(name,{exact:true})).toBeVisible();
   await page.goto("/communication");

@@ -6,6 +6,7 @@ import {
   apiGet, apiWrite, audienceOptions, categoryOptions, istLocalInput, segmentOptions,
 } from "./types";
 import type { Audience, Campaign, Category, Channel, Preview, Segment, Template } from "./types";
+import { PersonalizationTokens } from "./personalization";
 
 export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const router=useRouter();
@@ -25,6 +26,7 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
   const [notice,setNotice]=useState("");
   const [saving,setSaving]=useState(false);
   const requestId=useRef<string|null>(null);
+  const messageInput=useRef<HTMLTextAreaElement|null>(null);
 
   useEffect(()=>{
     apiGet<Template[]>("/templates").then(setTemplates).catch(()=>{
@@ -41,6 +43,16 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
     return()=>{active=false;};
   },[audience,segment,channel,category]);
   function invalidate(){requestId.current=null;setError("");setNotice("");}
+  function insertPersonalization(token:string){
+    const input=messageInput.current;
+    const start=input?.selectionStart??body.length;
+    const end=input?.selectionEnd??body.length;
+    setBody(body.slice(0,start)+token+body.slice(end));
+    invalidate();
+    requestAnimationFrame(()=>{
+      input?.focus();input?.setSelectionRange(start+token.length,start+token.length);
+    });
+  }
   function chooseTemplate(id:string){
     setSelectedTemplate(id);invalidate();
     const template=templates.find(x=>x.id===id);
@@ -53,6 +65,10 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
     event.preventDefault();if(saving)return;
     if(!title.trim()||body.trim().length<3){
       setError("Enter a title and message body.");return;
+    }
+    if(audience!=="prospects"&&
+      /{{\s*(sponsorship|sponsorship_amount|sponsorship_units)\s*}}/.test(body)){
+      setError("Sponsorship personalization is for Prospects only.");return;
     }
     if(category==="reminder"&&segment==="inactive"){
       setError("Inactive contacts cannot receive reminders.");return;
@@ -142,10 +158,11 @@ export function CommunicationCompose({onSaved}:{onSaved:()=>void}){
                 value={subject} onChange={e=>{setSubject(e.target.value);invalidate();}}
                 placeholder="A message from Emlen Foundation"/></label>}
             <label className="field comm-full"><span className="field-label">Message *</span>
-              <textarea aria-label="Message body" required rows={7} maxLength={1200}
+              <textarea ref={messageInput} aria-label="Message body" required rows={7} maxLength={1200}
                 value={body} onChange={e=>{setBody(e.target.value);invalidate();}}
                 placeholder={"Assalamu Alaikum {{name}},\n\nWe have an update to share with you."}/>
-              <span className="comm-muted">Use {"{{name}}"} or {"{{month}}"} for personalization.</span>
+              <PersonalizationTokens onInsert={insertPersonalization}
+                showSponsorship={audience==="prospects"}/>
             </label>
           </div>
         </div>

@@ -30,7 +30,7 @@ def _enable(monkeypatch, delivered):
     ))
     monkeypatch.setattr(
         "app.sponsor_otp._deliver",
-        lambda _cfg, phone, code: delivered.append((phone, code)),
+        lambda _cfg, phone, code, *_extra: delivered.append((phone, code)),
     )
 
 
@@ -288,7 +288,7 @@ def test_local_otp_request_refuses_other_prospect_before_provider_call(api, monk
     ))
     monkeypatch.setattr(
         "app.sponsor_otp._deliver",
-        lambda _cfg, phone, code: sent.append((phone, code)),
+        lambda _cfg, phone, code, *_extra: sent.append((phone, code)),
     )
     response = client.post("/v1/prospects/" + person["id"] + "/otp/request", headers=csrf)
     assert response.status_code == 403, response.text
@@ -472,7 +472,7 @@ def test_saasyto_production_otp_sends_to_only_selected_registered_prospect(
     def send_prospect(_cfg, *, phone, message):
         numbers.append(phone)
         import re
-        code = re.search(r"activation code is ([0-9]{4})", message)
+        code = re.search(r"authentication code to register this sponsorship: ([0-9]{4})", message)
         assert code and "Valid for 2 minutes" in message
         codes.append(code.group(1))
         return Submission("accepted_unverified")
@@ -578,7 +578,7 @@ def test_guarded_two_phone_pilot_otp_activates_only_selected_prospect(api, monke
 
     def mock_send(_cfg, *, phone, message):
         import re
-        match = re.search(r"activation code is ([0-9]{4})", message)
+        match = re.search(r"authentication code to register this sponsorship: ([0-9]{4})", message)
         assert match is not None
         outgoing.append((phone, match.group(1)))
         return Submission("accepted_unverified")
@@ -607,3 +607,116 @@ def test_guarded_two_phone_pilot_otp_activates_only_selected_prospect(api, monke
     assert client.get("/v1/prospects/"+second["id"]).json()["crm_stage"] == "inactive"
     assert client.get("/v1/prospects/"+third["id"]).json()["crm_stage"] == "inactive"
     assert len(outgoing) == 2
+
+
+def test_saasyto_otp_uses_editable_template_and_real_250_multiple(api, monkeypatch):
+    from app.sponsor_otp_copy import DEFAULT_OTP_BODY
+
+    client, csrf, engine = api
+    a = _create(client, csrf, "Unit One", "+918100000085")
+    b = _create(client, csrf, "Unit Two", "+918100000086")
+    assert a["monthly_contribution_paise"] == 25_000
+    update = client.patch("/v1/prospects/"+b["id"], headers=csrf, json={
+        "version": b["version"], "monthly_contribution_paise": 50_000,
+    })
+    assert update.status_code == 200, update.text
+    body = DEFAULT_OTP_BODY.replace("Thank you for taking this step", "JazakAllahu Khairan")
+    saved = client.post("/v1/communication/otp-template", headers=csrf, json={
+        "version": 0, "body": body,
+    })
+    assert saved.status_code == 200, saved.text
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_saasyto_enabled=True,
+        otp_local_pilot_enabled=False, otp_secret=SECRET,
+    ))
+    sent = []
+
+    def fake_send(_cfg, *, phone, message):
+        sent.append((phone, message))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.send_text", fake_send)
+    for person in (a,b):
+        response = client.post("/v1/prospects/"+person["id"]+"/otp/request", headers=csrf)
+        assert response.status_code == 200, response.text
+        assert "code" not in response.json()
+    assert len(sent) == 2
+    assert sent[0][0] == a["mobile_number"]
+    assert sent[1][0] == b["mobile_number"]
+    assert "₹250 per month" in sent[0][1]
+    assert "₹500 per month (2 units at ₹250 each)" in sent[1][1]
+    assert "JazakAllahu Khairan" in sent[0][1]
+    assert "by the 7th" in sent[1][1]
+    assert "{{code}}" not in sent[0][1]
+    with Session(engine) as db:
+        records = db.scalars(select(SponsorOtpChallenge)).all()
+        assert len(records) == 2
+        for number, message in sent:
+            assert number not in [str(record.code_digest) for record in records]
+            assert message not in str(records)
+
+
+def test_legacy_375_commitment_receives_actual_amount_in_activation_otp(
+    api, monkeypatch,
+):
+    from app.models import Prospect
+
+    client, csrf, engine = api
+    person = _create(client, csrf, "Legacy Amount", "+918100000087")
+    with Session(engine) as db:
+        row = db.get(Prospect, uuid.UUID(person["id"]))
+        row.monthly_contribution_paise = 37_500
+        db.commit()
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_saasyto_enabled=True,
+        otp_local_pilot_enabled=False, otp_secret=SECRET,
+    ))
+    sent = []
+    monkeypatch.setattr(
+        "app.sponsor_otp.send_text",
+        lambda _cfg, *, phone, message:
+        sent.append((phone, message)) or Submission("accepted_unverified"),
+    )
+    response = client.post("/v1/prospects/"+person["id"]+"/otp/request", headers=csrf)
+    assert response.status_code == 200, response.text
+    assert sent[0][0] == person["mobile_number"]
+    assert "₹375 per month" in sent[0][1]
+    assert "units at ₹250" not in sent[0][1]
+    assert len(sent) == 1
+
+
+def test_oversized_existing_otp_copy_is_rejected_without_consuming_a_code(
+    api, monkeypatch,
+):
+    from app.models import CommunicationTemplate, Prospect
+    from app.sponsor_otp_copy import DEFAULT_OTP_BODY, OTP_TEMPLATE_KEY
+
+    client, csrf, engine = api
+    person = _create(client, csrf, "Too Long", "+918100000088")
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False, otp_saasyto_enabled=True,
+        otp_local_pilot_enabled=False, otp_secret=SECRET,
+    ))
+    # Model stale data that predates the new expansion-size check.
+    with Session(engine) as db:
+        sponsor = db.get(Prospect, uuid.UUID(person["id"]))
+        db.add(CommunicationTemplate(
+            organization_id=sponsor.organization_id,
+            name="Sponsorship registration OTP", name_key=OTP_TEMPLATE_KEY,
+            channel="whatsapp", category="other", subject=None,
+            body=DEFAULT_OTP_BODY + " {{name}}" * 8,
+            provider_template_id=None, version=1,
+        ))
+        db.commit()
+    called = []
+    monkeypatch.setattr(
+        "app.sponsor_otp.send_text",
+        lambda _cfg, *, phone, message:
+        called.append(phone) or Submission("accepted_unverified"),
+    )
+    response = client.post("/v1/prospects/"+person["id"]+"/otp/request", headers=csrf)
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Activation message cannot be prepared"
+    assert called == []
+    with Session(engine) as db:
+        assert db.scalars(select(SponsorOtpChallenge)).all() == []

@@ -43,6 +43,12 @@ from app.models import (
     SponsorshipRate,
 )
 from app.security import utc_now
+from app.sponsor_otp_copy import (
+    DEFAULT_OTP_BODY,
+    OTP_TEMPLATE_KEY,
+    OTP_TEMPLATE_NAME,
+    validate_otp_body,
+)
 
 router = APIRouter(prefix="/v1/communication", tags=["Admin communication planning"])
 Channel = Literal["whatsapp", "email"]
@@ -210,7 +216,9 @@ def _template(db: Session, admin: AdminUser, identifier: uuid.UUID, lock=False):
     if lock:
         statement = statement.with_for_update()
     row = db.scalars(statement).one_or_none()
-    if row is None:
+    if row is None or row.name_key == OTP_TEMPLATE_KEY:
+        # Registration OTP copy has a dedicated validated endpoint. It cannot
+        # be modified, archived, or reused as a bulk campaign template.
         raise HTTPException(status_code=404, detail="Template not found")
     return row
 
@@ -615,6 +623,78 @@ def preview_audience(
     )
 
 
+class OtpCopyRead(BaseModel):
+    body: str
+    version: int
+
+
+class OtpCopyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    body: str = Field(min_length=30, max_length=1200)
+    version: int = Field(ge=0)
+
+
+@router.get("/otp-template", response_model=OtpCopyRead)
+def read_otp_copy(
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+) -> OtpCopyRead:
+    row = database.scalars(select(CommunicationTemplate).where(
+        CommunicationTemplate.organization_id == context[0].organization_id,
+        CommunicationTemplate.name_key == OTP_TEMPLATE_KEY,
+        CommunicationTemplate.archived_at.is_(None),
+    )).one_or_none()
+    response.headers["Cache-Control"] = "no-store"
+    return OtpCopyRead(
+        body=row.body if row else DEFAULT_OTP_BODY,
+        version=row.version if row else 0,
+    )
+
+
+@router.post("/otp-template", response_model=OtpCopyRead)
+def save_otp_copy(
+    payload: OtpCopyUpdate,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> OtpCopyRead:
+    admin = context[0]
+    try:
+        body = validate_otp_body(payload.body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    row = database.scalars(select(CommunicationTemplate).where(
+        CommunicationTemplate.organization_id == admin.organization_id,
+        CommunicationTemplate.name_key == OTP_TEMPLATE_KEY,
+        CommunicationTemplate.archived_at.is_(None),
+    ).with_for_update()).one_or_none()
+    if (row.version if row else 0) != payload.version:
+        raise HTTPException(status_code=409, detail="Template changed; refresh")
+    if row is None:
+        row = CommunicationTemplate(
+            organization_id=admin.organization_id,
+            name=OTP_TEMPLATE_NAME, name_key=OTP_TEMPLATE_KEY,
+            channel="whatsapp", category="other", subject=None,
+            body=body, provider_template_id=None, version=1,
+        )
+        database.add(row)
+        database.flush()
+    elif row.body != body:
+        row.body = body
+        row.version += 1
+        row.updated_at = utc_now()
+    _audit(database, admin, "communication.otp_template_updated",
+           "comm_template", row.id, {"version": row.version})
+    try:
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(status_code=409, detail="Template changed; refresh") from exc
+    response.headers["Cache-Control"] = "no-store"
+    return OtpCopyRead(body=row.body, version=row.version)
+
+
 @router.get("/templates", response_model=list[TemplateRead])
 def list_templates(
     response: Response,
@@ -626,6 +706,7 @@ def list_templates(
         select(CommunicationTemplate).where(
             CommunicationTemplate.organization_id == context[0].organization_id,
             CommunicationTemplate.archived_at.is_(None),
+            CommunicationTemplate.name_key != OTP_TEMPLATE_KEY,
         ).order_by(CommunicationTemplate.name_key).limit(200)
     )]
 
@@ -638,6 +719,8 @@ def create_template(
     database: Annotated[Session, Depends(db_session)],
 ) -> TemplateRead:
     admin = context[0]
+    if payload.name.casefold() == OTP_TEMPLATE_KEY:
+        raise HTTPException(status_code=422, detail="Reserved system template")
     row = CommunicationTemplate(
         organization_id=admin.organization_id, name=payload.name,
         name_key=payload.name.casefold(), channel=payload.channel,
@@ -666,6 +749,10 @@ def update_template(
 ) -> TemplateRead:
     admin = context[0]
     row = _template(database, admin, identifier, lock=True)
+    if row.name_key == OTP_TEMPLATE_KEY:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if payload.name.casefold() == OTP_TEMPLATE_KEY:
+        raise HTTPException(status_code=422, detail="Reserved system template")
     if row.version != payload.version:
         raise HTTPException(status_code=409, detail="Template changed; refresh")
     changed = []
@@ -698,6 +785,8 @@ def archive_template(
 ) -> Response:
     admin = context[0]
     row = _template(database, admin, identifier, lock=True)
+    if row.name_key == OTP_TEMPLATE_KEY:
+        raise HTTPException(status_code=404, detail="Template not found")
     if row.version != version:
         raise HTTPException(status_code=409, detail="Template changed; refresh")
     # Preserve both campaign snapshots and automation references.
