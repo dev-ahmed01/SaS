@@ -8,7 +8,6 @@ import { FollowUpLog } from "./followup-log";
 import { ContactConsent } from "../communication/contact-consent";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
-import { ProspectStageControl } from "./prospect-stage-control";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
 
@@ -114,7 +113,6 @@ export function ProspectDetails({id}:{id:string}){
               {record.occupation&&<Tile label="Occupation">{record.occupation}</Tile>}
             </div>
           </details>
-          <ProspectStageControl prospect={record} onChanged={refresh}/>
         </section>
         <section className="crm-detail-card">
           <div className="crm-panel-heading"><h2>Activity timeline</h2>
