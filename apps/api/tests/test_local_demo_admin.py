@@ -112,3 +112,88 @@ def test_username_admin_signs_in_only_in_opted_in_development(monkeypatch):
         })
         assert blocked.status_code == 422
     engine.dispose()
+
+
+def test_guarded_local_demo_admin_recovery_keeps_org_and_revokes_sessions(monkeypatch):
+    from datetime import timedelta
+
+    from app.local_demo_admin import recover_local_demo_admin
+    from app.models import AdminLoginAttempt, AdminSession, AuditEvent
+    from app.security import PASSWORD_HASHER, utc_now
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    cfg = SimpleNamespace(
+        app_env="development", local_demo_login_enabled=True,
+        auth_secret=SECRET,
+    )
+    monkeypatch.setattr("app.local_demo_admin.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.bootstrap_admin.get_settings", lambda: cfg)
+    now = utc_now()
+    with Session(engine) as db:
+        provision_admin(
+            db, email="pilot@example.org", password="initial-long-test-password",
+            organization_name="Emlen Foundation",
+        )
+        admin = db.scalars(select(AdminUser)).one()
+        original_id = admin.id
+        original_org = admin.organization_id
+        db.add(AdminSession(
+            admin_user_id=admin.id,
+            organization_id=admin.organization_id,
+            token_hash="d" * 64,
+            created_at=now,
+            expires_at=now + timedelta(hours=1),
+        ))
+        db.add(AdminLoginAttempt(
+            email_hash="e" * 64,
+            network_hash="f" * 64,
+            occurred_at=now,
+        ))
+        db.commit()
+        assert recover_local_demo_admin(db, "chosen-demo-pass") == "reset"
+        db.refresh(admin)
+        assert admin.id == original_id
+        assert admin.organization_id == original_org
+        assert admin.email == "admin@local.sas.example"
+        assert PASSWORD_HASHER.verify(admin.password_hash, "chosen-demo-pass")
+        assert not verify_password(admin.password_hash, "initial-long-test-password")
+        session = db.scalars(select(AdminSession)).one()
+        assert session.revoked_at is not None
+        assert db.scalars(select(AdminLoginAttempt)).all() == []
+        audit = db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "admin.local_demo_credentials_recovered"
+        )).one()
+        assert audit.actor_admin_id == original_id
+        assert db.get(OrganizationSettings, original_org).automation_enabled is False
+    engine.dispose()
+
+
+def test_demo_recovery_creates_admin_only_when_empty_and_refuses_production(monkeypatch):
+    from app.local_demo_admin import recover_local_demo_admin
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    cfg = SimpleNamespace(
+        app_env="development", local_demo_login_enabled=True,
+        auth_secret=SECRET,
+    )
+    monkeypatch.setattr("app.local_demo_admin.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.bootstrap_admin.get_settings", lambda: cfg)
+    with Session(engine) as db:
+        assert recover_local_demo_admin(db, "chosen-demo-pass") == "created"
+        assert db.scalars(select(AdminUser)).one().email == "admin@local.sas.example"
+        cfg.app_env = "production"
+        with pytest.raises(ValueError, match="restricted"):
+            recover_local_demo_admin(db, "chosen-demo-pass")
+        cfg.app_env = "development"
+        with pytest.raises(ValueError, match="8 to 128"):
+            recover_local_demo_admin(db, "short")
+        assert db.scalars(select(AdminUser)).one().email == "admin@local.sas.example"
+    engine.dispose()
