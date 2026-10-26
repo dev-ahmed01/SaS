@@ -796,6 +796,7 @@ def test_activation_acknowledgement_is_claimed_before_submission_and_never_repla
 
 def test_activation_acknowledgement_suppressed_without_general_consent(api, monkeypatch):
     from datetime import UTC, datetime
+
     from app.models import AuditEvent
 
     client, csrf, engine = api
