@@ -130,14 +130,14 @@ export function StageDialog({prospect,onClose,onChanged}:{
           setNotice("OTP requested from WhatsApp provider. Delivery is not yet confirmed.");
         }
       }catch(e){
-        if(active)setError(e instanceof Error?e.message:"Could not request OTP.");
+        if(active){setError(e instanceof Error?e.message:"Could not request OTP.");setOtpReady(old=>old??false);}
       }finally{if(active)setBusy(false);}
     })();
     return ()=>{active=false;};
   },[markInactive,prospect.id]);
 
   async function requestCode(){
-    if(busy||otpReady!==true||!expired&&!error&&!(!challenge))return;
+    if(busy||otpReady!==true||(challenge&&!expired))return;
     setBusy(true);setError("");setNotice("");
     try{
       const response=await post<Challenge>(prospect.id+"/otp/request");
@@ -241,7 +241,8 @@ export function StageDialog({prospect,onClose,onChanged}:{
             </label>
           </>}
           <div className="sas-otp-summary">
-            <p className="crm-dialog-help">Your verification code has been requested on WhatsApp:</p>
+            <p className="crm-dialog-help">{challenge&&!expired
+              ?"Verification code requested on WhatsApp for:":"WhatsApp verification number:"}</p>
             <strong>{number}</strong>
             <p className="crm-dialog-help">OTP valid for the next 2 minutes.</p>
           </div>
