@@ -20,8 +20,10 @@ from app.models import (
     AdminUser,
     AuditEvent,
     Prospect,
+    ProspectFollowUp,
     ProspectStageDefinition,
 )
+from app.prospect_defaults import REGISTRATION_STAGE_KEY
 from app.security import utc_now
 
 router = APIRouter(prefix="/v1/prospect-stages", tags=["Admin prospect pipeline stages"])
@@ -96,6 +98,7 @@ class StageRead(BaseModel):
     sort_order: int
     version: int
     prospect_count: int
+    is_registration_default: bool
     created_at: datetime
 
 
@@ -121,7 +124,8 @@ def _present(db: Session, stage: ProspectStageDefinition) -> StageRead:
     return StageRead(
         id=stage.id, name=stage.name, description=stage.description,
         color=stage.color, sort_order=stage.sort_order, version=stage.version,
-        prospect_count=count, created_at=stage.created_at,
+        prospect_count=count, is_registration_default=(stage.system_key == REGISTRATION_STAGE_KEY),
+        created_at=stage.created_at,
     )
 
 
@@ -223,6 +227,16 @@ def delete_stage(
         raise HTTPException(status_code=428, detail="Stage version required")
     if version != stage.version:
         raise HTTPException(status_code=409, detail="Stage changed; reload and retry")
+    if stage.system_key == REGISTRATION_STAGE_KEY:
+        raise HTTPException(status_code=409, detail="Registration default cannot be deleted")
+    historical = database.scalar(select(func.count(ProspectFollowUp.id)).where(
+        ProspectFollowUp.organization_id == admin.organization_id,
+        ProspectFollowUp.pipeline_stage_id == stage.id,
+    )) or 0
+    if historical:
+        raise HTTPException(
+            status_code=409, detail="A recorded follow-up references this stage"
+        )
     assigned = database.scalar(select(func.count(Prospect.id)).where(
         Prospect.organization_id == admin.organization_id,
         Prospect.pipeline_stage_id == stage.id,
