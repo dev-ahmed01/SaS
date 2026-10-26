@@ -270,7 +270,9 @@ class FollowUpInput(BaseModel):
     version: int = Field(ge=1)
     occurred_on: date
     # Legacy outcome is accepted for existing clients, but new UI uses a stable stage UUID.
-    outcome: Literal["contacted", "no_answer", "interested", "not_interested", "callback"] = "contacted"
+    outcome: Literal[
+        "contacted", "no_answer", "interested", "not_interested", "callback"
+    ] = "contacted"
     pipeline_stage_id: uuid.UUID | None = None
     notes: str = Field(min_length=3, max_length=500)
     next_followup_on: date | None = None
@@ -1046,7 +1048,9 @@ def add_followup(
     next_date = payload.next_followup_on
     if payload.next_followup_at is not None:
         if payload.next_followup_at.tzinfo is None:
-            raise HTTPException(status_code=422, detail="Follow-up time requires an explicit timezone")
+            raise HTTPException(
+                status_code=422, detail="Follow-up time requires an explicit timezone"
+            )
         if payload.next_followup_at <= utc_now():
             raise HTTPException(status_code=422, detail="Next follow-up time must be in the future")
         next_date = payload.next_followup_at.astimezone(ZoneInfo("Asia/Kolkata")).date()
@@ -1074,8 +1078,12 @@ def add_followup(
     database.flush()
     _audit(database, admin, prospect, "prospect.followup_logged",
            after={"outcome": payload.outcome, "followup_id": str(event.id),
-                  "previous_pipeline_stage_id": str(previous_stage_id) if previous_stage_id else None,
-                  "pipeline_stage_id": str(payload.pipeline_stage_id) if payload.pipeline_stage_id else None})
+                  "previous_pipeline_stage_id": (
+                      str(previous_stage_id) if previous_stage_id else None
+                  ),
+                  "pipeline_stage_id": (
+                      str(payload.pipeline_stage_id) if payload.pipeline_stage_id else None
+                  )})
     database.commit()
     database.refresh(event)
     response.headers["Cache-Control"] = "no-store"
@@ -1125,8 +1133,14 @@ def prospect_activity(
         ProspectFollowUp.prospect_id == prospect.id,
     ).order_by(ProspectFollowUp.created_at.desc()).limit(100)).all()
     for row in followups:
-        stage = database.get(ProspectStageDefinition, row.pipeline_stage_id) if row.pipeline_stage_id else None
-        title = "Follow-up · " + stage.name if stage else "Follow-up: " + row.outcome.replace("_", " ")
+        stage = (
+            database.get(ProspectStageDefinition, row.pipeline_stage_id)
+            if row.pipeline_stage_id else None
+        )
+        title = (
+            "Follow-up · " + stage.name
+            if stage else "Follow-up: " + row.outcome.replace("_", " ")
+        )
         add(str(row.id), "followup", title, row.notes, row.created_at)
     assignments = database.scalars(select(PromoterAssignment).where(
         PromoterAssignment.organization_id == admin.organization_id,
