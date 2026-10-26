@@ -362,9 +362,9 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
   const phone=uniqueProspectMobile();
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(prospect);
-  await page.getByRole("textbox",{name:/WhatsApp \\/ Mobile/}).fill(phone);
+  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(phone);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\\/prospects\\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(new RegExp("/prospects/[0-9a-f-]{36}$"));
   const pendingId=crypto.randomUUID();
   const expiry=new Date(Date.now()+120000).toISOString();
   let requests=0;
