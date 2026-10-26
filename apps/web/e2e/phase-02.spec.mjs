@@ -366,6 +366,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await page.getByRole("button",{name:/^Edit\b/}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Save Changes"}).click();
+  await page.getByText("Contact & profile",{exact:true}).click();
   await expect(page.getByText("Teacher")).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
@@ -373,6 +374,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
+  await page.getByText("Contact & profile",{exact:true}).click();
   await expect(page.getByText("Teacher")).toBeVisible();
 });
 
