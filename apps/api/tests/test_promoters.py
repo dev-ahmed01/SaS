@@ -268,3 +268,47 @@ def test_promoter_crm_profile_fields_and_status_filter(system):
     assert client.get("/v1/promoters?active=true").json()["total"] == 0
     assert add(client, csrf, full_name="Invalid Email", mobile_number="+919111199999",
                email="not-an-email").status_code == 422
+
+
+def test_promoter_can_register_as_prospect_and_assign_themselves(system):
+    """Cross-role phone reuse is permitted; each module retains its own record."""
+    client, engine = system
+    csrf = login(client)
+    created = add(client, csrf)
+    assert created.status_code == 201, created.text
+    promoter = created.json()
+    own = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": promoter["full_name"],
+        "mobile_number": promoter["mobile_number"],
+        "whatsapp_number": promoter["mobile_number"],
+        "area_city": promoter["area_city"],
+        "whatsapp_opt_in": False,
+    })
+    assert own.status_code == 201, own.text
+    prospect = own.json()
+    assert prospect["id"] != promoter["id"]
+    assert prospect["crm_stage"] == "inactive"
+    assigned = client.put(
+        "/v1/promoters/"+promoter["id"]+"/sponsors/"+prospect["id"],
+        headers={**csrf, "If-Match": str(prospect["version"])},
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["sponsor_count"] == 1
+    sponsor_list = client.get(
+        "/v1/promoters/"+promoter["id"]+"/sponsors?kind=prospects"
+    )
+    assert sponsor_list.status_code == 200
+    assert sponsor_list.json()["total"] == 1
+    assert sponsor_list.json()["items"][0]["prospect_id"] == prospect["id"]
+    owner = client.get("/v1/prospects/"+prospect["id"])
+    assert owner.status_code == 200
+    assert owner.json()["assigned_promoter_id"] == promoter["id"]
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Promoter)) == 1
+        assert db.scalar(select(func.count()).select_from(PromoterAssignment)) == 1
+    # Duplicates within a single role are still blocked.
+    same_again = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Same phone, different prospect",
+        "mobile_number": promoter["mobile_number"], "area_city": "Bengaluru",
+    })
+    assert same_again.status_code == 409
