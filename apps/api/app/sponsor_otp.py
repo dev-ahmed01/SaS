@@ -94,13 +94,13 @@ def _otp_message(person: Prospect, code: str) -> str:
     units = contribution // 25_000
     unit_detail = f" ({units} sponsorship units)" if units > 1 else ""
     return (
-        f"Salaam {person.first_name or person.full_name},\\n\\n"
+        f"Salaam {person.first_name or person.full_name},\n\n"
         "Thank you for taking this step and helping us re-establish Namaz "
-        "in the house of Allah.\\n\\n"
-        "*Your sponsorship*\\n"
-        f"Monthly contribution: {amount}{unit_detail}\\n"
-        "Please make your monthly contribution by the 7th of every month.\\n\\n"
-        f"*Your verification code: {code}*\\n"
+        "in the house of Allah.\n\n"
+        "*Your sponsorship*\n"
+        f"Monthly contribution: {amount}{unit_detail}\n"
+        "Please make your monthly contribution by the 7th of every month.\n\n"
+        f"*Your verification code: {code}*\n"
         "Use this code to confirm your sponsorship registration. "
         "Valid for 2 minutes."
     )
