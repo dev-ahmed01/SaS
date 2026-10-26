@@ -124,12 +124,34 @@ def _legacy_reference_hash(ref: str) -> str:
     return hashlib.sha256(ref.encode("utf-8")).hexdigest()
 
 
+def _receipt_notice(
+    db: Session, organization_id: uuid.UUID, collection_id: uuid.UUID,
+) -> MessageOutbox:
+    """Prefer an explicit resend to the original even on same-second timestamps.
+
+    SQLite and some imported ledgers have coarse created_at timestamps; sorting
+    by a random UUID makes the visible status nondeterministic.
+    """
+    notices = db.scalars(select(MessageOutbox).where(
+        MessageOutbox.organization_id == organization_id,
+        MessageOutbox.collection_id == collection_id,
+    )).all()
+    resend = next(
+        (event for event in notices
+         if event.event_type == "collection_confirmation_resend"), None,
+    )
+    original = next(
+        (event for event in notices if event.event_type == "collection_recorded"), None,
+    )
+    event = resend or original
+    if event is None:
+        raise HTTPException(status_code=409, detail="Collection confirmation record missing")
+    return event
+
+
 def _view(db: Session, row: ManualCollection) -> CollectionOutput:
     sponsor = db.get(Prospect, row.prospect_id)
-    event = db.scalars(select(MessageOutbox).where(
-        MessageOutbox.organization_id == row.organization_id,
-        MessageOutbox.collection_id == row.id,
-    ).order_by(MessageOutbox.created_at.desc(), MessageOutbox.id.desc())).first()
+    event = _receipt_notice(db, row.organization_id, row.id)
     reversed_entry = db.scalars(select(ManualCollectionReversal).where(
         ManualCollectionReversal.organization_id == row.organization_id,
         ManualCollectionReversal.collection_id == row.id,
@@ -376,12 +398,7 @@ def _reversal_view(
     database: Session, reversal: ManualCollectionReversal, receipt: ManualCollection,
 ) -> ReversalOutput:
     sponsor = database.get(Prospect, receipt.prospect_id)
-    outbox = database.scalars(
-        select(MessageOutbox).where(
-            MessageOutbox.organization_id == receipt.organization_id,
-            MessageOutbox.collection_id == receipt.id,
-        ).order_by(MessageOutbox.created_at.desc(), MessageOutbox.id.desc())
-    ).first()
+    outbox = _receipt_notice(database, receipt.organization_id, receipt.id)
     dispatch=database.scalars(select(MessageDispatch).where(
         MessageDispatch.organization_id==receipt.organization_id,
         MessageDispatch.outbox_id==outbox.id,
@@ -446,7 +463,13 @@ def reverse_collection(
     ).with_for_update()).all()
     # Reversal suppresses every as-yet-unclaimed confirmation, including
     # an explicitly requeued copy, without altering the historical attempts.
-    before_message = outboxes[-1].status if outboxes else "suppressed"
+    before_message = (
+        next(
+            (event.status for event in outboxes
+             if event.event_type == "collection_confirmation_resend"),
+            outboxes[0].status if outboxes else "suppressed",
+        )
+    )
     for outbox in outboxes:
         if outbox.status == "awaiting_integration":
             outbox.status = "suppressed"
@@ -506,7 +529,7 @@ def reverse_collection(
         after_data={
             "reversal_id": str(reversal.id), "reason_code": payload.reason_code,
             "status": sponsor.lifecycle_status,
-            "message_status": outboxes[-1].status if outboxes else "suppressed",
+            "message_status": before_message,
             "net_receipt_removed_paise": receipt.amount_paise,
         },
     ))
