@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 from app import auth as auth_module
 from app.accounting import effective_credits, evaluate_status, ist_today, month_start, shift_month
 from app.auth import db_session, get_admin, require_csrf
+from app.communication_consent import address_opted_out
+from app.config import get_settings
 from app.models import (
     AdminSession,
     AdminUser,
@@ -127,7 +129,7 @@ def _view(db: Session, row: ManualCollection) -> CollectionOutput:
     event = db.scalars(select(MessageOutbox).where(
         MessageOutbox.organization_id == row.organization_id,
         MessageOutbox.collection_id == row.id,
-    )).one()
+    ).order_by(MessageOutbox.created_at.desc(), MessageOutbox.id.desc())).first()
     reversed_entry = db.scalars(select(ManualCollectionReversal).where(
         ManualCollectionReversal.organization_id == row.organization_id,
         ManualCollectionReversal.collection_id == row.id,
@@ -378,8 +380,8 @@ def _reversal_view(
         select(MessageOutbox).where(
             MessageOutbox.organization_id == receipt.organization_id,
             MessageOutbox.collection_id == receipt.id,
-        )
-    ).one()
+        ).order_by(MessageOutbox.created_at.desc(), MessageOutbox.id.desc())
+    ).first()
     dispatch=database.scalars(select(MessageDispatch).where(
         MessageDispatch.organization_id==receipt.organization_id,
         MessageDispatch.outbox_id==outbox.id,
@@ -438,16 +440,17 @@ def reverse_collection(
         Prospect.organization_id == admin.organization_id,
         Prospect.id == receipt.prospect_id,
     ).with_for_update()).one()
-    outbox = db.scalars(select(MessageOutbox).where(
+    outboxes = db.scalars(select(MessageOutbox).where(
         MessageOutbox.organization_id == admin.organization_id,
         MessageOutbox.collection_id == collection_id,
-    ).with_for_update()).one()
-    # No external messaging worker is enabled in this release. Any pending
-    # collection-confirmation intent is invalidated before a sender can use it.
-    before_message = outbox.status
-    if outbox.status == "awaiting_integration":
-        outbox.status = "suppressed"
-        outbox.suppress_reason = "collection_reversed"
+    ).with_for_update()).all()
+    # Reversal suppresses every as-yet-unclaimed confirmation, including
+    # an explicitly requeued copy, without altering the historical attempts.
+    before_message = outboxes[-1].status if outboxes else "suppressed"
+    for outbox in outboxes:
+        if outbox.status == "awaiting_integration":
+            outbox.status = "suppressed"
+            outbox.suppress_reason = "collection_reversed"
 
     reversal = ManualCollectionReversal(
         organization_id=admin.organization_id, collection_id=collection_id,
@@ -502,7 +505,8 @@ def reverse_collection(
         },
         after_data={
             "reversal_id": str(reversal.id), "reason_code": payload.reason_code,
-            "status": sponsor.lifecycle_status, "message_status": outbox.status,
+            "status": sponsor.lifecycle_status,
+            "message_status": outboxes[-1].status if outboxes else "suppressed",
             "net_receipt_removed_paise": receipt.amount_paise,
         },
     ))
