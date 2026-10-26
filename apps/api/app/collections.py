@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import auth as auth_module
-from app.accounting import effective_credits, evaluate_status, ist_today, month_start
+from app.accounting import effective_credits, evaluate_status, ist_today, month_start, shift_month
 from app.auth import db_session, get_admin, require_csrf
 from app.models import (
     AdminSession,
@@ -69,6 +69,7 @@ class CollectionOutput(BaseModel):
     id: uuid.UUID
     prospect_id: uuid.UUID
     sponsor_name: str
+    sponsor_mobile: str
     amount_paise: int
     period_month: date
     received_on: date
@@ -137,6 +138,7 @@ def _view(db: Session, row: ManualCollection) -> CollectionOutput:
     )).one_or_none()
     return CollectionOutput(
         id=row.id, prospect_id=row.prospect_id, sponsor_name=sponsor.full_name,
+        sponsor_mobile=sponsor.mobile_number,
         amount_paise=row.amount_paise, period_month=row.period_month,
         received_on=row.received_on, payment_method=row.payment_method,
         reference_mask=row.reference_mask, evidence="admin_attested",
@@ -309,6 +311,7 @@ def list_collections(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     db: Annotated[Session, Depends(db_session)],
     period_month: date | None = None,
+    received_month: date | None = None,
     active_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -318,6 +321,13 @@ def list_collections(
         if period_month != month_start(period_month):
             raise HTTPException(status_code=422, detail="Invalid billing month")
         conditions.append(ManualCollection.period_month == period_month)
+    if received_month is not None:
+        if received_month != month_start(received_month):
+            raise HTTPException(status_code=422, detail="Invalid received month")
+        conditions.extend([
+            ManualCollection.received_on >= received_month,
+            ManualCollection.received_on < shift_month(received_month, 1),
+        ])
     if active_only:
         reversed_record = select(ManualCollectionReversal.id).where(
             ManualCollectionReversal.organization_id == ManualCollection.organization_id,

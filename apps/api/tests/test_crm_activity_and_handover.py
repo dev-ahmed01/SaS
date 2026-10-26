@@ -1,4 +1,7 @@
 """CRM redesign acceptance: activity is factual and promoter transfers are atomic."""
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -132,3 +135,44 @@ def test_reassignment_without_deactivation_is_rejected_instead_of_silent_success
     assert no_op.json() == before
     with Session(engine) as db:
         assert db.scalar(select(func.count(PromoterAssignment.id))) == 1
+
+
+def test_followup_stores_stage_uuid_and_ist_timestamp_atomically(api):
+    client, csrf, _ = api
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Stage Followup Sponsor",
+        "mobile_number": "+918212340192", "area_city": "Bengaluru",
+    })
+    assert created.status_code == 201, created.text
+    person = created.json()
+    stage_id = person["pipeline_stage_id"]
+    assert stage_id is not None
+
+    future = (datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=2)).replace(
+        hour=15, minute=30, second=0, microsecond=0,
+    )
+    path = "/v1/prospects/" + person["id"] + "/followups"
+    payload = {
+        "version": person["version"],
+        "occurred_on": ist_today().isoformat(),
+        "notes": "Review next sponsorship commitment",
+        "pipeline_stage_id": stage_id,
+        "next_followup_at": future.isoformat(),
+    }
+    invalid = client.post(path, headers=csrf, json={
+        **payload, "next_followup_at": future.replace(tzinfo=None).isoformat(),
+    })
+    assert invalid.status_code == 422
+    assert client.get("/v1/prospects/" + person["id"]).json()["version"] == person["version"]
+
+    logged = client.post(path, headers=csrf, json=payload)
+    assert logged.status_code == 201, logged.text
+    assert logged.json()["pipeline_stage_id"] == stage_id
+    assert logged.json()["next_followup_on"] == future.date().isoformat()
+    assert logged.json()["next_followup_at"] is not None
+    current = client.get("/v1/prospects/" + person["id"]).json()
+    assert current["pipeline_stage_id"] == stage_id
+    assert current["next_followup_on"] == future.date().isoformat()
+    assert current["next_followup_at"] is not None
+    assert current["version"] == person["version"] + 1
+    assert client.get(path).json()[0]["pipeline_stage_id"] == stage_id

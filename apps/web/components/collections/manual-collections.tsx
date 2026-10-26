@@ -124,8 +124,8 @@ export function ManualCollections(){
       <h2>Record Collection</h2>
       <p className="crm-form-summary">Select an active sponsor. Saving a collection confirms the Foundation received these funds.</p>
       <form onSubmit={submit}>
-        <div className="form-grid">
-          <div className="form-cell full">
+        <div className="form-grid collection-entry-grid">
+          <div className="form-cell collection-sponsor">
             <label className="field"><span className="field-label">Sponsor <span className="required">*</span></span>
               <input aria-label="Search sponsor" autoComplete="off" required value={search}
                 placeholder="Search by name or mobile number"
@@ -146,7 +146,16 @@ export function ManualCollections(){
             {!selected&&lookupState==="failed"&&<p className="form-error" role="alert">Prospect lookup unavailable. Please retry.</p>}
             {!selected&&lookupState==="searching"&&<p role="status" className="crm-muted">Searching prospects…</p>}
           </div>
-          <div className="field"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
+          <label className="field collection-month"><span className="field-label">Sponsorship month *</span>
+            <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
+              value={period} onChange={e=>{setPeriod(e.target.value);update();}}/>
+          </label>
+          <label className="field collection-date"><span className="field-label">Date Paid (IST) *</span>
+            <input aria-label="Received date (DD/MM/YY)" required type="text" inputMode="numeric"
+              pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" placeholder="DD/MM/YY"
+              value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/>
+          </label>
+          <div className="field collection-amount"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
             <select id="collection-amount" aria-label="Amount received (₹)" required value={customAmount?"other":rupees}
               onChange={e=>{setCustomAmount(e.target.value==="other");setRupees(e.target.value==="other"?"":e.target.value);update();}}>
               <option value="" disabled>Select amount</option>
@@ -157,23 +166,12 @@ export function ManualCollections(){
               min="250" step="250" max="10000000" value={rupees} placeholder="Enter a multiple of ₹250"
               onChange={e=>{setRupees(e.target.value);update();}}/>}
           </div>
-          <label className="field"><span className="field-label">Payment method *</span>
+          <label className="field collection-method"><span className="field-label">Payment method *</span>
             <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
               <option value="cash">Cash</option>
             </select></label>
-          <div className="collection-date-row">
-            <div className="optional-fields">
-              <label className="field"><span className="field-label">Received date (IST) *</span>
-                <input aria-label="Received date (DD/MM/YY)" required type="text" inputMode="numeric"
-                  pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" placeholder="DD/MM/YY"
-                  value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/></label>
-              <label className="field"><span className="field-label">Sponsorship month *</span>
-                <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
-                  value={period} onChange={e=>{setPeriod(e.target.value);update();}}/></label>
-            </div>
-          </div>
-          <label className="field form-cell full"><span className="field-label">UPI transaction ID / bank reference / numbered receipt</span>
+          <label className="field collection-reference"><span className="field-label">Transaction ID / receipt reference</span>
             <input aria-label="Transaction reference" minLength={6} maxLength={100}
               value={reference} placeholder="Enter reference if available"
               onChange={e=>{setReference(e.target.value);update();}}/></label>

@@ -8,7 +8,6 @@ import { FollowUpLog } from "./followup-log";
 import { ContactConsent } from "../communication/contact-consent";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
-import { ProspectStageControl } from "./prospect-stage-control";
 import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
 
@@ -91,20 +90,29 @@ export function ProspectDetails({id}:{id:string}){
         <Tile label="Start month">{formatCRMDate(record.start_month)}</Tile>
         <Tile label="Payment status">{record.lifecycle_status==="new"?"Never paid":record.lifecycle_status}</Tile>
       </div>
+      <section className="crm-detail-card crm-followup-wide">
+        <FollowUpLog prospect={record} onSaved={refresh}/>
+      </section>
       <div className="crm-redesign-columns">
         <section className="crm-detail-card">
           <h2>Overview</h2>
           <div className="crm-overview-grid">
-            <Tile label="Full name">{record.full_name}</Tile>
-            <Tile label="City">{record.area_city||"—"}</Tile>
-            <Tile label="Contact"><span>{record.mobile_number}</span>
-              {record.email&&<small>{record.email}</small>}</Tile>
-            {record.occupation&&<Tile label="Occupation">{record.occupation}</Tile>}
-            <Tile label="Sponsorship">{money(record.monthly_contribution_paise)} / month
-              <small>{record.monthly_contribution_paise/25000} tokens · Starts {formatCRMDate(record.start_month)}</small></Tile>
-            <Tile label="Last contribution">{formatCRMDate(record.last_verified_payment_at)}</Tile>
+            <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)} / month</Tile>
+            <Tile label="Promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
+            <div className="crm-overview-total">
+              <Tile label="Total contribution">{money(record.total_contribution_paise)}</Tile>
+            </div>
           </div>
-          <ProspectStageControl prospect={record} onChanged={refresh}/>
+          <details className="crm-profile-disclosure">
+            <summary>Contact &amp; profile</summary>
+            <div className="crm-overview-grid">
+              <Tile label="Full name">{record.full_name}</Tile>
+              <Tile label="City">{record.area_city||"—"}</Tile>
+              <Tile label="Contact"><span>{record.mobile_number}</span>
+                {record.email&&<small>{record.email}</small>}</Tile>
+              {record.occupation&&<Tile label="Occupation">{record.occupation}</Tile>}
+            </div>
+          </details>
         </section>
         <section className="crm-detail-card">
           <div className="crm-panel-heading"><h2>Activity timeline</h2>
@@ -127,9 +135,6 @@ export function ProspectDetails({id}:{id:string}){
           {entries.length===0&&<p className="crm-muted">No recorded activity of this type.</p>}
         </section>
       </div>
-      <section className="crm-detail-card crm-followup-wide">
-        <FollowUpLog prospect={record} onSaved={refresh}/>
-      </section>
       <div className="crm-redesign-actions" aria-label="Prospect actions">
         <button type="button" className="btn btn-secondary"
           aria-expanded={consentOpen} onClick={()=>setConsentOpen(open=>!open)}>

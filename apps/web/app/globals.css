@@ -952,7 +952,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   margin-top:9px;
 }
 .prospects-table.crm-table {
-  min-width:1000px;
+  min-width:1500px;
   width:100%;
   table-layout:fixed;
 }
@@ -962,16 +962,33 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   text-overflow:ellipsis;
   font-size:11px;
 }
-.prospects-table.crm-table th:nth-child(1) {width:8%;}
-.prospects-table.crm-table th:nth-child(2) {width:13%;}
+/* All Prospects: checkbox and 11 data columns; no phantom Action column. */
+.prospects-table.crm-table th:nth-child(1) {width:3%;}
+.prospects-table.crm-table th:nth-child(2) {width:7%;}
 .prospects-table.crm-table th:nth-child(3) {width:12%;}
 .prospects-table.crm-table th:nth-child(4) {width:8%;}
-.prospects-table.crm-table th:nth-child(5) {width:11%;}
-.prospects-table.crm-table th:nth-child(6) {width:8%;}
+.prospects-table.crm-table th:nth-child(5) {width:7%;}
+.prospects-table.crm-table th:nth-child(6) {width:9%;}
 .prospects-table.crm-table th:nth-child(7) {width:10%;}
-.prospects-table.crm-table th:nth-child(8) {width:11%;}
-.prospects-table.crm-table th:nth-child(9) {width:9%;}
-.prospects-table.crm-table th:nth-child(10) {width:10%;}
+.prospects-table.crm-table th:nth-child(8) {width:9%;}
+.prospects-table.crm-table th:nth-child(9) {width:8%;}
+.prospects-table.crm-table th:nth-child(10) {width:8%;}
+.prospects-table.crm-table th:nth-child(11) {width:9%;}
+.prospects-table.crm-table th:nth-child(12) {width:10%;}
+/* Active and Inactive add a Status column. */
+.prospects-table.crm-table.has-status th:nth-child(1) {width:3%;}
+.prospects-table.crm-table.has-status th:nth-child(2) {width:6%;}
+.prospects-table.crm-table.has-status th:nth-child(3) {width:11%;}
+.prospects-table.crm-table.has-status th:nth-child(4) {width:8%;}
+.prospects-table.crm-table.has-status th:nth-child(5) {width:6%;}
+.prospects-table.crm-table.has-status th:nth-child(6) {width:8%;}
+.prospects-table.crm-table.has-status th:nth-child(7) {width:9%;}
+.prospects-table.crm-table.has-status th:nth-child(8) {width:8%;}
+.prospects-table.crm-table.has-status th:nth-child(9) {width:8%;}
+.prospects-table.crm-table.has-status th:nth-child(10) {width:8%;}
+.prospects-table.crm-table.has-status th:nth-child(11) {width:8%;}
+.prospects-table.crm-table.has-status th:nth-child(12) {width:9%;}
+.prospects-table.crm-table.has-status th:nth-child(13) {width:8%;}
 .prospects-table .crm-person-link {
   display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;
 }
@@ -980,18 +997,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 }
 .prospects-table .crm-pipeline-label {min-width:0;max-width:100%;gap:5px;}
 .prospects-table .crm-stage-cell {gap:4px;}
-.prospects-table .crm-action-cell,
-.prospects-table th:last-child {
-  position:sticky;
-  right:0;
-  z-index:1;
-  padding-inline:5px;
-  background:#fff;
-  box-shadow:-3px 0 9px rgba(16,55,38,.045);
-  overflow:visible;
-}
-.prospects-table th:last-child {background:#f3f8f5;z-index:2;}
-.prospects-table tr:hover .crm-action-cell {background:#fbfdfa;}
+/* Stage and Status are ordinary columns: horizontal scrolling is deliberate. */
 .crm-row-actions {
   display:block;
   width:100%;
@@ -1723,3 +1729,36 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .comm-otp-copy-preview {white-space:pre-wrap;max-width:660px;background:#f3f9f5;
   border:1px solid #d6eadd;border-radius:13px;padding:22px 25px;
   color:#284638;font:400 13px/1.75 var(--font-body);}
+
+/* Fathom Oct 26 — keep high-frequency follow-ups prominent and profile data tucked away. */
+.crm-overview-total {grid-column:1/-1;}
+.crm-profile-disclosure {margin-top:16px;border-top:1px solid var(--line);padding-top:14px;}
+.crm-profile-disclosure summary {cursor:pointer;color:var(--forest);font-weight:600;margin-bottom:12px;}
+.crm-profile-disclosure .crm-overview-grid {margin-top:12px;}
+.crm-profile-disclosure .crm-overview-grid .crm-summary-tile {background:var(--canvas);}
+.prospects-table input[type="checkbox"] {width:16px;height:16px;accent-color:var(--forest);cursor:pointer;}
+/* Sponsor and billing month on row one; payment details on row two. */
+.collection-entry-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;align-items:start;}
+.collection-entry-grid .collection-sponsor {grid-column:span 3;min-width:0;}
+.collection-entry-grid .collection-month {grid-column:span 1;min-width:0;}
+.collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
+.collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;min-width:0;}
+.collection-entry-grid input,.collection-entry-grid select {max-width:100%;}
+@media(max-width:1000px){
+  .collection-entry-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .collection-entry-grid .collection-sponsor {grid-column:span 2;}
+  .collection-entry-grid .collection-month {grid-column:span 2;}
+}
+@media(max-width:600px){
+  .collection-entry-grid {grid-template-columns:minmax(0,1fr);}
+  .collection-entry-grid .collection-sponsor,.collection-entry-grid .collection-month,
+  .collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
+  .collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;}
+}
+
+/* Date, stable stage ID, next date and IST time in one follow-up row. */
+.crm-followup-fields {grid-template-columns:repeat(4,minmax(0,1fr));}
+.crm-followup-fields .field {min-width:0;}
+.crm-followup-fields input,.crm-followup-fields select {max-width:100%;}
+@media(max-width:1080px){.crm-followup-fields {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:650px){.crm-followup-fields {grid-template-columns:minmax(0,1fr);}}

@@ -250,11 +250,13 @@ class ProspectRead(BaseModel):
     area_city: str
     monthly_contribution_paise: int
     next_followup_on: date | None
+    next_followup_at: datetime | None
     last_contact_on: date | None
     notes: str | None
     whatsapp_opt_in: bool
     lifecycle_status: Literal["new", "active", "inactive"]
     last_verified_payment_at: datetime | None
+    total_contribution_paise: int
     start_month: date | None
     created_at: datetime
     updated_at: datetime
@@ -267,9 +269,14 @@ class FollowUpInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=1)
     occurred_on: date
-    outcome: Literal["contacted", "no_answer", "interested", "not_interested", "callback"]
+    # Legacy outcome is accepted for existing clients, but new UI uses a stable stage UUID.
+    outcome: Literal[
+        "contacted", "no_answer", "interested", "not_interested", "callback"
+    ] = "contacted"
+    pipeline_stage_id: uuid.UUID | None = None
     notes: str = Field(min_length=3, max_length=500)
     next_followup_on: date | None = None
+    next_followup_at: datetime | None = None
 
     @field_validator("notes")
     @classmethod
@@ -286,6 +293,9 @@ class FollowUpRead(BaseModel):
     outcome: str
     notes: str
     next_followup_on: date | None
+    next_followup_at: datetime | None
+    pipeline_stage_id: uuid.UUID | None
+    pipeline_stage_name: str | None
     created_at: datetime
 
 
@@ -337,7 +347,8 @@ def _upi_list(prospect: Prospect) -> list[UpiRead]:
 
 
 def _read(prospect: Prospect, status_override: str | None = None,
-          *, db: Session | None = None) -> ProspectRead:
+          *, db: Session | None = None,
+          contribution_total: int | None = None) -> ProspectRead:
     promoter = None
     if db is not None:
         promoter = db.execute(select(PromoterAssignment.promoter_id, Promoter.full_name).join(
@@ -355,6 +366,12 @@ def _read(prospect: Prospect, status_override: str | None = None,
                      if prospect.crm_stage == "inactive" and changed_at else None)
     pipeline = (db.get(ProspectStageDefinition, prospect.pipeline_stage_id)
                 if db is not None and prospect.pipeline_stage_id else None)
+    if contribution_total is None:
+        contribution_total = (
+            sum(row.amount_paise for row in effective_credits(
+                db, prospect.organization_id, sponsor_id=prospect.id
+            )) if db is not None else 0
+        )
     return ProspectRead(
         id=prospect.id,
         full_name=prospect.full_name,
@@ -381,11 +398,13 @@ def _read(prospect: Prospect, status_override: str | None = None,
         area_city=prospect.area_city,
         monthly_contribution_paise=prospect.monthly_contribution_paise,
         next_followup_on=prospect.next_followup_on,
+        next_followup_at=prospect.next_followup_at,
         last_contact_on=prospect.last_contact_on,
         notes=prospect.notes,
         whatsapp_opt_in=prospect.whatsapp_opt_in,
         lifecycle_status=status_override or prospect.lifecycle_status,
         last_verified_payment_at=prospect.last_verified_payment_at,
+        total_contribution_paise=contribution_total,
         start_month=prospect.start_month,
         created_at=prospect.created_at,
         updated_at=prospect.updated_at,
@@ -516,8 +535,15 @@ def list_prospects(
         .order_by(Prospect.created_at.desc(), Prospect.id.desc())
     ).all()
     fresh = _project_statuses(database, admin, results)
+    # Net verified contributions exclude reversed manual receipts.
+    # Aggregate once for the page; never query a person's receipts per table row.
+    contribution_totals: dict[uuid.UUID, int] = defaultdict(int)
+    if results:
+        for credit in effective_credits(database, admin.organization_id):
+            contribution_totals[credit.prospect_id] += credit.amount_paise
     matching = [
-        _read(p, fresh.get(p.id), db=database)
+        _read(p, fresh.get(p.id), db=database,
+              contribution_total=contribution_totals[p.id])
         for p in results
         if status is None or fresh.get(p.id, p.lifecycle_status) == status
     ]
@@ -993,6 +1019,12 @@ def list_followups(
     return [FollowUpRead.model_validate({
         "id": row.id, "occurred_on": row.occurred_on, "outcome": row.outcome,
         "notes": row.notes, "next_followup_on": row.next_followup_on,
+        "next_followup_at": row.next_followup_at,
+        "pipeline_stage_id": row.pipeline_stage_id,
+        "pipeline_stage_name": (
+            database.get(ProspectStageDefinition, row.pipeline_stage_id).name
+            if row.pipeline_stage_id else None
+        ),
         "created_at": row.created_at,
     }) for row in rows]
 
@@ -1013,27 +1045,59 @@ def add_followup(
         raise HTTPException(status_code=422, detail="Follow-up cannot be in the future")
     if payload.next_followup_on is not None and payload.next_followup_on < today:
         raise HTTPException(status_code=422, detail="Next follow-up cannot be in the past")
+    next_date = payload.next_followup_on
+    if payload.next_followup_at is not None:
+        if payload.next_followup_at.tzinfo is None:
+            raise HTTPException(
+                status_code=422, detail="Follow-up time requires an explicit timezone"
+            )
+        if payload.next_followup_at <= utc_now():
+            raise HTTPException(status_code=422, detail="Next follow-up time must be in the future")
+        next_date = payload.next_followup_at.astimezone(ZoneInfo("Asia/Kolkata")).date()
+        if payload.next_followup_on is not None and payload.next_followup_on != next_date:
+            raise HTTPException(status_code=422, detail="Follow-up date and time disagree")
+    if payload.pipeline_stage_id is not None:
+        _validate_pipeline(database, admin, payload.pipeline_stage_id)
+    previous_stage_id = prospect.pipeline_stage_id
     event = ProspectFollowUp(
         organization_id=admin.organization_id,
         prospect_id=prospect.id, actor_admin_id=admin.id,
         occurred_on=payload.occurred_on, outcome=payload.outcome,
-        notes=payload.notes, next_followup_on=payload.next_followup_on,
+        notes=payload.notes, next_followup_on=next_date,
+        next_followup_at=payload.next_followup_at,
+        pipeline_stage_id=payload.pipeline_stage_id,
     )
     database.add(event)
     prospect.last_contact_on = payload.occurred_on
-    prospect.next_followup_on = payload.next_followup_on
+    prospect.next_followup_on = next_date
+    prospect.next_followup_at = payload.next_followup_at
+    if payload.pipeline_stage_id is not None:
+        prospect.pipeline_stage_id = payload.pipeline_stage_id
     prospect.updated_at = utc_now()
     prospect.version += 1
     database.flush()
     _audit(database, admin, prospect, "prospect.followup_logged",
-           after={"outcome": payload.outcome, "followup_id": str(event.id)})
+           after={"outcome": payload.outcome, "followup_id": str(event.id),
+                  "previous_pipeline_stage_id": (
+                      str(previous_stage_id) if previous_stage_id else None
+                  ),
+                  "pipeline_stage_id": (
+                      str(payload.pipeline_stage_id) if payload.pipeline_stage_id else None
+                  )})
     database.commit()
     database.refresh(event)
     response.headers["Cache-Control"] = "no-store"
     return FollowUpRead(
         id=event.id, occurred_on=event.occurred_on,
         outcome=event.outcome, notes=event.notes,
-        next_followup_on=event.next_followup_on, created_at=event.created_at,
+        next_followup_on=event.next_followup_on,
+        next_followup_at=event.next_followup_at,
+        pipeline_stage_id=event.pipeline_stage_id,
+        pipeline_stage_name=(
+            database.get(ProspectStageDefinition, event.pipeline_stage_id).name
+            if event.pipeline_stage_id else None
+        ),
+        created_at=event.created_at,
     )
 
 
@@ -1069,8 +1133,15 @@ def prospect_activity(
         ProspectFollowUp.prospect_id == prospect.id,
     ).order_by(ProspectFollowUp.created_at.desc()).limit(100)).all()
     for row in followups:
-        add(str(row.id), "followup", "Follow-up: " + row.outcome.replace("_", " "),
-            row.notes, row.created_at)
+        stage = (
+            database.get(ProspectStageDefinition, row.pipeline_stage_id)
+            if row.pipeline_stage_id else None
+        )
+        title = (
+            "Follow-up · " + stage.name
+            if stage else "Follow-up: " + row.outcome.replace("_", " ")
+        )
+        add(str(row.id), "followup", title, row.notes, row.created_at)
     assignments = database.scalars(select(PromoterAssignment).where(
         PromoterAssignment.organization_id == admin.organization_id,
         PromoterAssignment.prospect_id == prospect.id,
