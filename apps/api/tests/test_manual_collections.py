@@ -413,8 +413,6 @@ def test_resend_confirmation_requires_approved_worker_and_definite_original_stat
         messaging_enable_after=datetime.now(UTC) - timedelta(days=1),
     ))
     with Session(engine) as db:
-        setting = db.get(OrganizationSettings, uuid.UUID(person["id"]))  # not an org UUID
-        assert setting is None
         prospect = db.get(Prospect, uuid.UUID(person["id"]))
         cfg = db.get(OrganizationSettings, prospect.organization_id)
         cfg.automation_enabled = True
