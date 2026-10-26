@@ -216,7 +216,9 @@ def _template(db: Session, admin: AdminUser, identifier: uuid.UUID, lock=False):
     if lock:
         statement = statement.with_for_update()
     row = db.scalars(statement).one_or_none()
-    if row is None:
+    if row is None or row.name_key == OTP_TEMPLATE_KEY:
+        # Registration OTP copy has a dedicated validated endpoint. It cannot
+        # be modified, archived, or reused as a bulk campaign template.
         raise HTTPException(status_code=404, detail="Template not found")
     return row
 
