@@ -1148,9 +1148,9 @@ test("Communication templates, campaign plans and rules persist across navigatio
     "Campaign detail rendered: "+(await page.locator("body").innerText()).slice(-1500)
   ).toBeVisible();
   await page.goto("/communication/campaigns");
-  const row=page.getByRole("row",{name:new RegExp("Update "+key)});
+  const row=page.locator(".comm-campaign-item").filter({hasText:"Update "+key});
   await expect(row).toBeVisible();
-  await expect(row.getByRole("link",{name:"View results"})).toBeVisible();
+  await expect(row.getByRole("link",{name:"View details"})).toBeVisible();
   page.once("dialog",dialog=>dialog.accept());
   await row.getByRole("button",{name:"Cancel plan"}).click();
   await expect(row.getByText("Cancelled")).toBeVisible();
@@ -1186,9 +1186,9 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
     "Campaign detail rendered: "+(await page.locator("body").innerText()).slice(-1500)
   ).toBeVisible();
   await page.goto("/communication/campaigns");
-  const campaign=page.getByRole("row",{name:new RegExp("Consent update "+suffix)});
+  const campaign=page.locator(".comm-campaign-item").filter({hasText:"Consent update "+suffix});
   await expect(campaign).toBeVisible();
-  await campaign.getByRole("link",{name:"View results"}).click();
+  await campaign.getByRole("link",{name:"View details"}).click();
   await expect(page).toHaveURL(/#campaign-[0-9a-f-]{36}$/);
   const review=page.getByRole("region",{name:"Recipient approval"});
   await expect(page.getByRole("heading",{name:"Consent update "+suffix})).toBeVisible();
@@ -1196,7 +1196,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await review.getByRole("button",{name:"Check recipients"}).click();
   await expect(page.getByText("Recipient check updated. No messages were sent.")).toBeVisible();
   await expect(review.locator(".comm-review-counts strong").first()).toBeVisible();
-  await expect(page.getByRole("region",{name:"Eligible contacts (latest recipient check)"}))
+  await expect(page.getByRole("region",{name:"Eligible contacts"}))
     .toBeVisible();
   const numbers=await review.locator(".comm-review-counts strong").allTextContents();
   expect(Number(numbers[0])).toBeGreaterThanOrEqual(0);
@@ -1210,8 +1210,22 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   expect(data[0].delivery_activated).toBe(false);
   await page.getByRole("link",{name:"All campaigns"}).click();
   await expect(page.getByRole("heading",{name:"Campaigns"})).toBeVisible();
-  await expect(page.getByRole("row",{name:new RegExp("Consent update "+suffix)}))
+  await expect(page.locator(".comm-campaign-item").filter({hasText:"Consent update "+suffix}))
     .toBeVisible();
+});
+
+test("Communication hides explanatory copy and template provider identifiers",async ({page})=>{
+  await page.goto("/communication");
+  await expect(page.getByText(/current CRM contacts eligible for whatsapp/)).toHaveCount(0);
+  await expect(page.getByText(/Active includes contacts marked Active/)).toHaveCount(0);
+  await expect(page.getByRole("textbox",{name:/template ID/i})).toHaveCount(0);
+  await page.goto("/communication/templates");
+  await expect(page.getByRole("textbox",{name:/template ID/i})).toHaveCount(0);
+  await page.goto("/communication/campaigns");
+  await expect(page.getByRole("status").filter({hasText:"WhatsApp delivery · Saasyto"}))
+    .toHaveCount(0);
+  await expect(page.getByText("Confirm existing WhatsApp permissions")).toHaveCount(0);
+  await expect(page.getByRole("group",{name:"Filter campaigns"})).toBeVisible();
 });
 
 test("Communication proxy blocks forged-origin writes and has no unapproved send endpoint",async ({page})=>{
