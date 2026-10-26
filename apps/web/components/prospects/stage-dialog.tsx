@@ -133,7 +133,9 @@ export function StageDialog({prospect,onClose,onChanged}:{
         if(active){setError(e instanceof Error?e.message:"Could not request OTP.");setOtpReady(old=>old??false);}
       }finally{if(active)setBusy(false);}
     })();
-    return ()=>{active=false;};
+    // Strict Mode re-runs effects during development. The first fetch is ignored
+    // after cleanup, while the next setup is allowed to request exactly once.
+    return ()=>{active=false;started.current=false;};
   },[markInactive,prospect.id]);
 
   async function requestCode(){
