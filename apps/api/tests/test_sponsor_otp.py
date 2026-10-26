@@ -456,3 +456,109 @@ def test_production_meta_sender_requires_independent_credentials():
     # Enabling Saasyto production campaigns is a separately reviewed switch.
     with pytest.raises(ValueError, match="Saasyto"):
         Settings(_env_file=None, **{**base, "saasyto_delivery_enabled": True})
+
+
+def test_saasyto_production_otp_sends_to_only_selected_registered_prospect(
+    api, monkeypatch,
+):
+    """Each admin activation is one message to that prospect, never a broadcast."""
+    client, csrf, _engine = api
+    first = _create(client, csrf, "Own Number 1", "+918100000031")
+    second = _create(client, csrf, "Own Number 2", "+918100000032")
+    third = _create(client, csrf, "Not Selected", "+918100000033")
+    numbers = []
+    codes = []
+
+    def send_prospect(_cfg, *, phone, message):
+        numbers.append(phone)
+        import re
+        code = re.search(r"activation code is ([0-9]{4})", message)
+        assert code and "Valid for 2 minutes" in message
+        codes.append(code.group(1))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=False,
+        otp_saasyto_enabled=True,
+        otp_local_pilot_enabled=False,
+        otp_secret=SECRET,
+    ))
+    monkeypatch.setattr("app.sponsor_otp.send_text", send_prospect)
+    one = client.post("/v1/prospects/"+first["id"]+"/otp/request", headers=csrf)
+    assert one.status_code == 200, one.text
+    assert numbers == [first["mobile_number"]]
+    assert third["mobile_number"] not in numbers
+    assert "code" not in one.json()
+    two = client.post("/v1/prospects/"+second["id"]+"/otp/request", headers=csrf)
+    assert two.status_code == 200, two.text
+    assert numbers == [first["mobile_number"], second["mobile_number"]]
+    assert len(codes) == 2 and all(len(code) == 4 for code in codes)
+    assert client.get("/v1/prospects/"+third["id"]).json()["crm_stage"] == "inactive"
+    confirmed = client.post("/v1/prospects/"+first["id"]+"/otp/activate", headers=csrf,
+        json={"version": first["version"], "challenge_id": one.json()["challenge_id"],
+              "code": codes[0]})
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "active"
+    assert client.get("/v1/prospects/"+second["id"]).json()["crm_stage"] == "inactive"
+    assert numbers == [first["mobile_number"], second["mobile_number"]]
+
+
+def test_saasyto_production_otp_outcomes_never_claim_verified_delivery(monkeypatch):
+    """Provider accept only starts an OTP challenge; reject/unknown block activation."""
+    selected = "+918100000034"
+    cfg = SimpleNamespace(
+        otp_local_pilot_enabled=False, otp_saasyto_enabled=True,
+    )
+    seen = []
+    monkeypatch.setattr("app.sponsor_otp.send_text", lambda _cfg, *, phone, message:
+                        seen.append((phone, message)) or Submission("accepted_unverified"))
+    _deliver(cfg, selected, "1234")
+    assert len(seen) == 1 and seen[0][0] == selected
+    assert "1234" in seen[0][1]
+    monkeypatch.setattr("app.sponsor_otp.send_text", lambda *_a, **_kw:
+                        Submission("rejected"))
+    with pytest.raises(ValueError, match="declined"):
+        _deliver(cfg, selected, "2345")
+    monkeypatch.setattr("app.sponsor_otp.send_text", lambda *_a, **_kw:
+                        Submission("unknown"))
+    with pytest.raises(OtpDeliveryUnconfirmed, match="unknown"):
+        _deliver(cfg, selected, "3456")
+
+
+def test_saasyto_only_production_config_needs_no_meta_subscription():
+    from app.config import Settings
+
+    base = {
+        "app_env": "production",
+        "database_url": "postgresql+psycopg://tester:pw@db.example.com:5432/sas?sslmode=require",
+        "auth_secret": "A"*48,
+        "upi_match_secret": "B"*48,
+        "otp_secret": "C"*48,
+        "local_demo_login_enabled": False,
+        "saasyto_delivery_enabled": True,
+        "saasyto_sender_approved": True,
+        "saasyto_instance_id": "sas-instance-01",
+        "saasyto_access_token": "saasyto-synthetic-token-value",
+        "saasyto_enable_after": "2026-11-01T00:00:00+05:30",
+        "saasyto_runner_secret": "D"*48,
+        "saasyto_local_test_enabled": False,
+        "otp_saasyto_enabled": True,
+        "otp_delivery_enabled": False,
+        "otp_local_pilot_enabled": False,
+        "otp_activation_notice_enabled": False,
+    }
+    cfg = Settings(_env_file=None, **base)
+    assert cfg.otp_saasyto_enabled is True
+    assert cfg.otp_meta_access_token is None
+    assert cfg.otp_meta_phone_number_id is None
+    assert cfg.saasyto_local_test_phone is None
+    with pytest.raises(ValueError, match="Saasyto production OTP"):
+        Settings(_env_file=None, **{**base, "app_env": "development"})
+    with pytest.raises(ValueError, match="Saasyto production OTP"):
+        Settings(_env_file=None, **{**base, "saasyto_local_test_enabled": True})
+    with pytest.raises(ValueError, match="Saasyto production OTP"):
+        Settings(_env_file=None, **{**base, "otp_delivery_enabled": True})
+    with pytest.raises(ValueError, match="Saasyto production OTP"):
+        Settings(_env_file=None, **{**base, "saasyto_delivery_enabled": False})
+    with pytest.raises(ValueError, match="OTP_SECRET"):
+        Settings(_env_file=None, **{**base, "otp_secret": ""})
