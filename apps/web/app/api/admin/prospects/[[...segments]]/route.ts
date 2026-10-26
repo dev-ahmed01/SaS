@@ -22,7 +22,7 @@ function resolveRoute(segments: string[], method: string): string | null {
   if (segments.length === 3 && UUID.test(segments[0]) &&
       segments[1] === "otp" &&
       (segments[2] === "status" && method === "GET" ||
-       ["request", "verify"].includes(segments[2]) && method === "POST")) {
+       ["request", "verify", "activate"].includes(segments[2]) && method === "POST")) {
     return "/" + segments[0] + "/otp/" + segments[2];
   }
   if (segments.length === 1 && UUID.test(segments[0]) &&
