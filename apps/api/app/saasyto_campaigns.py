@@ -36,7 +36,7 @@ from app.models import (
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
 )
-from app.saasyto_client import send_text
+from app.saasyto_client import local_pilot_permits, local_pilot_phones, send_text
 from app.security import as_utc, utc_now
 
 admin_router = APIRouter(prefix="/v1/communication", tags=["Saasyto campaigns"])
@@ -144,6 +144,7 @@ class CampaignApprovalReadiness(BaseModel):
     eligible_count: int
     local_test_mode: bool
     permitted_phone: str | None = None
+    permitted_phones: list[str] = Field(default_factory=list)
 
 
 @admin_router.get("/campaigns/{identifier}/saasyto/readiness",
@@ -163,8 +164,8 @@ def campaign_approval_readiness(
     row = _campaign(db, admin, identifier)
     now = utc_now()
     local = bool(getattr(cfg, "saasyto_local_test_enabled", False))
-    allowlisted = (getattr(cfg, "saasyto_local_test_phone", None) or "").lstrip("+")
     permitted = getattr(cfg, "saasyto_local_test_phone", None) if local else None
+    test_phones = local_pilot_phones(cfg) if local else ()
     preparation = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == admin.organization_id,
         CommunicationPreparation.campaign_id == row.id,
@@ -181,7 +182,7 @@ def campaign_approval_readiness(
         return CampaignApprovalReadiness(
             ready=code == "ready", code=code, message=message,
             eligible_count=count, local_test_mode=local,
-            permitted_phone=permitted,
+            permitted_phone=permitted, permitted_phones=list(test_phones),
         )
 
     response.headers["Cache-Control"] = "no-store"
@@ -219,16 +220,20 @@ def campaign_approval_readiness(
                       "Eligible contacts changed since the last check. "
                       "Click Check recipients again.")
     if local:
-        if count != 1:
-            return result("local_requires_one",
-                          "Local pilot requires exactly one eligible recipient.")
-        actual = contact_address(eligible[0][0], "whatsapp").lstrip("+")
-        if not allowlisted or not hmac.compare_digest(actual, allowlisted):
-            return result("local_number_mismatch",
-                          "The one eligible contact does not match the permitted "
-                          "local test number. Check the contact's WhatsApp number "
-                          "against SAASYTO_LOCAL_TEST_PHONE in the API .env, "
-                          "then restart the API and run Check recipients again.")
+        if count > len(test_phones):
+            return result(
+                "local_requires_one" if len(test_phones) == 1 else "local_limit",
+                "Local pilot permits at most the explicitly configured "
+                "test recipients.",
+            )
+        if any(not local_pilot_permits(cfg, contact_address(person, "whatsapp"))
+               for person, _kind in eligible):
+            return result(
+                "local_number_mismatch",
+                "An eligible contact is not in the local test phone allowlist. "
+                "Check SAASYTO_LOCAL_TEST_PHONE and SAASYTO_LOCAL_TEST_PHONE_2, "
+                "then restart the API and run Check recipients again.",
+            )
     return result("ready", "Recipient check passed. Sending still requires your approval.")
 
 
@@ -276,14 +281,13 @@ def approve_campaign(
             )):
         raise HTTPException(status_code=409, detail="Audience changed; review again")
     if getattr(cfg, "saasyto_local_test_enabled", False):
-        allowed = (cfg.saasyto_local_test_phone or "").lstrip("+")
-        if len(eligible) != 1 or any(
-            contact_address(person, "whatsapp").lstrip("+") != allowed
+        if len(eligible) > len(local_pilot_phones(cfg)) or any(
+            not local_pilot_permits(cfg, contact_address(person, "whatsapp"))
             for person, _kind in eligible
         ):
             raise HTTPException(
                 status_code=409,
-                detail="Local pilot requires one consented, allowlisted recipient",
+                detail="Local pilot requires consented, allowlisted recipients",
             )
     run = SaasytoCampaignRun(
         organization_id=admin.organization_id, campaign_id=row.id,
@@ -388,8 +392,8 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
         return None
     phone = contact_address(person, "whatsapp")
     cfg = get_settings()
-    if getattr(cfg, "saasyto_local_test_enabled", False) and not hmac.compare_digest(
-        phone.lstrip("+"), (cfg.saasyto_local_test_phone or "").lstrip("+")
+    if getattr(cfg, "saasyto_local_test_enabled", False) and not local_pilot_permits(
+        cfg, phone,
     ):
         return None
     if not hmac.compare_digest(
@@ -488,10 +492,10 @@ def send_now_local_pilot(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
     db: Annotated[Session, Depends(db_session)],
 ) -> CampaignRunRead:
-    """Explicitly dispatch ONE previously approved local pilot recipient.
+    """Explicitly dispatch up to two allowlisted local pilot recipients once.
 
-    This is not available for production, a future scheduled campaign, or bulk
-    sends. The private worker remains the production/scheduled transport.
+    Not available for production, future scheduled campaigns, or unrestricted
+    bulk sends. The private worker remains the production/scheduled transport.
     """
     cfg = get_settings()
     if not (cfg.saasyto_delivery_enabled and cfg.saasyto_sender_approved):
@@ -505,8 +509,9 @@ def send_now_local_pilot(
     run = _existing_run(db, admin.organization_id, identifier)
     if run is None:
         raise HTTPException(status_code=409, detail="Approve the campaign before sending")
-    if run.status != "approved" or run.eligible_count != 1:
-        raise HTTPException(status_code=409, detail="Campaign not eligible for one-phone send")
+    limit = len(local_pilot_phones(cfg))
+    if run.status != "approved" or not 1 <= run.eligible_count <= limit:
+        raise HTTPException(status_code=409, detail="Campaign exceeds local pilot limit")
     if as_utc(run.due_at) > utc_now():
         raise HTTPException(status_code=409, detail="Scheduled campaign is not yet due")
     # Checking for exactly one queued recipient prevents this endpoint from
@@ -515,9 +520,9 @@ def send_now_local_pilot(
         SaasytoCampaignRecipient.organization_id == admin.organization_id,
         SaasytoCampaignRecipient.run_id == run.id,
     )).all()
-    if states != ["queued"]:
+    if len(states) != run.eligible_count or any(state != "queued" for state in states):
         raise HTTPException(status_code=409, detail="Already attempted or no pending send")
-    _dispatch_due(db, cfg, target_run_id=run.id, max_attempts=1)
+    _dispatch_due(db, cfg, target_run_id=run.id, max_attempts=run.eligible_count)
     db.refresh(run)
     response.headers["Cache-Control"] = "no-store"
     return _read(db, run)
