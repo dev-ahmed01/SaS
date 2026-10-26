@@ -5,6 +5,7 @@ The selected password is entered at a hidden terminal prompt, never stored in
 source or shell history. Never use with live Foundation records.
 """
 
+# isort: off
 import argparse
 import getpass
 
@@ -21,6 +22,7 @@ from app.models import (
     AuditEvent,
 )
 from app.security import PASSWORD_HASHER, utc_now
+# isort: on
 
 
 LOCAL_ADMIN_EMAIL = "admin@local.sas.example"
