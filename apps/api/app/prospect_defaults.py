@@ -1,6 +1,7 @@
 """One stable tenant-scoped registration pipeline stage, independent of its name."""
 import uuid
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -47,4 +48,7 @@ def get_registration_stage(db: Session, organization_id: uuid.UUID) -> ProspectS
         db.flush()
         return stage
 
-    raise ValueError("Ambiguous legacy registration stage requires review")
+    raise HTTPException(
+        status_code=409,
+        detail="Ambiguous legacy registration stage. Review existing stages.",
+    )
