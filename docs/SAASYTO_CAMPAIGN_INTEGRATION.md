@@ -1,3 +1,9 @@
+> **Current OTP configuration:** Saasyto can now be selected for individual
+> production activation OTPs with `OTP_SAASYTO_ENABLED=true`; each is
+> submitted only to the selected prospect's registered WhatsApp number.
+> See [WhatsApp Production Rollout](WHATSAPP_PRODUCTION_ROLLOUT.md) for current
+> `.env` guidance. The older local pilot restriction remains for localhost.
+
 # Saasyto campaign integration — verified surface and safe connector foundation
 
 ## Controlled localhost one-phone pilot (October 2026)
