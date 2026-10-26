@@ -33,7 +33,7 @@ def setup(monkeypatch, *, local=False, cutoff=None, error=False):
     monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: settings)
     monkeypatch.setattr(
         "app.sponsor_otp._deliver",
-        lambda _cfg, phone, code: codes.append(code),
+        lambda _cfg, phone, code, *_extra: codes.append(code),
     )
 
     def submit(_cfg, *, phone, message):
