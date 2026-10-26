@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -86,9 +86,19 @@ def test_acknowledgement_once_for_registration_consented_sponsor(api, monkeypatc
     assert replay.status_code in (400, 409)
     assert len(messages) == 1
     with Session(engine) as db:
-        assert db.scalar(select(func.count(AuditEvent.id)).where(
-            AuditEvent.action == "prospect.activation_notice_attempt",
-        )) == 1
+        claim = db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "prospect.activation_notice_claimed",
+            AuditEvent.entity_id == person["id"],
+        )).all()
+        result = db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "prospect.activation_notice_result",
+            AuditEvent.entity_id == person["id"],
+        )).all()
+        assert len(claim) == len(result) == 1
+        assert claim[0].after_data["status"] == "claimed"
+        assert result[0].after_data["status"] == "accepted_unverified"
+        assert claim[0].after_data["challenge_id"] == challenge
+        assert result[0].after_data["challenge_id"] == challenge
 
 
 def test_acknowledgement_suppressed_on_explicit_optout(api, monkeypatch):
