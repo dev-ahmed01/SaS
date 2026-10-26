@@ -39,6 +39,7 @@ export type Prospect = {
   assigned_promoter_id: string | null;
   assigned_promoter_name: string | null;
   last_verified_payment_at: string | null;
+  total_contribution_paise: number;
   start_month: string | null;
   created_at: string;
   updated_at: string;
