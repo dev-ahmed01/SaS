@@ -530,3 +530,29 @@ def test_delete_all_refuses_unsettled_claimed_send(dispatch_system, monkeypatch)
         "confirm": "DELETE ALL CAMPAIGNS", "expected_campaigns": 1,
     })
     assert okay.status_code == 200, okay.text
+
+
+def test_campaign_sponsorship_variables_resolve_from_each_prospect_and_ist():
+    from datetime import UTC, datetime
+
+    from app.models import Promoter
+    from app.saasyto_campaigns import _render
+
+    period = datetime(2026, 10, 26, 9, 0, tzinfo=UTC)
+    first = Prospect(full_name="Sponsor A", monthly_contribution_paise=25_000)
+    second = Prospect(full_name="Sponsor B", monthly_contribution_paise=50_000)
+    body = (
+        "Salaam {{name}}! Your {{month}} commitment is {{sponsorship}}. "
+        "Pay {{sponsorship_amount}} for {{sponsorship_units}} unit(s)."
+    )
+    assert _render(body, first, period) == (
+        "Salaam Sponsor A! Your October 2026 commitment is ₹250 per month. "
+        "Pay ₹250 for 1 unit(s)."
+    )
+    assert _render(body, second, period) == (
+        "Salaam Sponsor B! Your October 2026 commitment is "
+        "₹500 per month (2 units at ₹250 each). Pay ₹500 for 2 unit(s)."
+    )
+    with pytest.raises(ValueError, match="prospect record"):
+        _render(body, Promoter(full_name="Promoter C"), period)
+
