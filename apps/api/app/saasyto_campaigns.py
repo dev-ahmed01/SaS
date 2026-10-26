@@ -143,7 +143,7 @@ class CampaignApprovalReadiness(BaseModel):
     message: str
     eligible_count: int
     local_test_mode: bool
-    permitted_phone_masked: str | None = None
+    permitted_phone: str | None = None
 
 
 @admin_router.get("/campaigns/{identifier}/saasyto/readiness",
@@ -164,7 +164,7 @@ def campaign_approval_readiness(
     now = utc_now()
     local = bool(getattr(cfg, "saasyto_local_test_enabled", False))
     allowlisted = (getattr(cfg, "saasyto_local_test_phone", None) or "").lstrip("+")
-    masked = "•••• " + allowlisted[-4:] if local and len(allowlisted) >= 4 else None
+    permitted = getattr(cfg, "saasyto_local_test_phone", None) if local else None
     preparation = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == admin.organization_id,
         CommunicationPreparation.campaign_id == row.id,
@@ -181,7 +181,7 @@ def campaign_approval_readiness(
         return CampaignApprovalReadiness(
             ready=code == "ready", code=code, message=message,
             eligible_count=count, local_test_mode=local,
-            permitted_phone_masked=masked,
+            permitted_phone=permitted,
         )
 
     response.headers["Cache-Control"] = "no-store"
