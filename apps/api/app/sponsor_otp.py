@@ -152,6 +152,8 @@ def status(
     latest = database.scalars(select(SponsorOtpChallenge).where(
         SponsorOtpChallenge.organization_id == admin.organization_id,
         SponsorOtpChallenge.prospect_id == prospect_id,
+        SponsorOtpChallenge.phone_digest == _digest(cfg.otp_secret, _phone(person))
+        if cfg.otp_secret else SponsorOtpChallenge.id.is_(None),
         SponsorOtpChallenge.status == "accepted",
         SponsorOtpChallenge.expires_at > utc_now(),
         SponsorOtpChallenge.consumed_at.is_(None),
