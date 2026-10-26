@@ -473,8 +473,26 @@ def read_activation_notice_status(
     activations = [row for row in records if row.action == "prospect.otp_activated"]
     if not activations:
         return {"status": "not_recorded", "attempted_at": None}
-    latest_activation = activations[0]
-    challenge_id = (latest_activation.after_data or {}).get("challenge_id")
+    # Audit timestamps on SQLite have second precision; choose the newest
+    # consumed challenge instead of relying on random UUID tie-breaking.
+    challenge_ids = [
+        uuid.UUID(raw) for row in activations
+        if isinstance((raw := (row.after_data or {}).get("challenge_id")), str)
+        and re.fullmatch(r"[0-9a-fA-F-]{36}", raw)
+    ]
+    latest_challenge = database.scalars(select(SponsorOtpChallenge).where(
+        SponsorOtpChallenge.organization_id == admin.organization_id,
+        SponsorOtpChallenge.prospect_id == prospect_id,
+        SponsorOtpChallenge.id.in_(challenge_ids),
+        SponsorOtpChallenge.consumed_at.is_not(None),
+    ).order_by(
+        SponsorOtpChallenge.consumed_at.desc(),
+        SponsorOtpChallenge.created_at.desc(),
+        SponsorOtpChallenge.id.desc(),
+    ).limit(1)).first()
+    challenge_id = str(latest_challenge.id) if latest_challenge else (
+        activations[0].after_data or {}
+    ).get("challenge_id")
     matching = [
         row for row in records
         if row.action in (
