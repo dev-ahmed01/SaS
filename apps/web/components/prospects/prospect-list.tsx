@@ -90,7 +90,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
     <div className="table-scroll crm-table-scroll">
-      <table className="data-table prospects-table crm-table">
+      <table className={"data-table prospects-table crm-table"+(view==="all"?"":" has-status")}>
         <thead><tr>
           <th scope="col">
             <input type="checkbox" aria-label="Select all prospects on this page"
