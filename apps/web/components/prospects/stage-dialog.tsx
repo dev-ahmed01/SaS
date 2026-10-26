@@ -39,7 +39,9 @@ async function post<T>(path:string,body?:Record<string,unknown>):Promise<T>{
   });
   if(!response.ok){
     const problem=await response.json().catch(()=>null) as {detail?:unknown}|null;
-    throw Error(typeof problem?.detail==="string"?problem.detail:
+    throw Error(response.status===404?
+      "OTP activation is unavailable. Refresh and try again.":
+      typeof problem?.detail==="string"?problem.detail:
       response.status===409?"The prospect changed. Reload and retry.":
       "Could not complete this action.");
   }
@@ -65,7 +67,6 @@ export function StageDialog({prospect,onClose,onChanged}:{
   const [otpReady,setOtpReady]=useState<boolean|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const [notice,setNotice]=useState("");
   const [now,setNow]=useState(()=>Date.now());
   const closeButton=useRef<HTMLButtonElement>(null);
   const digitRefs=useRef<(HTMLInputElement|null)[]>([]);
@@ -119,7 +120,6 @@ export function StageDialog({prospect,onClose,onChanged}:{
         if(status.challenge_id&&status.expires_at&&
           Date.parse(status.expires_at)>Date.now()){
           setChallenge({challenge_id:status.challenge_id,expires_at:status.expires_at});
-          setNotice("A code has already been requested for this WhatsApp number.");
           return;
         }
         setBusy(true);
@@ -127,7 +127,6 @@ export function StageDialog({prospect,onClose,onChanged}:{
         if(active){
           setChallenge(issued);
           setNow(Date.now());
-          setNotice("OTP requested from WhatsApp provider. Delivery is not yet confirmed.");
         }
       }catch(e){
         if(active){setError(e instanceof Error?e.message:"Could not request OTP.");setOtpReady(old=>old??false);}
@@ -140,12 +139,11 @@ export function StageDialog({prospect,onClose,onChanged}:{
 
   async function requestCode(){
     if(busy||otpReady!==true||(challenge&&!expired))return;
-    setBusy(true);setError("");setNotice("");
+    setBusy(true);setError("");
     try{
       const response=await post<Challenge>(prospect.id+"/otp/request");
       if(!mounted.current)return;
       setChallenge(response);setDigits(EMPTY);setNow(Date.now());
-      setNotice("New OTP requested. Delivery is not yet confirmed.");
     }catch(e){if(mounted.current)setError(e instanceof Error?e.message:"Could not request OTP.");}
     finally{if(mounted.current)setBusy(false);}
   }
@@ -192,7 +190,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
     if(reactivation&&note.trim().length<3){
       setError("Explain why this sponsor is being reactivated.");return;
     }
-    setBusy(true);setError("");setNotice("");
+    setBusy(true);setError("");
     try{
       let confirmation:string|undefined;
       if(markInactive){
@@ -213,7 +211,8 @@ export function StageDialog({prospect,onClose,onChanged}:{
 
   return <div className="crm-dialog-scrim" role="presentation"
     onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
-    <section className="crm-dialog" role="dialog" aria-modal="true"
+    <section className={"crm-dialog"+(markInactive?"":" sas-otp-dialog")}
+      role="dialog" aria-modal="true"
       aria-label={markInactive?"Mark prospect inactive":reactivation?"Reactivate prospect":"Activate prospect"}>
       <div className="crm-dialog-head">
         <div><h2>{markInactive?"Mark inactive":reactivation?"Reactivate prospect":"Verify and activate"}</h2>
@@ -243,10 +242,8 @@ export function StageDialog({prospect,onClose,onChanged}:{
             </label>
           </>}
           <div className="sas-otp-summary">
-            <p className="crm-dialog-help">{challenge&&!expired
-              ?"Verification code requested on WhatsApp for:":"WhatsApp verification number:"}</p>
+            <span className="crm-muted">{challenge&&!expired?"Code requested for":"WhatsApp number"}</span>
             <strong>{number}</strong>
-            <p className="crm-dialog-help">OTP valid for the next 2 minutes.</p>
           </div>
           {otpReady===null?<p className="crm-muted">Preparing WhatsApp verification…</p>:
             otpReady===false?
@@ -254,7 +251,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
                 Activation is unavailable until a provider is connected.</p>:
             challenge&&!expired?
               <div className="sas-otp-entry">
-                <div className="field-label" id="sas-otp-label">Enter the 4-digit OTP</div>
+                <div className="field-label" id="sas-otp-label">4-digit OTP</div>
                 <div className="sas-otp-inputs" role="group" aria-labelledby="sas-otp-label">
                   {digits.map((digit,index)=><input key={index} ref={el=>{digitRefs.current[index]=el;}}
                     className={fieldClasses} type="text" inputMode="numeric"
@@ -284,10 +281,7 @@ export function StageDialog({prospect,onClose,onChanged}:{
                 <button type="button" className="btn btn-secondary" disabled={busy}
                   onClick={()=>void requestCode()}>{busy?"Requesting…":"Send new OTP"}</button>
               </div>}
-          <p className="crm-dialog-help">A correct OTP activates this person.
-            Communication permission and payment records remain separate.</p>
         </>}
-        {notice&&<p role="status" className="crm-muted">{notice}</p>}
         {error&&<p className="form-error" role="alert">{error}</p>}
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}
