@@ -1,6 +1,6 @@
 """Manual collection acceptance: financial attestation, consent and idempotency."""
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -17,7 +17,9 @@ from app.models import (
     AuditEvent,
     Base,
     ManualCollection,
+    MessageDispatch,
     MessageOutbox,
+    OrganizationSettings,
     Prospect,
     VerifiedCredit,
 )
@@ -390,3 +392,100 @@ def test_missing_external_reference_uses_internal_unique_ledger_key(system):
         "receipt_reference": "BAD VALUE",
     })
     assert invalid.status_code == 422
+
+
+def test_resend_confirmation_requires_approved_worker_and_definite_original_status(
+    system, monkeypatch,
+):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=True)
+    payment = client.post("/v1/collections", headers=csrf, json=sample(person["id"]))
+    assert payment.status_code == 201, payment.text
+    collection_id = payment.json()["id"]
+    path = "/v1/collections/" + collection_id + "/resend-confirmation"
+    input_data = {"request_id": str(uuid.uuid4()), "confirmation": "RESEND"}
+    assert client.post(path, json=input_data).status_code == 403
+    assert client.post(path, headers=csrf, json=input_data).status_code == 503
+
+    monkeypatch.setattr("app.collections.get_settings", lambda: SimpleNamespace(
+        messaging_delivery_enabled=True, messaging_sender_approved=True,
+        messaging_enable_after=datetime.now(UTC) - timedelta(days=1),
+    ))
+    with Session(engine) as db:
+        setting = db.get(OrganizationSettings, uuid.UUID(person["id"]))  # not an org UUID
+        assert setting is None
+        prospect = db.get(Prospect, uuid.UUID(person["id"]))
+        cfg = db.get(OrganizationSettings, prospect.organization_id)
+        cfg.automation_enabled = True
+        db.commit()
+    # An unattempted original message is pending, not eligible for a resend.
+    assert client.post(path, headers=csrf, json=input_data).status_code == 409
+    with Session(engine) as db:
+        event = db.scalars(select(MessageOutbox).where(
+            MessageOutbox.collection_id == uuid.UUID(collection_id),
+        )).one()
+        db.add(MessageDispatch(
+            organization_id=event.organization_id, outbox_id=event.id,
+            category="collection", status="failed",
+        ))
+        db.commit()
+
+    first = client.post(path, headers=csrf, json=input_data)
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "queued"
+    assert "delivery is not confirmed" in first.json()["notice"]
+    again = client.post(path, headers=csrf, json=input_data)
+    assert again.status_code == 200
+    assert again.json()["status"] == "already_queued"
+    listed = client.get("/v1/collections")
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["message_status"] == "awaiting_integration"
+    with Session(engine) as db:
+        events = db.scalars(select(MessageOutbox).where(
+            MessageOutbox.collection_id == uuid.UUID(collection_id),
+        )).all()
+        assert len(events) == 2
+    reverted = client.post(
+        "/v1/collections/" + collection_id + "/reverse", headers=csrf,
+        json={"request_id": str(uuid.uuid4()), "reason_code": "wrong_amount",
+              "confirmation": "REVERSE"},
+    )
+    assert reverted.status_code == 201, reverted.text
+    with Session(engine) as db:
+        retry = db.scalars(select(MessageOutbox).where(
+            MessageOutbox.collection_id == uuid.UUID(collection_id),
+            MessageOutbox.event_type == "collection_confirmation_resend",
+        )).one()
+        assert retry.status == "suppressed"
+    assert client.post(path, headers=csrf, json=input_data).status_code == 409
+
+
+def test_resend_rejects_uncertain_original_delivery(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, consent=True)
+    receipt = client.post("/v1/collections", headers=csrf, json=sample(person["id"]))
+    assert receipt.status_code == 201
+    monkeypatch.setattr("app.collections.get_settings", lambda: SimpleNamespace(
+        messaging_delivery_enabled=True, messaging_sender_approved=True,
+        messaging_enable_after=datetime.now(UTC) - timedelta(days=1),
+    ))
+    with Session(engine) as db:
+        p = db.get(Prospect, uuid.UUID(person["id"]))
+        db.get(OrganizationSettings, p.organization_id).automation_enabled = True
+        original = db.scalars(select(MessageOutbox).where(
+            MessageOutbox.collection_id == uuid.UUID(receipt.json()["id"]),
+        )).one()
+        db.add(MessageDispatch(
+            organization_id=original.organization_id, outbox_id=original.id,
+            category="collection", status="accepted",
+        ))
+        db.commit()
+    attempt = client.post(
+        "/v1/collections/" + receipt.json()["id"] + "/resend-confirmation",
+        headers=csrf, json={"request_id": str(uuid.uuid4()), "confirmation": "RESEND"},
+    )
+    assert attempt.status_code == 409, attempt.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(MessageOutbox)) == 1
