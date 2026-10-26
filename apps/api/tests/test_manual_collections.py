@@ -214,6 +214,13 @@ def test_payment_lists_and_does_not_expose_unmasked_reference(system):
     assert response.status_code == 200
     assert response.json()["total"] == 1
     assert "SYNTHETICREF001" not in response.text
+    assert response.json()["items"][0]["sponsor_mobile"] == p["mobile_number"]
+    current_month = month_start(ist_today()).isoformat()
+    paid_this_month = client.get("/v1/collections?received_month=" + current_month)
+    assert paid_this_month.status_code == 200, paid_this_month.text
+    assert paid_this_month.json()["total"] == 1
+    assert client.get("/v1/collections?received_month=2026-10-03").status_code == 422
+    assert client.get("/v1/prospects/" + p["id"]).json()["total_contribution_paise"] == 50000
     assert client.get("/v1/collections?limit=101").status_code == 422
     assert client.get("/v1/collections?period_month=2026-10-03").status_code == 422
     with Session(engine) as db:
