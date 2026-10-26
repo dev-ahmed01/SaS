@@ -33,7 +33,7 @@ from app.saasyto_client import send_text
 from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
-OTP_MINUTES = 10
+OTP_MINUTES = 2
 COOLDOWN_SECONDS = 60
 MAX_ISSUES_PER_DAY = 5
 MAX_ATTEMPTS = 5
@@ -46,7 +46,7 @@ class OtpDeliveryUnconfirmed(Exception):
 class OtpConfirm(BaseModel):
     model_config = ConfigDict(extra="forbid")
     challenge_id: uuid.UUID
-    code: str = Field(pattern=r"^[0-9]{6}$")
+    code: str = Field(pattern=r"^[0-9]{4}$")
 
 
 class OtpActivate(OtpConfirm):
@@ -93,7 +93,7 @@ def _deliver(cfg: Settings, phone: str, code: str) -> None:
             cfg, phone=phone,
             message=(
                 f"Your Sponsor a Salah activation code is {code}. "
-                "Valid for 10 minutes. Do not share unless you requested activation."
+                "Valid for 2 minutes. Do not share unless you requested activation."
             ),
         )
         if submission.state == "unknown":
@@ -149,11 +149,24 @@ def status(
     person = _load(database, admin, prospect_id)
     cfg = get_settings()
     response.headers["Cache-Control"] = "no-store"
+    latest = database.scalars(select(SponsorOtpChallenge).where(
+        SponsorOtpChallenge.organization_id == admin.organization_id,
+        SponsorOtpChallenge.prospect_id == prospect_id,
+        SponsorOtpChallenge.phone_digest == _digest(cfg.otp_secret, _phone(person))
+        if cfg.otp_secret else SponsorOtpChallenge.id.is_(None),
+        SponsorOtpChallenge.status == "accepted",
+        SponsorOtpChallenge.expires_at > utc_now(),
+        SponsorOtpChallenge.consumed_at.is_(None),
+    ).order_by(SponsorOtpChallenge.created_at.desc()).limit(1)).one_or_none()
     return {
         "delivery_enabled": _enabled(cfg),
         "verified": person.whatsapp_verified_at is not None,
         "verified_at": person.whatsapp_verified_at.isoformat()
         if person.whatsapp_verified_at else None,
+        # A dialog reopened during the 2-minute window resumes the same OTP.
+        # The plaintext code is never returned or persisted.
+        "challenge_id": str(latest.id) if latest else None,
+        "expires_at": latest.expires_at.isoformat() if latest else None,
     }
 
 
@@ -192,7 +205,22 @@ def request_otp(
     if rows and as_utc(rows[0].created_at) > now - timedelta(seconds=COOLDOWN_SECONDS):
         raise HTTPException(status_code=429, detail="Retry after the verification cooldown")
     challenge_id = uuid.uuid4()
-    code = f"{secrets.randbelow(1000000):06d}"
+    # 4-digit codes are unique among this recipient's recent challenges.
+    # The challenge UUID is separately unique and binds the code to the phone.
+    code = ""
+    for _ in range(30):
+        candidate = f"{secrets.randbelow(10000):04d}"
+        if not any(
+            hmac.compare_digest(
+                prior.code_digest,
+                _code_digest(cfg.otp_secret, prior.id, number, candidate),
+            )
+            for prior in rows
+        ):
+            code = candidate
+            break
+    if not code:
+        raise HTTPException(status_code=503, detail="Could not generate a fresh OTP")
     record = SponsorOtpChallenge(
         id=challenge_id, organization_id=admin.organization_id,
         prospect_id=prospect_id, phone_digest=phone_digest,
@@ -215,6 +243,10 @@ def request_otp(
         raise HTTPException(
             status_code=502, detail="WhatsApp provider could not accept OTP"
         ) from None
+    # New successful issue invalidates any previous accepted challenge.
+    for prior in rows:
+        if prior.status == "accepted":
+            prior.status = "superseded"
     record.status = "accepted"
     database.add(AuditEvent(
         organization_id=admin.organization_id, actor_admin_id=admin.id,

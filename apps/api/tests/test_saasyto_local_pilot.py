@@ -400,9 +400,9 @@ def test_readiness_identifies_wrong_pilot_number_despite_one_eligible(
     assert data["ready"] is False
     assert data["code"] == "local_number_mismatch"
     assert data["eligible_count"] == 1
-    assert data["permitted_phone_masked"] == "•••• 9999"
+    assert data["permitted_phone"] == "+919899009999"
     assert "+919899001001" not in diagnosis.text
-    assert "+919899009999" not in diagnosis.text
+    assert "+919899009999" in diagnosis.text
     assert excluded["mobile_number"] not in diagnosis.text
     failed = client.post(base + "/saasyto", headers=csrf, json={
         "preparation_id": prepared.json()["id"],
@@ -417,7 +417,7 @@ def test_readiness_identifies_wrong_pilot_number_despite_one_eligible(
     assert ready.status_code == 200 and ready.json()["ready"] is True
     assert ready.json()["code"] == "ready"
     assert ready.json()["eligible_count"] == 1
-    assert ready.json()["permitted_phone_masked"] == "•••• 1001"
+    assert ready.json()["permitted_phone"] == "+919899001001"
     approved = client.post(base + "/saasyto", headers=csrf, json={
         "preparation_id": prepared.json()["id"],
         "expected_eligible": 1, "confirm_send": True,

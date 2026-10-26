@@ -1527,3 +1527,47 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   border:1px solid #cddcd4;border-radius:8px;font:inherit;}
 .comm-consent-batch-form .comm-consent-batch-check{width:100%;display:flex;
   align-items:center;gap:8px;}
+
+
+/* Four-digit sponsor WhatsApp verification */
+.sas-otp-summary {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 18px;
+}
+.sas-otp-summary strong {
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: .015em;
+  overflow-wrap: anywhere;
+}
+.sas-otp-summary .crm-dialog-help { margin: 0; }
+.sas-otp-entry { display: grid; gap: 12px; }
+.sas-otp-inputs { display: flex; align-items: center; gap: 10px; }
+.sas-otp-digit {
+  width: min(18%, 58px);
+  height: 62px;
+  min-width: 48px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1.5px solid #bfd0c6;
+  background: #fff;
+  color: #1a3426;
+  font-family: Poppins, sans-serif;
+  font-weight: 600;
+  font-size: 1.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.sas-otp-digit:focus-visible {
+  border-color: #23714c;
+  outline: 3px solid #c7e9d5;
+  outline-offset: 2px;
+}
+.sas-otp-digit:disabled { opacity: .65; }
+.sas-otp-timer { margin: 0; font-size: .9rem; color: #496254; }
+.sas-otp-timer strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 440px) {
+  .sas-otp-inputs { gap: 8px; }
+  .sas-otp-digit { min-width: 44px; height: 54px; }
+}

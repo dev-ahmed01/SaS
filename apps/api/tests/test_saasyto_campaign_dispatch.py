@@ -220,7 +220,7 @@ def test_approval_requires_fresh_review_and_new_campaign(dispatch_system, monkey
     assert response.status_code == 409
 
 
-def test_campaign_results_include_excluded_contacts_and_mask_numbers(dispatch_system):
+def test_campaign_results_include_excluded_contacts_and_full_numbers(dispatch_system):
     client, _ = dispatch_system
     csrf = login(client)
     allowed = _person(client, csrf, "1101")
@@ -250,9 +250,9 @@ def test_campaign_results_include_excluded_contacts_and_mask_numbers(dispatch_sy
     excluded = record["excluded_recipients"][0]
     assert excluded["recipient_id"] == missing_general_consent["id"]
     assert excluded["name"] == missing_general_consent["full_name"]
-    assert excluded["phone_masked"] == "•••• 1102"
+    assert excluded["phone"] == "+919899001102"
     assert excluded["status"] == "excluded"
-    assert "+919899001102" not in detail.text
+    assert "+919899001102" in detail.text
     all_summaries = client.get("/v1/communication/campaigns/results").json()
     assert all_summaries[0]["run_status"] == "not_approved"
     assert all_summaries[0]["excluded_in_review"] == 1
@@ -281,7 +281,7 @@ def test_campaign_results_distinguish_submission_rejection_unknown_and_no_webhoo
     assert detail["summary"]["delivered"] is None
     assert detail["summary"]["read"] is None
     assert detail["recipients"][0]["status"] == "rejected"
-    assert detail["recipients"][0]["phone_masked"] == "•••• 1103"
+    assert detail["recipients"][0]["phone"] == "+919899001103"
     assert "test-consent-reference" not in str(detail)
     row = next(x for x in client.get("/v1/communication/campaigns/results").json()
                if x["campaign_id"] == cid)

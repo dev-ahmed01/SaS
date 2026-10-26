@@ -1,5 +1,6 @@
 """Sponsor OTP: bounded challenge, tenant binding, no delivery claims or consent changes."""
 import uuid
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -62,7 +63,7 @@ def test_success_and_replay_without_crm_or_consent_side_effects(api, monkeypatch
     assert "code" not in challenge
     assert len(sent) == 1
     assert sent[0][0] == person["mobile_number"]
-    assert len(sent[0][1]) == 6
+    assert len(sent[0][1]) == 4
     with Session(engine) as db:
         record = db.get(SponsorOtpChallenge, uuid.UUID(challenge["challenge_id"]))
         assert record is not None
@@ -76,8 +77,8 @@ def test_success_and_replay_without_crm_or_consent_side_effects(api, monkeypatch
     )
     assert wrong_person.status_code == 400
     wrong = client.post(url + "/verify", headers=csrf, json={
-        "challenge_id": challenge["challenge_id"], "code": "000000"
-        if sent[0][1] != "000000" else "999999",
+        "challenge_id": challenge["challenge_id"], "code": "0000"
+        if sent[0][1] != "0000" else "9999",
     })
     assert wrong.status_code == 400
     valid = client.post(url + "/verify", headers=csrf, json={
@@ -117,7 +118,7 @@ def test_cooldown_and_lockout(api, monkeypatch):
     for _ in range(5):
         response = client.post(url + "/verify", headers=csrf, json={
             "challenge_id": first.json()["challenge_id"],
-            "code": "111111" if sent[0][1] != "111111" else "222222",
+            "code": "1111" if sent[0][1] != "1111" else "2222",
         })
         assert response.status_code == 400
     valid_after_lock = client.post(url + "/verify", headers=csrf, json={
@@ -177,7 +178,7 @@ def test_first_activation_and_reactivation_are_otp_gated(api, monkeypatch):
     challenge = request.json()["challenge_id"]
     wrong = client.post(root + "/otp/activate", headers=csrf, json={
         "version": person["version"], "challenge_id": challenge,
-        "code": "000000" if sent[-1][1] != "000000" else "111111",
+        "code": "0000" if sent[-1][1] != "0000" else "1111",
     })
     assert wrong.status_code == 400
     assert client.get(root).json()["crm_stage"] == "inactive"
@@ -266,7 +267,7 @@ def test_local_otp_uses_allowlisted_phone_only_and_does_not_claim_delivery(monke
     assert len(sent) == 1 and sent[0][0] == allowed
     assert "123456" in sent[0][1]
     with pytest.raises(ValueError, match="allowlisted"):
-        _deliver(config, "+918100000011", "654321")
+        _deliver(config, "+918100000011", "6543")
     assert len(sent) == 1
     monkeypatch.setattr(
         "app.sponsor_otp.send_text",
@@ -293,3 +294,61 @@ def test_local_otp_request_refuses_other_prospect_before_provider_call(api, monk
     assert sent == []
     with Session(engine) as db:
         assert db.scalars(select(SponsorOtpChallenge)).all() == []
+
+
+def test_four_digits_two_minutes_and_session_resume(api, monkeypatch):
+    client, csrf, engine = api
+    delivered = []
+    _enable(monkeypatch, delivered)
+    prospect = _create(client, csrf, "Four Digits", "+918100000014")
+    root = "/v1/prospects/" + prospect["id"] + "/otp"
+    issued = client.post(root + "/request", headers=csrf)
+    assert issued.status_code == 200, issued.text
+    assert len(delivered) == 1
+    assert delivered[0][1].isdigit() and len(delivered[0][1]) == 4
+    with Session(engine) as db:
+        entry = db.get(SponsorOtpChallenge, uuid.UUID(issued.json()["challenge_id"]))
+        assert entry.expires_at - entry.created_at == timedelta(minutes=2)
+    resumed = client.get(root + "/status")
+    assert resumed.status_code == 200
+    assert resumed.json()["challenge_id"] == issued.json()["challenge_id"]
+    assert resumed.json()["expires_at"] == issued.json()["expires_at"]
+    assert "code" not in resumed.json()
+    from app.security import utc_now
+    after_expiry = utc_now() + timedelta(minutes=3)
+    monkeypatch.setattr("app.sponsor_otp.utc_now", lambda: after_expiry)
+    assert client.get(root + "/status").json()["challenge_id"] is None
+    invalid = client.post(root + "/activate", headers=csrf, json={
+        "version": prospect["version"], "challenge_id": issued.json()["challenge_id"],
+        "code": delivered[0][1],
+    })
+    assert invalid.status_code == 400
+    assert client.get("/v1/prospects/" + prospect["id"]).json()["crm_stage"] == "inactive"
+
+
+def test_next_otp_differs_and_invalidates_previous(api, monkeypatch):
+    client, csrf, engine = api
+    delivered = []
+    _enable(monkeypatch, delivered)
+    monkeypatch.setattr("app.sponsor_otp.COOLDOWN_SECONDS", 0)
+    prospect = _create(client, csrf, "Fresh Code", "+918100000015")
+    base = "/v1/prospects/" + prospect["id"] + "/otp"
+    old = client.post(base + "/request", headers=csrf)
+    new = client.post(base + "/request", headers=csrf)
+    assert old.status_code == 200 and new.status_code == 200
+    assert old.json()["challenge_id"] != new.json()["challenge_id"]
+    assert delivered[0][1] != delivered[1][1]
+    with Session(engine) as db:
+        previous = db.get(SponsorOtpChallenge, uuid.UUID(old.json()["challenge_id"]))
+        assert previous.status == "superseded"
+    old_code = client.post(base + "/activate", headers=csrf, json={
+        "version": prospect["version"], "challenge_id": old.json()["challenge_id"],
+        "code": delivered[0][1],
+    })
+    assert old_code.status_code == 400
+    current = client.post(base + "/activate", headers=csrf, json={
+        "version": prospect["version"], "challenge_id": new.json()["challenge_id"],
+        "code": delivered[1][1],
+    })
+    assert current.status_code == 200, current.text
+    assert current.json()["status"] == "active"

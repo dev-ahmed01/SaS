@@ -357,6 +357,53 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await expect(page.getByText("Teacher")).toBeVisible();
 });
 
+test("Mark Active auto-requests a two-minute four-digit OTP and shows complete phone",async ({page})=>{
+  const prospect="OTP Browser Candidate "+Date.now();
+  const phone=uniqueProspectMobile();
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(prospect);
+  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(phone);
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(new RegExp("/prospects/[0-9a-f-]{36}$"));
+  const pendingId=crypto.randomUUID();
+  const expiry=new Date(Date.now()+120000).toISOString();
+  let requests=0;
+  await page.route("**/api/admin/prospects/*/otp/status",async route=>{
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+      delivery_enabled:true,verified:false,verified_at:null,
+      challenge_id:null,expires_at:null,
+    })});
+  });
+  await page.route("**/api/admin/prospects/*/otp/request",async route=>{
+    requests++;
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+      challenge_id:pendingId,expires_at:expiry,status:"accepted_by_provider",
+    })});
+  });
+  await page.getByRole("button",{name:/Mark Active/}).click();
+  const modal=page.getByRole("dialog",{name:"Activate prospect"});
+  await expect(modal.getByText(phone,{exact:false})).toBeVisible();
+  await expect(modal.getByText("OTP valid for the next 2 minutes.")).toBeVisible();
+  const digits=modal.locator(".sas-otp-digit");
+  await expect(digits).toHaveCount(4);
+  await expect(modal.getByRole("timer")).toContainText("01:");
+  expect(requests).toBe(1);
+  await digits.nth(0).fill("1");
+  await digits.nth(1).fill("2");
+  await digits.nth(2).fill("3");
+  await digits.nth(3).fill("4");
+  await digits.nth(3).click();
+  await page.keyboard.type("5");
+  await expect(digits.nth(3)).toHaveValue("5");
+  await expect(digits.nth(2)).toHaveValue("3");
+  await digits.nth(3).fill("56");
+  await expect(digits.nth(3)).toHaveValue("6");
+  await expect(modal.getByRole("button",{name:"Verify OTP & Activate"})).toBeEnabled();
+  // This is a UI-only mocked OTP test. Do not submit fake OTP to the real API.
+  await modal.getByRole("button",{name:"Close stage dialog"}).click();
+  await expect(modal).toHaveCount(0);
+});
+
 test("Same-name prospects require different mobile numbers across registrations and edits",async ({page})=>{
   const label="Identity QA "+Date.now();
   const first=uniqueProspectMobile(),second=uniqueProspectMobile();

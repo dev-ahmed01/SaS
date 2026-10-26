@@ -14,7 +14,7 @@ type Summary={
 };
 type Recipient={
   recipient_kind:"prospect"|"promoter";recipient_id:string;
-  name:string;phone_masked:string;status:string;reason:string|null;
+  name:string;phone:string;status:string;reason:string|null;
   finished_at:string|null;
 };
 type CampaignDetails={
@@ -41,7 +41,7 @@ type Provider={
 };
 type Readiness={
   ready:boolean;code:string;message:string;eligible_count:number;
-  local_test_mode:boolean;permitted_phone_masked:string|null;
+  local_test_mode:boolean;permitted_phone:string|null;
 };
 const reasons:Record<string,string>={
   no_general_consent:"General-message permission not recorded",
@@ -94,7 +94,7 @@ function RecipientTable({title,rows}:{
             <Link href={row.recipient_kind==="prospect"
               ?"/prospects/"+row.recipient_id:"/promoters/"+row.recipient_id}>
               {row.name}</Link>
-            <small>{row.phone_masked}</small>
+            <small>{row.phone}</small>
           </div>
           <div className="comm-result-person-outcome">
             <strong>{statuses[row.status]??row.status}</strong>
@@ -310,8 +310,8 @@ export function CampaignResultDetails({id,onBack}:{
         </p>}
         {provider?.local_test_mode&&<p className="comm-muted">
           Local testing is limited to one authorized WhatsApp number.
-          {readiness?.permitted_phone_masked
-            ? " Configured test recipient: "+readiness.permitted_phone_masked+"."
+          {readiness?.permitted_phone
+            ? " Configured test recipient: "+readiness.permitted_phone+"."
             : ""}
         </p>}
         {!run&&readiness&&!readiness.ready&&
