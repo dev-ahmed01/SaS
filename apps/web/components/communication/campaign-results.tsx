@@ -41,7 +41,7 @@ type Provider={
 };
 type Readiness={
   ready:boolean;code:string;message:string;eligible_count:number;
-  local_test_mode:boolean;permitted_phone:string|null;
+  local_test_mode:boolean;permitted_phone:string|null;permitted_phones?:string[];
 };
 const reasons:Record<string,string>={
   no_general_consent:"General-message permission not recorded",
@@ -170,6 +170,7 @@ export function CampaignResultDetails({id,onBack}:{
     finally{setBusy(false);}
   }
   const localImmediate=Boolean(provider?.local_test_mode&&!details?.planned_for);
+  const localLimit=readiness?.permitted_phones?.length??1;
   const futurePlan=Boolean(details?.planned_for&&
     new Date(details.planned_for).getTime()>Date.now());
   async function approve(){
@@ -177,7 +178,7 @@ export function CampaignResultDetails({id,onBack}:{
       review.eligible_count<1||run)return;
     const immediate=localImmediate;
     if(!window.confirm(immediate
-      ? "Send one WhatsApp message now to the authorized test contact? "+
+      ? "Send "+review.eligible_count+" WhatsApp message(s) now to the authorized test contacts? "+
         "The request will reach Saasyto immediately. Gateway acceptance is not delivery."
       : "Approve "+review.eligible_count+
         " eligible recipient(s)? Messages will be queued for the private sender. "+
@@ -194,15 +195,10 @@ export function CampaignResultDetails({id,onBack}:{
             "/campaigns/"+id+"/saasyto/send-now","POST",{}
           );
           await refresh();
-          setNotice(attempt.accepted_unverified===1
-            ? "Saasyto accepted the message. Check the recipient's WhatsApp; delivery is not confirmed."
-            : attempt.rejected===1
-              ? "Saasyto rejected the message. Review the sending result and sender connection."
-              : attempt.unknown===1
-                ? "Saasyto result is unknown. Verify on WhatsApp before considering another campaign."
-                : attempt.suppressed_after_approval===1
-                  ? "Not sent: the recipient no longer meets sending requirements."
-                  : "Message attempt recorded. See the result below.");
+          setNotice(attempt.accepted_unverified+" accepted by Saasyto · "+
+            attempt.rejected+" rejected · "+attempt.unknown+" unknown · "+
+            attempt.suppressed_after_approval+" suppressed. Check each WhatsApp; "+
+            "acceptance is not delivery.");
         }catch{
           await refresh();
           setError("Approved, but immediate submission could not be verified. "+
@@ -218,8 +214,8 @@ export function CampaignResultDetails({id,onBack}:{
   }
   async function sendPendingLocal(){
     if(busy||!provider?.local_test_mode||!provider.delivery_enabled||
-      !run||run.status!=="approved"||run.queued!==1||futurePlan)return;
-    if(!window.confirm("Submit this single pending WhatsApp message now? "+
+      !run||run.status!=="approved"||run.queued<1||run.queued>localLimit||futurePlan)return;
+    if(!window.confirm("Submit "+run.queued+" pending WhatsApp message(s) now? "+
       "This cannot be undone and will never be automatically retried."))return;
     setBusy(true);setError("");setNotice("");
     try{
@@ -227,9 +223,9 @@ export function CampaignResultDetails({id,onBack}:{
         "/campaigns/"+id+"/saasyto/send-now","POST",{}
       );
       await refresh();
-      setNotice(attempt.accepted_unverified===1
-        ? "Saasyto accepted the message; check WhatsApp for actual receipt."
-        : "Sending attempt recorded. See the recipient outcome below.");
+      setNotice(attempt.accepted_unverified+" accepted by Saasyto · "+
+        attempt.rejected+" rejected · "+attempt.unknown+" unknown. "+
+        "Check the per-recipient outcomes; acceptance is not delivery.");
     }catch{
       await refresh();
       setError("Could not verify submission. Check the recipient attempt status; "+
@@ -288,10 +284,10 @@ export function CampaignResultDetails({id,onBack}:{
         {older&&!run&&<p className="form-error" role="status">
           This campaign predates Saasyto activation. Create a new campaign
           to obtain a valid delivery approval.</p>}
-        {provider?.local_test_mode&&!run&&details.eligible_in_review>1&&
+        {provider?.local_test_mode&&!run&&details.eligible_in_review>localLimit&&
           <p className="form-error" role="status">
-            Local test allows one authorized recipient. This campaign has
-            multiple eligible contacts.
+            Local test allows at most {localLimit} authorized recipient(s). This campaign
+            includes more than that.
           </p>}
         {run?.status==="approved"&&<p className="comm-muted" role="status">
           {futurePlan
@@ -299,7 +295,7 @@ export function CampaignResultDetails({id,onBack}:{
             : "Approved and queued. The private worker submits eligible contacts in batches."}
           {" "}{s.queued} waiting · {s.claimed} claimed. Results refresh automatically while pending.
           {provider?.local_test_mode
-            ? " For one-phone local testing, use Send pending WhatsApp now instead."
+            ? " For guarded local testing, use Send pending WhatsApp now instead."
             : " Confirm the production worker is running; approval alone does not send."}
         </p>}
         {run?.status==="completed"&&<p className="comm-muted">
@@ -309,10 +305,12 @@ export function CampaignResultDetails({id,onBack}:{
           WhatsApp sending is disabled in backend settings. Creating a plan does not send a message.
         </p>}
         {provider?.local_test_mode&&<p className="comm-muted">
-          Local testing is limited to one authorized WhatsApp number.
-          {readiness?.permitted_phone
-            ? " Configured test recipient: "+readiness.permitted_phone+"."
-            : ""}
+          Local testing is limited to {localLimit} explicitly authorized WhatsApp number(s).
+          {(readiness?.permitted_phones?.length??0)>0
+            ? " Configured test recipients: "+readiness?.permitted_phones?.join(", ")+"."
+            : readiness?.permitted_phone
+              ? " Configured test recipient: "+readiness.permitted_phone+"."
+              : ""}
         </p>}
         {!run&&readiness&&!readiness.ready&&
           <p className="form-error" role="alert">
@@ -344,7 +342,7 @@ export function CampaignResultDetails({id,onBack}:{
             {!run&&<button type="button" className="btn btn-secondary"
               disabled={busy} onClick={()=>void checkRecipients()}>
               {busy?"Working…":"Check recipients"}</button>}
-            {run?.status==="approved"&&run.queued===1&&provider?.local_test_mode&&
+            {run?.status==="approved"&&run.queued>0&&run.queued<=localLimit&&provider?.local_test_mode&&
               provider.delivery_enabled&&!futurePlan&&<button type="button"
               className="btn btn-primary" disabled={busy}
               onClick={()=>void sendPendingLocal()}>
@@ -353,7 +351,7 @@ export function CampaignResultDetails({id,onBack}:{
             {!run&&provider?.delivery_enabled&&<button type="button"
               className="btn btn-primary" disabled={
                 busy||older||!review||!readiness?.ready||review.eligible_count===0||
-                Boolean(provider.local_test_mode&&review.eligible_count!==1)
+                Boolean(provider.local_test_mode&&review.eligible_count>localLimit)
               } onClick={()=>void approve()}>
                 {busy?"Working…":localImmediate?"Send WhatsApp now":"Approve WhatsApp delivery"}
               </button>}

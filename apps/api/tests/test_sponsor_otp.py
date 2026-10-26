@@ -562,3 +562,48 @@ def test_saasyto_only_production_config_needs_no_meta_subscription():
         Settings(_env_file=None, **{**base, "saasyto_delivery_enabled": False})
     with pytest.raises(ValueError, match="OTP_SECRET"):
         Settings(_env_file=None, **{**base, "otp_secret": ""})
+
+
+def test_guarded_two_phone_pilot_otp_activates_only_selected_prospect(api, monkeypatch):
+    client, csrf, _engine = api
+    first = _create(client, csrf, "Pilot A", "+918100000041")
+    second = _create(client, csrf, "Pilot B", "+918100000042")
+    third = _create(client, csrf, "Not Authorized", "+918100000043")
+    cfg = SimpleNamespace(
+        otp_delivery_enabled=False, otp_local_pilot_enabled=True, otp_secret=SECRET,
+        saasyto_local_test_phone=first["mobile_number"],
+        saasyto_local_test_phone_2=second["mobile_number"],
+    )
+    outgoing = []
+
+    def mock_send(_cfg, *, phone, message):
+        import re
+        match = re.search(r"activation code is ([0-9]{4})", message)
+        assert match is not None
+        outgoing.append((phone, match.group(1)))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.sponsor_otp.send_text", mock_send)
+    def request(person):
+        return client.post("/v1/prospects/"+person["id"]+"/otp/request", headers=csrf)
+    one = request(first)
+    two = request(second)
+    denied = request(third)
+    assert one.status_code == 200 and two.status_code == 200
+    assert denied.status_code == 403
+    assert outgoing[0][0] == first["mobile_number"]
+    assert outgoing[1][0] == second["mobile_number"]
+    assert len(outgoing) == 2
+    assert client.get("/v1/prospects/"+first["id"]).json()["crm_stage"] == "inactive"
+    activated = client.post("/v1/prospects/"+first["id"]+"/otp/activate",
+                            headers=csrf, json={
+        "version": first["version"],
+        "challenge_id": one.json()["challenge_id"],
+        "code": outgoing[0][1],
+    })
+    assert activated.status_code == 200, activated.text
+    assert client.get("/v1/prospects/"+first["id"]).json()["crm_stage"] == "active"
+    assert client.get("/v1/prospects/"+second["id"]).json()["crm_stage"] == "inactive"
+    assert client.get("/v1/prospects/"+third["id"]).json()["crm_stage"] == "inactive"
+    assert len(outgoing) == 2

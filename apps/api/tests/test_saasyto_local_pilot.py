@@ -451,3 +451,102 @@ def test_readiness_communicates_disabled_and_older_campaign(
     assert client.get(url, headers={
         "Cookie": "sas_session=not-a-session",
     }).status_code in (200, 401)
+
+
+def test_second_local_phone_requires_distinct_explicit_owner_authorization():
+    cfg = settings(saasyto_local_test_phone_2="+919899001002")
+    assert cfg.saasyto_local_test_phone_2 == "+919899001002"
+    for invalid in (LOCAL_PHONE, "+910", "919899001002", ""):
+        with pytest.raises(ValidationError):
+            settings(saasyto_local_test_phone_2=invalid)
+    with pytest.raises(ValidationError):
+        settings(saasyto_local_test_enabled=False,
+                 saasyto_local_test_phone_2="+919899001002")
+
+
+def test_two_phone_local_transport_rejects_third_without_http(monkeypatch):
+    from app.saasyto_client import local_pilot_permits, local_pilot_phones
+
+    cfg = SimpleNamespace(
+        saasyto_delivery_enabled=True,
+        saasyto_sender_approved=True,
+        saasyto_instance_id="local_pilot_001",
+        saasyto_access_token=SecretStr("synthetic-testing-token"),
+        saasyto_local_test_enabled=True,
+        saasyto_local_test_phone=LOCAL_PHONE,
+        saasyto_local_test_phone_2="+919899001002",
+    )
+    assert local_pilot_phones(cfg) == (LOCAL_PHONE, "+919899001002")
+    assert all(local_pilot_permits(cfg, value) for value in local_pilot_phones(cfg))
+    assert not local_pilot_permits(cfg, "+919899001003")
+    monkeypatch.setattr("app.saasyto_client.httpx.Client", lambda **_:
+                        (_ for _ in ()).throw(AssertionError("Network forbidden")))
+    with pytest.raises(ValueError, match="not allowlisted"):
+        send_text(cfg, phone="+919899001003", message="Must never reach provider")
+
+
+def test_local_two_person_campaign_send_now_once_only(dispatch_system, monkeypatch):
+    """Both eligible authorized phones are submitted once by one admin click."""
+    client, _engine = dispatch_system
+    csrf = login(client)
+    first = _person(client, csrf, "1001")
+    second = _person(client, csrf, "1002")
+    _consent(client, csrf, first, "opted_in")
+    _consent(client, csrf, second, "opted_in")
+    cfg = _manual_pilot()
+    cfg.saasyto_local_test_phone_2 = "+919899001002"
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    cid = create_campaign(client, csrf, title="Two authorized reminders",
+                          category="reminder").json()["id"]
+    base = "/v1/communication/campaigns/" + cid
+    prepared = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    })
+    assert prepared.status_code == 201, prepared.text
+    assert prepared.json()["eligible_count"] == 2
+    readiness = client.get(base + "/saasyto/readiness").json()
+    assert readiness["ready"] is True
+    assert readiness["permitted_phones"] == [LOCAL_PHONE, "+919899001002"]
+    approved = client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": prepared.json()["id"],
+        "expected_eligible": 2, "confirm_send": True,
+    })
+    assert approved.status_code == 201, approved.text
+    attempted = []
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.send_text",
+        lambda _cfg, *, phone, message:
+        attempted.append(phone) or Submission("accepted_unverified"),
+    )
+    submitted = client.post(base + "/saasyto/send-now", headers=csrf, json={})
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "completed"
+    assert submitted.json()["accepted_unverified"] == 2
+    assert set(attempted) == {LOCAL_PHONE, "+919899001002"}
+    assert client.post(base + "/saasyto/send-now", headers=csrf, json={}).status_code == 409
+    assert len(attempted) == 2
+
+
+def test_local_two_phone_campaign_refuses_third_contact(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
+    csrf = login(client)
+    for suffix in ("1001", "1002", "1003"):
+        person = _person(client, csrf, suffix)
+        _consent(client, csrf, person, "opted_in")
+    cfg = _manual_pilot()
+    cfg.saasyto_local_test_phone_2 = "+919899001002"
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    cid = create_campaign(client, csrf, title="Three cannot send locally").json()["id"]
+    base = "/v1/communication/campaigns/" + cid
+    prepared = client.post(base + "/preparations", headers=csrf, json={
+        "request_id": str(uuid.uuid4()), "simulation_only": True,
+    }).json()
+    assert prepared["eligible_count"] == 3
+    readiness = client.get(base + "/saasyto/readiness").json()
+    assert readiness["ready"] is False and readiness["code"] == "local_limit"
+    assert client.post(base + "/saasyto", headers=csrf, json={
+        "preparation_id": prepared["id"], "expected_eligible": 3,
+        "confirm_send": True,
+    }).status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count(SaasytoCampaignRun.id))) == 0

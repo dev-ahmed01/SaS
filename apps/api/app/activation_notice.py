@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.communication_consent import evaluate_recipients
 from app.models import Prospect
-from app.saasyto_client import send_text
+from app.saasyto_client import local_pilot_permits, send_text
 from app.security import as_utc, utc_now
 
 
@@ -35,8 +35,7 @@ def send_activation_notice(db: Session, cfg, person: Prospect, *, reactivated: b
             return "suppressed_no_general_consent"
         number = person.whatsapp_number or person.mobile_number
         if getattr(cfg, "saasyto_local_test_enabled", False):
-            allowed = getattr(cfg, "saasyto_local_test_phone", None) or ""
-            if number.lstrip("+") != allowed.lstrip("+"):
+            if not local_pilot_permits(cfg, number):
                 return "suppressed_local_test_number"
 
         action = "reactivated" if reactivated else "activated"

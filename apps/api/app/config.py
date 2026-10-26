@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # development-mode bypass of the normal production sending restriction.
     saasyto_local_test_enabled: bool = False
     saasyto_local_test_phone: str | None = None
+    # Optional second explicitly authorized recipient for an isolated local test.
+    saasyto_local_test_phone_2: str | None = None
 
     # Separate from reminder messaging. Explicitly OFF unless Meta OTP is provisioned.
     otp_delivery_enabled: bool = False
@@ -111,7 +113,14 @@ class Settings(BaseSettings):
             # The local-demo validator above already enforces exactly
             # sas_dev@127.0.0.1:5432/sas_dev, no extra query parameters.
             if not re.fullmatch(r"\+[1-9][0-9]{7,14}", self.saasyto_local_test_phone or ""):
-                raise ValueError("Saasyto local test requires one E.164 +country-code phone")
+                raise ValueError("Saasyto local test requires an E.164 +country-code phone")
+            if self.saasyto_local_test_phone_2 is not None:
+                if not re.fullmatch(r"\+[1-9][0-9]{7,14}", self.saasyto_local_test_phone_2):
+                    raise ValueError("Second local Saasyto recipient must be an E.164 phone")
+                if self.saasyto_local_test_phone_2 == self.saasyto_local_test_phone:
+                    raise ValueError("Local Saasyto pilot phones must be distinct")
+        elif self.saasyto_local_test_phone_2:
+            raise ValueError("Second local Saasyto phone requires guarded local test mode")
         if self.saasyto_delivery_enabled:
             import re
 
@@ -145,7 +154,7 @@ class Settings(BaseSettings):
                 and self.saasyto_sender_approved
                 and not self.otp_delivery_enabled
             ):
-                raise ValueError("Local OTP requires approved one-number Saasyto pilot only")
+                raise ValueError("Local OTP requires approved guarded Saasyto pilot only")
             if not self.otp_secret or len(self.otp_secret) < 32:
                 raise ValueError("OTP_SECRET of 32+ characters is required")
         if self.otp_saasyto_enabled:

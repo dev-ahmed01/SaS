@@ -47,7 +47,7 @@ def saasyto_status(
         webhook_verified=False,
         connection_tested=False,
         notice=(
-            "Local pilot is active for one allowlisted recipient; WhatsApp delivery "
+            "Local pilot is active for explicitly allowlisted recipients; WhatsApp delivery "
             "and webhooks are still unverified."
             if cfg.saasyto_delivery_enabled and
             getattr(cfg, "saasyto_local_test_enabled", False) else

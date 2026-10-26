@@ -186,7 +186,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       setRun(result);
       setReload(x=>x+1);
       setNotice(provider?.local_test_mode
-        ? "Approved for local sending. The localhost worker must be running to submit the message."
+        ? "Approved for local sending. Open campaign results to send now; a worker is optional."
         : "Campaign approved for the private delivery runner; messages are not automatically sent from this browser.");
     }catch(e){setReviewError(e instanceof Error?e.message:"Approval was not confirmed.");}
     finally{setRunBusy(false);}
@@ -266,7 +266,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       <span>{provider
         ? provider.delivery_enabled
           ? provider.local_test_mode
-            ? "Local test · one permitted recipient · delivery callbacks unverified"
+            ? "Local test · explicitly permitted recipients only · delivery callbacks unverified"
             : "Provider configuration enabled · delivery callbacks unverified"
           : "Not connected for sending · campaigns remain drafts or plans"
         : "Provider configuration not verified"}
@@ -462,7 +462,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       campaign's detailed results. Planned dates use IST.
       Creating a campaign never sends WhatsApp messages.
       An approved campaign requires the private dispatch worker. Local pilots
-      can send only to the number explicitly permitted in API settings.
+      can send only to the numbers explicitly permitted in API settings.
     </p>
   </section>;
 }

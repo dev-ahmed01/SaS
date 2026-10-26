@@ -30,7 +30,7 @@ from app.models import (
     ProspectStageTransition,
     SponsorOtpChallenge,
 )
-from app.saasyto_client import send_text
+from app.saasyto_client import local_pilot_permits, send_text
 from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/prospects", tags=["Sponsor WhatsApp verification"])
@@ -91,10 +91,8 @@ def _deliver(cfg: Settings, phone: str, code: str) -> None:
     local_pilot = getattr(cfg, "otp_local_pilot_enabled", False)
     saasyto_production = getattr(cfg, "otp_saasyto_enabled", False)
     if local_pilot or saasyto_production:
-        if local_pilot:
-            allowed = cfg.saasyto_local_test_phone or ""
-            if not allowed or not hmac.compare_digest(phone, allowed):
-                raise ValueError("Local OTP recipient is not the allowlisted test phone")
+        if local_pilot and not local_pilot_permits(cfg, phone):
+            raise ValueError("Local OTP recipient is not allowlisted")
         submission = send_text(
             cfg, phone=phone,
             message=(
@@ -191,12 +189,12 @@ def request_otp(
     number = _phone(person)
     if not re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
         raise HTTPException(status_code=422, detail="Prospect needs a valid WhatsApp number")
-    if getattr(cfg, "otp_local_pilot_enabled", False) and not hmac.compare_digest(
-        number, cfg.saasyto_local_test_phone or ""
+    if getattr(cfg, "otp_local_pilot_enabled", False) and not local_pilot_permits(
+        cfg, number,
     ):
         raise HTTPException(
             status_code=403,
-            detail="Local OTP pilot permits only the configured test phone",
+            detail="Local OTP pilot permits only explicitly configured test phones",
         )
     now = utc_now()
     phone_digest = _digest(cfg.otp_secret, number)

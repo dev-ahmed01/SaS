@@ -1,0 +1,24 @@
+# Isolated and disposable PostgreSQL for the local two-number WhatsApp pilot.
+# Run: docker compose -f docker-compose.saasyto-session.yml up -d
+# Stop/delete ALL test records: docker compose -f docker-compose.saasyto-session.yml down
+# Does not mount the repository's persistent sas_postgres volume.
+# Port 5432 must be free; the normal local db service must NOT be running.
+name: sas-saasyto-session
+services:
+  db:
+    image: postgres:16-alpine
+    restart: "no"
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_DB: sas_dev
+      POSTGRES_USER: sas_dev
+      POSTGRES_PASSWORD: ${SAS_LOCAL_DB_PASSWORD:-change-me-for-local-only}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    tmpfs:
+      - /var/lib/postgresql/data:rw,nosuid,size=256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sas_dev -d sas_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
