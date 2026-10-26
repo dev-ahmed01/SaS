@@ -166,7 +166,11 @@ class Settings(BaseSettings):
         if self.otp_activation_notice_enabled and not (
             self.saasyto_delivery_enabled
             and self.saasyto_sender_approved
-            and (self.otp_delivery_enabled or self.otp_local_pilot_enabled)
+            and (
+                self.otp_delivery_enabled
+                or self.otp_local_pilot_enabled
+                or self.otp_saasyto_enabled
+            )
         ):
             raise ValueError(
                 "Activation notice requires approved Saasyto sending and enabled OTP"
