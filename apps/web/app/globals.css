@@ -1774,3 +1774,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .crm-bulk-results .data-table{min-width:690px;}
 .crm-bulk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:16px;}
 @media(max-width:600px){.crm-bulk-toolbar{align-items:stretch;flex-direction:column;}.crm-bulk-toolbar>.field{width:100%;flex:auto;}}
+
+/* Keep the collection actions readable without adding another page. */
+.collection-row-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px 14px;min-width:240px;}
+.collection-row-actions .text-action{white-space:nowrap;font-size:11px;}
+.collection-row-actions .text-action:disabled{cursor:wait;opacity:.55;}
+.collection-review .form-success a{font-weight:600;text-decoration:underline;text-underline-offset:3px;}
