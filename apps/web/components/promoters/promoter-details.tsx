@@ -32,6 +32,7 @@ export function PromoterDetails({id}:{id:string}){
   const [record,setRecord]=useState<Promoter|null>(null);
   const [activity,setActivity]=useState<Activity[]>([]);
   const [filter,setFilter]=useState("all");
+  const [showOlder,setShowOlder]=useState(false);
   const [sponsorCount,setSponsorCount]=useState<number|null>(null);
   const [prospectCount,setProspectCount]=useState<number|null>(null);
   const [loading,setLoading]=useState(true);
@@ -60,6 +61,7 @@ export function PromoterDetails({id}:{id:string}){
     return()=>controller.abort();
   },[load,revision]);
   const entries=filter==="all"?activity:activity.filter(entry=>entry.kind===filter);
+  const visibleEntries=showOlder?entries:entries.slice(0,12);
   const scrollTo=(elementId:string)=>document.getElementById(elementId)?.scrollIntoView({behavior:"smooth",block:"start"});
   const initials=record?.full_name.split(/\s+/).map(n=>n[0]).slice(0,2).join("").toUpperCase()??"";
   return <AppShell><div className="crm-details crm-redesign promoter-modern-detail">
@@ -75,7 +77,7 @@ export function PromoterDetails({id}:{id:string}){
               {record.is_active?"Active":"Inactive"}
             </span>
           </div>
-          <p>Joined on {formatCRMDate(record.created_at)}</p>
+          <p>{record.mobile_number} · Joined {formatCRMDate(record.created_at)}</p>
         </div>
       </header>
       {editing&&<PromoterEditor initial={record} onCancel={()=>setEditing(false)}
@@ -92,20 +94,23 @@ export function PromoterDetails({id}:{id:string}){
           <h2>Personal information</h2>
           <dl className="promoter-profile-facts">
             <Fact label="Phone (WhatsApp)">{record.mobile_number}</Fact>
-            <Fact label="Email">{record.email||"—"}</Fact>
-            <Fact label="City">{record.area_city||"—"}</Fact>
-            <Fact label="Occupation">{record.occupation||"—"}</Fact>
+            {record.whatsapp_number&&record.whatsapp_number!==record.mobile_number&&
+              <Fact label="WhatsApp">{record.whatsapp_number}</Fact>}
+            {record.email&&<Fact label="Email">{record.email}</Fact>}
+            {record.area_city&&<Fact label="City">{record.area_city}</Fact>}
+            {record.occupation&&<Fact label="Occupation">{record.occupation}</Fact>}
           </dl>
         </section>
         <section className="crm-detail-card promoter-timeline-card">
           <div className="crm-panel-heading"><h2>Activity timeline</h2>
-            <select aria-label="Filter promoter activity" value={filter} onChange={e=>setFilter(e.target.value)}>
+            <select aria-label="Filter promoter activity" value={filter}
+              onChange={e=>{setFilter(e.target.value);setShowOlder(false);}}>
               <option value="all">All activity</option>
               <option value="assignment">Assignments</option>
               <option value="updated">Updates</option>
             </select></div>
           <ol className="crm-activity-timeline">
-            {entries.map(item=><li key={item.id}>
+            {visibleEntries.map(item=><li key={item.id}>
               <span className={"crm-activity-dot "+item.kind} aria-hidden="true"/>
               <div><strong>{item.title}</strong><p>{item.detail}</p>
                 <small>{formatCRMDate(item.occurred_at)} · {new Date(item.occurred_at).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit"})} IST</small>
@@ -113,6 +118,9 @@ export function PromoterDetails({id}:{id:string}){
             </li>)}
           </ol>
           {entries.length===0&&<p className="crm-muted">No recorded activity of this type.</p>}
+          {entries.length>12&&<button type="button" className="text-action"
+            onClick={()=>setShowOlder(v=>!v)}>{showOlder?"Show recent 12":
+            "Show all "+entries.length+" activities"}</button>}
         </section>
       </div>
       <div className="crm-redesign-columns crm-assignment-panels promoter-assignments-grid">
