@@ -38,7 +38,7 @@ REQUIRED_TABLES = (
     "saasyto_campaign_runs",
     "saasyto_campaign_recipients",
 )
-EXPECTED_MIGRATION = "0022_followup_stage_datetime"
+EXPECTED_MIGRATION = "0023_stage_system_identity"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):

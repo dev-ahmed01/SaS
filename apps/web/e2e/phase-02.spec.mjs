@@ -366,16 +366,23 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await page.getByRole("button",{name:/^Edit\b/}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Save Changes"}).click();
-  await page.getByText("Contact & profile",{exact:true}).click();
-  await expect(page.getByText("Teacher")).toBeVisible();
+  const disclosure=page.locator("details.crm-profile-disclosure");
+  if(await disclosure.getAttribute("open")===null){
+    await disclosure.locator("summary").click();
+  }
+  await expect(disclosure).toHaveAttribute("open","");
+  await expect(disclosure.getByText("Teacher")).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   const row=page.getByRole("row",{name:new RegExp(label)});
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
-  await page.getByText("Contact & profile",{exact:true}).click();
-  await expect(page.getByText("Teacher")).toBeVisible();
+  if(await disclosure.getAttribute("open")===null){
+    await disclosure.locator("summary").click();
+  }
+  await expect(disclosure).toHaveAttribute("open","");
+  await expect(disclosure.getByText("Teacher")).toBeVisible();
 });
 
 test("Mark Active auto-requests a two-minute four-digit OTP and shows complete phone",async ({page})=>{

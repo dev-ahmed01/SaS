@@ -144,15 +144,17 @@ export function PipelineManager(){
           <span className="pipeline-stage-dot" style={{backgroundColor:item.color}}/>
           <div className="pipeline-stage-content">
             <strong>{item.name}</strong>
+            {item.is_registration_default&&<span className="crm-muted">Registration default</span>}
             {item.description&&<span>{item.description}</span>}
           </div>
           <span className="pipeline-stage-count">{item.prospect_count} prospects</span>
           <span className="pipeline-stage-order">#{item.sort_order}</span>
           <button type="button" className="icon-button" aria-label={"Edit stage "+item.name}
             onClick={()=>edit(item)}><Icon name="pencil" size={17}/></button>
-          <button type="button" className="icon-button pipeline-delete"
-            aria-label={"Delete stage "+item.name}
-            onClick={()=>setDeleting(item)}><Icon name="trash" size={17}/></button>
+          {!item.is_registration_default&&
+            <button type="button" className="icon-button pipeline-delete"
+              aria-label={"Delete stage "+item.name}
+              onClick={()=>setDeleting(item)}><Icon name="trash" size={17}/></button>}
         </article>)}
     </div>
     {deleting&&<div className="crm-dialog-scrim">

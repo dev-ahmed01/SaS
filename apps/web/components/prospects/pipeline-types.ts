@@ -1,6 +1,7 @@
 export type PipelineStage={
   id:string;name:string;description:string|null;color:string;
   sort_order:number;version:number;prospect_count:number;created_at:string;
+  is_registration_default:boolean;
 };
 export const stagePalette=[
   "#64748b","#0f766e","#16a34a","#2563eb","#7c3aed","#db2777",

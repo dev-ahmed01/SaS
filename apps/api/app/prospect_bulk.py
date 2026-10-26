@@ -23,9 +23,9 @@ from app.models import (
     AuditEvent,
     OrganizationSettings,
     Prospect,
-    ProspectStageDefinition,
     SponsorshipRate,
 )
+from app.prospect_defaults import get_registration_stage
 from app.prospects import ProspectFields, _ist_month
 from app.security import utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
@@ -183,18 +183,7 @@ def import_prospects(
     added = 0
     try:
         if payload.commit and ready:
-            inquiry = db.scalars(select(ProspectStageDefinition).where(
-                ProspectStageDefinition.organization_id == admin.organization_id,
-                ProspectStageDefinition.name_key == "new inquiry",
-            )).one_or_none()
-            if inquiry is None:
-                inquiry = ProspectStageDefinition(
-                    organization_id=admin.organization_id, name="New Inquiry",
-                    name_key="new inquiry", color="#64748b", sort_order=0, version=1,
-                    description="Awaiting first documented follow-up",
-                )
-                db.add(inquiry)
-                db.flush()
+            inquiry = get_registration_stage(db, admin.organization_id)
             now = utc_now()
             for index, row in enumerate(payload.rows):
                 if results[index].status != "ready":
