@@ -1,0 +1,40 @@
+name: InterServer staging container validation
+
+on:
+  pull_request:
+    paths:
+      - 'ops/staging/**'
+      - '.github/workflows/interserver-staging.yml'
+      - 'apps/api/requirements.txt'
+      - 'apps/web/package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare placeholder-only CI environment
+        run: |
+          cp ops/staging/.env.example ops/staging/.env
+          cp ops/staging/.env.api.example ops/staging/.env.api
+          chmod 600 ops/staging/.env ops/staging/.env.api
+      - name: Validate Compose configuration
+        run: |
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.yaml config --quiet
+      - name: Validate Caddy HTTPS routing
+        run: |
+          docker run --rm \
+            -e STAGING_HOST=sas-staging.example.org \
+            -e ACME_EMAIL=ops@example.org \
+            -v "$PWD/ops/staging/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Build FastAPI staging container
+        run: docker build --pull -f ops/staging/Dockerfile.api -t sas-api-ci .
+      - name: Build Next.js staging container
+        run: docker build --pull -f ops/staging/Dockerfile.web -t sas-web-ci .
