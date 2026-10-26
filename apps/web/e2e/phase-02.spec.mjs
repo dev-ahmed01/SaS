@@ -1442,3 +1442,20 @@ test("Prospect bulk import blocks duplicate mobile before saving",async ({page})
   await expect(page.getByText("Repeated mobile number in this CSV")).toBeVisible();
   await expect(page.getByRole("button",{name:/Confirm & add/})).toBeDisabled();
 });
+
+
+test("Received This Month gateway filters by actual date paid",async ({page})=>{
+  const month=new Intl.DateTimeFormat("en-CA",{
+    timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",
+  }).format(new Date())+"-01";
+  const gateway=await page.request.get(
+    "/api/admin/collections?received_month="+encodeURIComponent(month),
+  );
+  expect(gateway.status()).toBe(200);
+  const result=await gateway.json();
+  expect(result).toMatchObject({items:expect.any(Array),total:expect.any(Number)});
+  await page.goto("/collections/active");
+  await expect(page.getByRole("heading",{name:"Received this month"})).toBeVisible();
+  await expect(page.locator('input[aria-label="Filter collection history by month"]'))
+    .toBeVisible();
+});
