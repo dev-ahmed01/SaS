@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -789,6 +789,119 @@ def create_campaign(
     database.refresh(row)
     response.headers["Cache-Control"] = "no-store"
     return _campaign_read(row)
+
+
+class PurgeAllCampaigns(BaseModel):
+    """Require a deliberate tenant-scoped acknowledgement for permanent cleanup."""
+
+    model_config = ConfigDict(extra="forbid")
+    confirm: Literal["DELETE ALL CAMPAIGNS"]
+    expected_campaigns: int = Field(ge=0)
+
+
+class PurgeAllCampaignsResult(BaseModel):
+    deleted_campaigns: int
+    deleted_preparations: int
+    deleted_recipient_snapshots: int
+    deleted_saasyto_runs: int
+    deleted_delivery_recipients: int
+
+
+@router.post("/campaigns/purge-all", response_model=PurgeAllCampaignsResult)
+def purge_all_campaigns(
+    payload: PurgeAllCampaigns, response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> PurgeAllCampaignsResult:
+    """Permanently clear campaign plans, reviews, and sending attempts.
+
+    Lock tenant campaign/run/recipient rows before checking for in-flight
+    dispatches. A *claimed* submission may currently be reaching WhatsApp:
+    block clearing until it settles; never hide an outstanding attempt.
+    Consent, prospects, promoters, payment records and append-only audit
+    evidence are untouched. The action itself is recorded with counts.
+    """
+    admin = context[0]
+    org = admin.organization_id
+    campaigns = database.scalars(select(CommunicationCampaign).where(
+        CommunicationCampaign.organization_id == org,
+    ).order_by(CommunicationCampaign.id).with_for_update()).all()
+    if len(campaigns) != payload.expected_campaigns:
+        raise HTTPException(
+            status_code=409,
+            detail="Campaign list changed. Refresh before deleting.",
+        )
+    ids = [row.id for row in campaigns]
+    if not ids:
+        response.headers["Cache-Control"] = "no-store"
+        return PurgeAllCampaignsResult(
+            deleted_campaigns=0, deleted_preparations=0,
+            deleted_recipient_snapshots=0, deleted_saasyto_runs=0,
+            deleted_delivery_recipients=0,
+        )
+    runs = database.scalars(select(SaasytoCampaignRun).where(
+        SaasytoCampaignRun.organization_id == org,
+        SaasytoCampaignRun.campaign_id.in_(ids),
+    ).order_by(SaasytoCampaignRun.id).with_for_update()).all()
+    run_ids = [run.id for run in runs]
+    recipients = database.scalars(select(SaasytoCampaignRecipient).where(
+        SaasytoCampaignRecipient.organization_id == org,
+        SaasytoCampaignRecipient.run_id.in_(run_ids),
+    ).order_by(SaasytoCampaignRecipient.id).with_for_update()).all() if run_ids else []
+    if any(item.status == "claimed" for item in recipients):
+        raise HTTPException(
+            status_code=409,
+            detail="A WhatsApp submission is in progress or unresolved. "
+                   "Reconcile the sending attempt before clearing campaigns.",
+        )
+    # Cancel active queues before deleting; the dispatch worker also locks
+    # joined campaign/run rows when claiming recipients.
+    for run in runs:
+        if run.status == "approved":
+            run.status = "cancelled"
+    for campaign in campaigns:
+        campaign.status = "cancelled"
+    database.flush()
+
+    preparations = database.scalars(select(CommunicationPreparation.id).where(
+        CommunicationPreparation.organization_id == org,
+        CommunicationPreparation.campaign_id.in_(ids),
+    )).all()
+    deleted_snapshots = 0
+    if preparations:
+        deleted_snapshots = database.execute(delete(CommunicationRecipientSnapshot).where(
+            CommunicationRecipientSnapshot.organization_id == org,
+            CommunicationRecipientSnapshot.preparation_id.in_(preparations),
+        )).rowcount
+        database.execute(delete(CommunicationPreparation).where(
+            CommunicationPreparation.organization_id == org,
+            CommunicationPreparation.id.in_(preparations),
+        ))
+    if run_ids:
+        database.execute(delete(SaasytoCampaignRecipient).where(
+            SaasytoCampaignRecipient.organization_id == org,
+            SaasytoCampaignRecipient.run_id.in_(run_ids),
+        ))
+        database.execute(delete(SaasytoCampaignRun).where(
+            SaasytoCampaignRun.organization_id == org,
+            SaasytoCampaignRun.id.in_(run_ids),
+        ))
+    database.execute(delete(CommunicationCampaign).where(
+        CommunicationCampaign.organization_id == org,
+        CommunicationCampaign.id.in_(ids),
+    ))
+    _audit(database, admin, "communication.campaigns_purged", "comm_campaign", uuid.uuid4(),
+           {"campaigns": len(ids), "preparations": len(preparations),
+            "snapshots": deleted_snapshots, "runs": len(runs),
+            "delivery_recipients": len(recipients)})
+    database.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return PurgeAllCampaignsResult(
+        deleted_campaigns=len(ids), deleted_preparations=len(preparations),
+        deleted_recipient_snapshots=deleted_snapshots,
+        deleted_saasyto_runs=len(runs),
+        deleted_delivery_recipients=len(recipients),
+    )
 
 
 @router.post("/campaigns/{identifier}/cancel", response_model=CampaignRead)
