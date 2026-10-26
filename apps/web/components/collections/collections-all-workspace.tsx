@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { AccountingOverview } from "../accounting/accounting-overview";
@@ -58,6 +59,10 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
   const [loading,setLoading] = useState(true);
   const [data,setData] = useState<Page|null>(null);
   const [selected,setSelected] = useState<Payment|null>(null);
+  const [action,setAction] = useState<"edit"|"delete">("delete");
+  const [correctionReady,setCorrectionReady] = useState(false);
+  const [resendBusy,setResendBusy] = useState<string|null>(null);
+  const resendRequests=useRef<Record<string,string>>({});
   const [reason,setReason] = useState<Reason>("duplicate_entry");
   const [typed,setTyped] = useState("");
   const [busy,setBusy] = useState(false);
@@ -83,9 +88,11 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
     return ()=>controller.abort();
   },[month,offset,refresh,activeOnly]);
 
-  function choose(row:Payment) {
+  function choose(row:Payment,kind:"edit"|"delete") {
     if(row.reversed)return;
-    setSelected(row);setReason("duplicate_entry");setTyped("");
+    setSelected(row);setAction(kind);
+    setReason(kind==="edit"?"wrong_amount":"duplicate_entry");
+    setTyped("");setCorrectionReady(false);
     setError("");setNotice("");requestId.current=null;
   }
   function close() {
@@ -114,11 +121,13 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
         throw Error("Reversal was not confirmed. Check records before retrying.");
       }
       const result=await response.json();
-      setNotice("Reversed the incorrect "+rupees(result.amount_paise)+
-        " collection. Ledger and sponsor status were recalculated. "+
+      setNotice((action==="edit"?"Original collection reversed. Record the corrected payment next. ":
+        "Entry removed from net totals (original audit record preserved). ")+
+        "Ledger and sponsor status were recalculated. "+
         (result.message_status==="suppressed"
-          ?"Its pending WhatsApp confirmation was suppressed."
-          :"An earlier provider transmission cannot be recalled. Verify recipient communication."));
+          ?"Pending WhatsApp confirmation was suppressed."
+          :"An earlier provider transmission cannot be recalled.")); 
+      setCorrectionReady(action==="edit");
       setSelected(null);setTyped("");requestId.current=null;
       setRefresh(n=>n+1);onReversed();
     } catch(err) {
@@ -126,6 +135,36 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
     } finally {
       setBusy(false);
     }
+  }
+
+  async function resend(row:Payment){
+    if(resendBusy||busy||row.reversed)return;
+    setResendBusy(row.id);setError("");setNotice("");setCorrectionReady(false);
+    resendRequests.current[row.id]??=crypto.randomUUID();
+    try{
+      const session=await fetch("/api/admin/session",{cache:"no-store"});
+      if(!session.ok)throw Error("Session expired");
+      const {csrf_token}=await session.json();
+      const response=await fetch(
+        "/api/admin/collections/"+row.id+"/resend-confirmation",{
+          method:"POST",credentials:"same-origin",
+          headers:{"Content-Type":"application/json","X-CSRF-Token":csrf_token},
+          body:JSON.stringify({
+            request_id:resendRequests.current[row.id],confirmation:"RESEND",
+          }),
+        }
+      );
+      const payload=await response.json().catch(()=>null);
+      if(!response.ok)throw Error(
+        typeof payload?.detail==="string"?payload.detail:
+        response.status===503?"Approved WhatsApp receipt sending is not configured.":
+        "Resend could not be queued. Check messaging status."
+      );
+      setNotice(payload.notice??"Receipt resend queued. Delivery is not confirmed.");
+      setRefresh(n=>n+1);
+    }catch(e){
+      setError(e instanceof Error?e.message:"Could not request receipt resend.");
+    }finally{setResendBusy(null);}
   }
 
   return <section className="collection-review" aria-label="Collection review">
@@ -139,7 +178,9 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           onChange={e=>{setMonth(e.target.value);setOffset(0);}}/>
       </label>
     </div>
-    {notice&&<p role="status" className="form-success">{notice}</p>}
+    {notice&&<p role="status" className="form-success">{notice}
+      {correctionReady&&<span> <Link href="/collections/add">Record corrected collection</Link></span>}
+    </p>}
     {error&&<p role="alert" className="form-error">{error}</p>}
     <div className="table-scroll">
       <table className="data-table">
@@ -158,9 +199,19 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
               {row.reversed?"Reversed":"Recorded"}</span></td>
             <td>{deliveryLabel(row.message_status)}</td>
             <td>{row.reversed?<span className="muted">No further action</span>
-              :<button type="button" className="text-action" onClick={()=>choose(row)}>
-                Reverse entry
-              </button>}</td>
+              :<div className="collection-row-actions">
+                <button type="button" className="text-action"
+                  disabled={busy||resendBusy!==null}
+                  onClick={()=>choose(row,"edit")}>Edit</button>
+                <button type="button" className="text-action"
+                  disabled={busy||resendBusy!==null}
+                  onClick={()=>choose(row,"delete")}>Delete</button>
+                <button type="button" className="text-action"
+                  disabled={busy||resendBusy!==null}
+                  onClick={()=>void resend(row)}>
+                  {resendBusy===row.id?"Queuing…":"Resend confirmation"}
+                </button>
+              </div>}</td>
           </tr>)}</tbody>
       </table>
     </div>
@@ -186,9 +237,11 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
             aria-label="Close reversal dialog">Close</button>
         </div>
         <div className="content-panel">
-          <h2 id="reverse-title">Reverse collection entry</h2>
+          <h2 id="reverse-title">{action==="edit"?"Correct collection":"Delete collection entry"}</h2>
 
-          <p className="panel-description">Reverses the record only. No refund is issued.</p>
+          <p className="panel-description">{action==="edit"
+            ?"Corrections preserve the original record: reverse this entry, then record the corrected payment."
+            :"Removes this entry from totals by recording a reversal. The original stays in the audit trail; no refund occurs."}</p>
           <div className="reversal-facts">
             <div><span>Sponsor</span><strong>{selected.sponsor_name}</strong></div>
             <div><span>Amount</span><strong>{rupees(selected.amount_paise)}</strong></div>
@@ -212,7 +265,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
               <button className="btn btn-secondary" type="button" onClick={close}
                 disabled={busy}>Cancel</button>
               <button type="submit" className="btn btn-danger" disabled={busy||typed!=="REVERSE"}>
-                {busy?"Reversing…":"Confirm reversal"}
+                {busy?"Reversing…":action==="edit"?"Reverse & correct":"Confirm deletion (reversal)"}
               </button>
             </div>
           </form>
