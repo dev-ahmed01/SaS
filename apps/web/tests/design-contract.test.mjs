@@ -125,7 +125,8 @@ test("Consent and campaign review never send before explicit approval", () => {
 test("phase 2 never claims functional authentication, payment or reminder delivery", () => {
   assert.match(modules,/disabled/);
   assert.match(ui,/disabled/);
-  assert.match(composer,/No message has been sent or queued/);
+  assert.match(composer,/router.push\("\/communication\/campaigns#campaign-/);
+  assert.doesNotMatch(composer,/\/saasyto\/send-now/);
   assert.match(modules,/DashboardLive/);
   assert.doesNotMatch(modules,/Waiting for live data/);
   const dashboard = read("../components/dashboard/dashboard-live.tsx");
