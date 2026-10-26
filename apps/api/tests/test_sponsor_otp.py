@@ -721,3 +721,156 @@ def test_oversized_existing_otp_copy_is_rejected_without_consuming_a_code(
     assert called == []
     with Session(engine) as db:
         assert db.scalars(select(SponsorOtpChallenge)).all() == []
+
+
+def test_activation_acknowledgement_is_claimed_before_submission_and_never_replayed(
+    api, monkeypatch,
+):
+    from app.models import AuditEvent
+
+    client, csrf, engine = api
+    person = _create(client, csrf, "Acknowledgement", "+918100000091")
+    send_code = []
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activation_notice_enabled=True,
+    ))
+    monkeypatch.setattr(
+        "app.sponsor_otp._deliver",
+        lambda _cfg, number, code, *_args: send_code.append(code),
+    )
+    network_attempts = []
+
+    def fake_notice(db, _cfg, record, *, reactivated):
+        # The claim and CRM activation MUST already have committed.
+        with Session(engine) as reader:
+            attempts = reader.scalars(select(AuditEvent).where(
+                AuditEvent.entity_id == str(record.id),
+                AuditEvent.action == "prospect.activation_notice_claimed",
+            )).all()
+            assert len(attempts) == 1
+            assert attempts[0].after_data["status"] == "claimed"
+        network_attempts.append(record.id)
+        return "accepted_unverified"
+
+    monkeypatch.setattr("app.sponsor_otp.send_activation_notice", fake_notice)
+    root = "/v1/prospects/" + person["id"]
+    before = client.get(root + "/otp/notice-status")
+    assert before.status_code == 200
+    assert before.json()["status"] == "inactive"
+    assert client.get("/v1/prospects/"+str(uuid.uuid4())+"/otp/notice-status").status_code == 404
+    issued = client.post(root + "/otp/request", headers=csrf)
+    assert issued.status_code == 200, issued.text
+    confirmed = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"],
+        "challenge_id": issued.json()["challenge_id"],
+        "code": send_code[0],
+    })
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["activation_notice"] == "accepted_unverified"
+    latest = client.get(root + "/otp/notice-status")
+    assert latest.status_code == 200
+    assert latest.headers["cache-control"] == "no-store"
+    assert latest.json()["status"] == "accepted_unverified"
+    assert latest.json()["attempted_at"] is not None
+    with Session(engine) as db:
+        history = db.scalars(select(AuditEvent).where(
+            AuditEvent.entity_id == person["id"],
+            AuditEvent.action.in_([
+                "prospect.activation_notice_claimed",
+                "prospect.activation_notice_result",
+            ]),
+        )).all()
+        assert len(history) == 2
+        assert all("phone" not in str(row.after_data).lower() for row in history)
+        assert all("code" not in str(row.after_data).lower() for row in history)
+    assert len(network_attempts) == 1
+    replay = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"],
+        "challenge_id": issued.json()["challenge_id"],
+        "code": send_code[0],
+    })
+    assert replay.status_code in (400, 409)
+    assert len(network_attempts) == 1
+
+
+def test_activation_acknowledgement_suppressed_without_general_consent(api, monkeypatch):
+    from datetime import UTC, datetime
+
+    from app.models import AuditEvent
+
+    client, csrf, engine = api
+    person = _create(client, csrf, "No General Consent", "+918100000092")
+    codes = []
+    cfg = SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activation_notice_enabled=True, saasyto_delivery_enabled=True,
+        saasyto_sender_approved=True,
+        saasyto_enable_after=datetime.now(UTC) - timedelta(days=1),
+        saasyto_local_test_enabled=False,
+    )
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: cfg)
+    monkeypatch.setattr(
+        "app.sponsor_otp._deliver",
+        lambda _cfg, _phone, code, *_args: codes.append(code),
+    )
+    # Use the REAL permission gate; never infer consent from OTP or CRM Active.
+    from app.activation_notice import send_activation_notice
+    monkeypatch.setattr("app.sponsor_otp.send_activation_notice", send_activation_notice)
+    def cannot_send(*_args, **_kwargs):
+        raise AssertionError("Activation acknowledgement must not send without consent")
+    monkeypatch.setattr("app.activation_notice.send_text", cannot_send)
+    root = "/v1/prospects/" + person["id"]
+    issued = client.post(root + "/otp/request", headers=csrf)
+    assert issued.status_code == 200, issued.text
+    confirmed = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": issued.json()["challenge_id"],
+        "code": codes[0],
+    })
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "active"
+    assert confirmed.json()["activation_notice"] == "suppressed_no_general_consent"
+    assert client.get(root + "/otp/notice-status").json()["status"] == (
+        "suppressed_no_general_consent"
+    )
+    with Session(engine) as db:
+        events = db.scalars(select(AuditEvent).where(
+            AuditEvent.entity_id == person["id"],
+            AuditEvent.action == "prospect.activation_notice_result",
+        )).all()
+        assert len(events) == 1
+        assert events[0].after_data["status"] == "suppressed_no_general_consent"
+
+
+def test_activation_acknowledgement_unknown_result_is_not_retried(api, monkeypatch):
+    client, csrf, _ = api
+    person = _create(client, csrf, "Uncertain Result", "+918100000093")
+    sent_codes = []
+    monkeypatch.setattr("app.sponsor_otp.get_settings", lambda: SimpleNamespace(
+        otp_delivery_enabled=True, otp_secret=SECRET,
+        otp_activation_notice_enabled=True,
+    ))
+    monkeypatch.setattr(
+        "app.sponsor_otp._deliver",
+        lambda _cfg, _phone, code, *_args: sent_codes.append(code),
+    )
+    calls = []
+    monkeypatch.setattr(
+        "app.sponsor_otp.send_activation_notice",
+        lambda *_args, **_kwargs: calls.append(1) or "unknown",
+    )
+    root = "/v1/prospects/" + person["id"]
+    issued = client.post(root + "/otp/request", headers=csrf).json()
+    first = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": issued["challenge_id"],
+        "code": sent_codes[0],
+    })
+    assert first.status_code == 200
+    assert first.json()["status"] == "active"
+    assert client.get(root + "/otp/notice-status").json()["status"] == "unknown"
+    second = client.post(root + "/otp/activate", headers=csrf, json={
+        "version": person["version"], "challenge_id": issued["challenge_id"],
+        "code": sent_codes[0],
+    })
+    assert second.status_code in (400, 409)
+    assert calls == [1]

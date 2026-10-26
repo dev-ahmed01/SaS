@@ -363,6 +363,12 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await expect(page.getByText("Never paid")).toBeVisible();
+  const createdId=page.url().split("/").at(-1);
+  const acknowledgement=await page.request.get(
+    "/api/admin/prospects/"+createdId+"/otp/notice-status",
+  );
+  expect(acknowledgement.status()).toBe(200);
+  expect((await acknowledgement.json()).status).toBe("inactive");
   await page.getByRole("button",{name:/^Edit\b/}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Save Changes"}).click();

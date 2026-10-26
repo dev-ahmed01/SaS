@@ -23,6 +23,10 @@ function resolveRoute(segments: string[], method: string): string | null {
     return "/" + segments[0] + "/activity";
   }
   if (segments.length === 3 && UUID.test(segments[0]) &&
+      segments[1] === "otp" && segments[2] === "notice-status" && method === "GET") {
+    return "/" + segments[0] + "/otp/notice-status";
+  }
+  if (segments.length === 3 && UUID.test(segments[0]) &&
       segments[1] === "otp" &&
       (segments[2] === "status" && method === "GET" ||
        ["request", "verify", "activate"].includes(segments[2]) && method === "POST")) {

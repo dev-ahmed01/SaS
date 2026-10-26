@@ -408,18 +408,116 @@ def activate_after_otp(
         after_data={"version": person.version, "reactivation": previously_active,
                     "challenge_id": str(record.id)},
     ))
-    database.commit()
-    # The verification is already consumed and CRM activation committed.
-    # This is an independent, non-retried consent-gated attempt, never an OTP send.
-    notice = send_activation_notice(database, cfg, person, reactivated=previously_active)
-    if getattr(cfg, "otp_activation_notice_enabled", False):
+    notice_enabled = bool(getattr(cfg, "otp_activation_notice_enabled", False))
+    if notice_enabled:
+        # Durable claim IN the OTP activation transaction and BEFORE network IO.
+        # A crash leaves an explicitly unresolved attempt, never a retryable gap.
         database.add(AuditEvent(
             organization_id=admin.organization_id, actor_admin_id=admin.id,
-            action="prospect.activation_notice_attempt",
+            action="prospect.activation_notice_claimed",
             entity_type="prospect", entity_id=str(person.id),
-            after_data={"status": notice},
+            after_data={"challenge_id": str(record.id), "status": "claimed"},
         ))
-        database.commit()
+    database.commit()
+    notice = "disabled"
+    if notice_enabled:
+        # Already committed: a failed or ambiguous provider response must never
+        # roll back activation or cause an automatic repeat of the message.
+        try:
+            notice = send_activation_notice(
+                database, cfg, person, reactivated=previously_active
+            )
+            database.add(AuditEvent(
+                organization_id=admin.organization_id, actor_admin_id=admin.id,
+                action="prospect.activation_notice_result",
+                entity_type="prospect", entity_id=str(person.id),
+                after_data={"challenge_id": str(record.id), "status": notice},
+            ))
+            database.commit()
+        except Exception:
+            database.rollback()
+            # The durable claim remains unresolved if even the result audit fails.
+            notice = "unknown"
     response.headers["Cache-Control"] = "no-store"
     return {"status": "active", "reactivation": previously_active,
             "activation_notice": notice}
+
+
+@router.get("/{prospect_id}/otp/notice-status")
+def read_activation_notice_status(
+    prospect_id: uuid.UUID,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+) -> dict[str, str | None]:
+    """Show recorded submission state for the latest activation only.
+
+    Never infer delivered or read from a Saasyto HTTP acknowledgement.
+    Never return recipient address, message content or OTP digits.
+    """
+    admin = context[0]
+    person = _load(database, admin, prospect_id)
+    response.headers["Cache-Control"] = "no-store"
+    if person.crm_stage != "active":
+        return {"status": "inactive", "attempted_at": None}
+    records = database.scalars(select(AuditEvent).where(
+        AuditEvent.organization_id == admin.organization_id,
+        AuditEvent.entity_type == "prospect",
+        AuditEvent.entity_id == str(prospect_id),
+        AuditEvent.action.in_([
+            "prospect.otp_activated",
+            "prospect.activation_notice_claimed",
+            "prospect.activation_notice_result",
+        ]),
+    ).order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc()).limit(200)).all()
+    activations = [row for row in records if row.action == "prospect.otp_activated"]
+    if not activations:
+        return {"status": "not_recorded", "attempted_at": None}
+    # Audit timestamps on SQLite have second precision; choose the newest
+    # consumed challenge instead of relying on random UUID tie-breaking.
+    challenge_ids = [
+        uuid.UUID(raw) for row in activations
+        if isinstance((raw := (row.after_data or {}).get("challenge_id")), str)
+        and re.fullmatch(r"[0-9a-fA-F-]{36}", raw)
+    ]
+    latest_challenge = database.scalars(select(SponsorOtpChallenge).where(
+        SponsorOtpChallenge.organization_id == admin.organization_id,
+        SponsorOtpChallenge.prospect_id == prospect_id,
+        SponsorOtpChallenge.id.in_(challenge_ids),
+        SponsorOtpChallenge.consumed_at.is_not(None),
+    ).order_by(
+        SponsorOtpChallenge.consumed_at.desc(),
+        SponsorOtpChallenge.created_at.desc(),
+        SponsorOtpChallenge.id.desc(),
+    ).limit(1)).first()
+    challenge_id = str(latest_challenge.id) if latest_challenge else (
+        activations[0].after_data or {}
+    ).get("challenge_id")
+    matching = [
+        row for row in records
+        if row.action in (
+            "prospect.activation_notice_claimed", "prospect.activation_notice_result"
+        ) and (row.after_data or {}).get("challenge_id") == challenge_id
+    ]
+    if not matching:
+        return {"status": "disabled", "attempted_at": None}
+    result = next(
+        (row for row in matching if row.action == "prospect.activation_notice_result"),
+        None,
+    )
+    if result is None:
+        claimed = next(
+            row for row in matching
+            if row.action == "prospect.activation_notice_claimed"
+        )
+        return {"status": "unconfirmed", "attempted_at": claimed.occurred_at.isoformat()}
+    state = (result.after_data or {}).get("status")
+    permitted = {
+        "accepted_unverified", "suppressed_no_general_consent",
+        "suppressed_local_test_number", "before_sender_activation",
+        "rejected", "unknown", "disabled",
+    }
+    return {
+        "status": state if state in permitted else "unknown",
+        "attempted_at": result.occurred_at.isoformat(),
+    }

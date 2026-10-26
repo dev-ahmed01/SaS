@@ -12,6 +12,17 @@ import { StageDialog } from "./stage-dialog";
 import type { Prospect } from "./prospects-types";
 
 type Activity={id:string;kind:string;title:string;detail:string;occurred_at:string};
+type NoticeStatus={status:string;attempted_at:string|null};
+const noticeLabels:Record<string,string>={
+  accepted_unverified:"Accepted by Saasyto · delivery not verified",
+  rejected:"Rejected by provider",
+  unknown:"Provider outcome unknown · no automatic retry",
+  unconfirmed:"Submission unresolved · no automatic retry",
+  suppressed_no_general_consent:"Not sent · WhatsApp update permission missing",
+  suppressed_local_test_number:"Not sent · outside approved test recipients",
+  before_sender_activation:"Not sent · sender activation date not reached",
+  disabled:"Not enabled for this activation",
+};
 const money=(p:number)=>(p/100).toLocaleString("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0});
 function Tile({label,children}:{label:string;children:React.ReactNode}){
   return <div className="crm-summary-tile"><span className="crm-muted">{label}</span>
@@ -25,6 +36,7 @@ export function ProspectDetails({id}:{id:string}){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [activationNotice,setActivationNotice]=useState("");
+  const [noticeRecord,setNoticeRecord]=useState<NoticeStatus|null>(null);
   const [editing,setEditing]=useState(false);
   const [consentOpen,setConsentOpen]=useState(false);
   const [stageOpen,setStageOpen]=useState(false);
@@ -41,16 +53,19 @@ export function ProspectDetails({id}:{id:string}){
     const controller=new AbortController();
     // Keep the same person's view mounted while refreshing after edits.
     // Switching to a different person still hides stale private data.
-    if(loadedId.current!==id){setLoading(true);setRecord(null);}
+    if(loadedId.current!==id){setLoading(true);setRecord(null);setNoticeRecord(null);}
     setError("");
     Promise.all([
       load(controller.signal),
       fetch("/api/admin/prospects/"+id+"/activity",{cache:"no-store",signal:controller.signal})
         .then(async r=>{if(!r.ok)throw Error("Activity timeline unavailable.");return r.json() as Promise<Activity[]>;}),
-    ]).then(([person,events])=>{
+      fetch("/api/admin/prospects/"+id+"/otp/notice-status",{
+        cache:"no-store",signal:controller.signal,
+      }).then(async r=>r.ok?await r.json() as NoticeStatus:null).catch(()=>null),
+    ]).then(([person,events,notice])=>{
       if(!controller.signal.aborted){
         loadedId.current=id;
-        setRecord(person);setActivity(events);
+        setRecord(person);setActivity(events);setNoticeRecord(notice);
       }
     }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load details.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
@@ -86,6 +101,12 @@ export function ProspectDetails({id}:{id:string}){
             {record.archived_at?"Archived":record.crm_stage==="active"?"Active":"Inactive"}
           </span></div>
           <p>Created {formatCRMDate(record.created_at)}</p>
+          {record.crm_stage==="active"&&noticeRecord&&noticeLabels[noticeRecord.status]&&
+            <p className="crm-muted" role="status">
+              WhatsApp acknowledgement: {noticeLabels[noticeRecord.status]}
+              {noticeRecord.attempted_at&&
+                <span> · {formatCRMDate(noticeRecord.attempted_at)}</span>}
+            </p>}
         </div>
       </div>
       {editing&&<ProspectEditor initial={record}
