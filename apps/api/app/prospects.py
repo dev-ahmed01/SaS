@@ -41,6 +41,7 @@ from app.models import (
     ProspectUpiIdentifier,
     SponsorshipRate,
 )
+from app.prospect_defaults import get_registration_stage
 from app.security import utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
 
@@ -628,21 +629,8 @@ def create_prospect(
     if ids:
         for identifier in ids:
             _upi_digest(identifier)
-    # Server-enforced: registration always begins at New Inquiry.
-    # Admin can change it later only through the versioned details PATCH.
-    inquiry = database.scalars(select(ProspectStageDefinition).where(
-        ProspectStageDefinition.organization_id == admin.organization_id,
-        ProspectStageDefinition.name_key == "new inquiry",
-    )).one_or_none()
-    if inquiry is None:
-        inquiry = ProspectStageDefinition(
-            organization_id=admin.organization_id,
-            name="New Inquiry", name_key="new inquiry",
-            description="Awaiting first documented follow-up",
-            color="#64748b", sort_order=0, version=1,
-        )
-        database.add(inquiry)
-        database.flush()
+    # Stable system stage UUID; renaming its label never changes registration.
+    inquiry = get_registration_stage(database, admin.organization_id)
     fields = payload.model_dump(exclude={
         "upi_ids", "monthly_contribution_paise", "request_id", "start_month",
     })
