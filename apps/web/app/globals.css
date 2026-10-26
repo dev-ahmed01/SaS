@@ -1530,6 +1530,16 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 
 
 /* Four-digit sponsor WhatsApp verification */
+.sas-otp-dialog { width: min(100%, 460px); padding: 25px 28px; }
+.sas-otp-dialog .crm-dialog-head { margin-bottom: 14px; }
+.sas-otp-dialog form { gap: 13px; }
+.sas-otp-dialog .form-actions { margin-top: 2px; }
+.sas-otp-dialog .sas-otp-summary { margin: 2px 0 8px; gap: 3px; }
+.sas-otp-dialog .sas-otp-entry { gap: 10px; }
+.sas-otp-dialog .sas-otp-timer { font-size: .85rem; }
+@media (max-width: 440px) {
+  .sas-otp-dialog { padding: 20px; }
+}
 .sas-otp-summary {
   display: grid;
   gap: 6px;
