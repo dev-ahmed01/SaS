@@ -1456,6 +1456,6 @@ test("Received This Month gateway filters by actual date paid",async ({page})=>{
   expect(result).toMatchObject({items:expect.any(Array),total:expect.any(Number)});
   await page.goto("/collections/active");
   await expect(page.getByRole("heading",{name:"Received this month"})).toBeVisible();
-  await expect(page.getByRole("textbox",{name:"Filter collection history by month"}))
+  await expect(page.locator('input[aria-label="Filter collection history by month"]'))
     .toBeVisible();
 });
