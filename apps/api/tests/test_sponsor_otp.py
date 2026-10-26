@@ -30,7 +30,7 @@ def _enable(monkeypatch, delivered):
     ))
     monkeypatch.setattr(
         "app.sponsor_otp._deliver",
-        lambda _cfg, phone, code: delivered.append((phone, code)),
+        lambda _cfg, phone, code, *_extra: delivered.append((phone, code)),
     )
 
 
@@ -288,7 +288,7 @@ def test_local_otp_request_refuses_other_prospect_before_provider_call(api, monk
     ))
     monkeypatch.setattr(
         "app.sponsor_otp._deliver",
-        lambda _cfg, phone, code: sent.append((phone, code)),
+        lambda _cfg, phone, code, *_extra: sent.append((phone, code)),
     )
     response = client.post("/v1/prospects/" + person["id"] + "/otp/request", headers=csrf)
     assert response.status_code == 403, response.text
@@ -472,7 +472,7 @@ def test_saasyto_production_otp_sends_to_only_selected_registered_prospect(
     def send_prospect(_cfg, *, phone, message):
         numbers.append(phone)
         import re
-        code = re.search(r"activation code is ([0-9]{4})", message)
+        code = re.search(r"authentication code to register this sponsorship: ([0-9]{4})", message)
         assert code and "Valid for 2 minutes" in message
         codes.append(code.group(1))
         return Submission("accepted_unverified")
@@ -578,7 +578,7 @@ def test_guarded_two_phone_pilot_otp_activates_only_selected_prospect(api, monke
 
     def mock_send(_cfg, *, phone, message):
         import re
-        match = re.search(r"activation code is ([0-9]{4})", message)
+        match = re.search(r"authentication code to register this sponsorship: ([0-9]{4})", message)
         assert match is not None
         outgoing.append((phone, match.group(1)))
         return Submission("accepted_unverified")
