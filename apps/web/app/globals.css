@@ -1640,6 +1640,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .comm-campaign-item-metrics span {display:grid;gap:4px;white-space:nowrap;
   color:#718679;font:400 10px var(--font-body);}
 .comm-campaign-item-metrics strong {color:#1f4735;font:600 17px var(--font-heading);}
+.comm-campaign-item-actions {display:grid;gap:8px;justify-items:start;align-content:center;}
 .comm-campaign-open {color:var(--forest-deep);font:600 12px var(--font-body);
   text-decoration:none;white-space:nowrap;border-radius:6px;}
 .comm-campaign-open:hover {text-decoration:underline;}
@@ -1682,14 +1683,14 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
     grid-template-columns:minmax(200px,1.5fr) minmax(165px,1fr) auto;
   }
   .comm-campaign-item-metrics {grid-column:1/3;grid-row:2;}
-  .comm-campaign-open {grid-column:3;grid-row:1/3;align-self:center;}
+  .comm-campaign-item-actions {grid-column:3;grid-row:1/3;align-self:center;}
 }
 @media(max-width:720px){
   .comm-campaign-item {grid-template-columns:minmax(0,1fr) auto;gap:13px;padding:16px;}
   .comm-campaign-item-main {grid-column:1/3;}
   .comm-campaign-item-time {grid-column:1;grid-row:2;}
   .comm-campaign-item-metrics {grid-column:1;grid-row:3;}
-  .comm-campaign-open {grid-column:2;grid-row:2/4;align-self:center;}
+  .comm-campaign-item-actions {grid-column:2;grid-row:2/4;align-self:center;}
   .comm-detail-header {align-items:flex-start;flex-direction:column;}
   .comm-detail-dates {gap:16px 24px;}
   .comm-history-bottom {align-items:flex-start;flex-direction:column;}
@@ -1700,6 +1701,6 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:440px){
   .comm-campaign-item {grid-template-columns:minmax(0,1fr);}
   .comm-campaign-item-main,.comm-campaign-item-time,
-  .comm-campaign-item-metrics,.comm-campaign-open {grid-column:1;grid-row:auto;}
+  .comm-campaign-item-metrics,.comm-campaign-item-actions {grid-column:1;grid-row:auto;}
   .comm-history-filter {padding:8px 10px;}
 }
