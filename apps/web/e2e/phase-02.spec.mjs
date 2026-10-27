@@ -369,26 +369,18 @@ test("Admin registers and searches a new prospect without fake payment status",a
   );
   expect(acknowledgement.status()).toBe(200);
   expect((await acknowledgement.json()).status).toBe("inactive");
-  await page.getByRole("button",{name:/^Edit\b/}).click();
+  await page.getByRole("button",{name:"Edit details"}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Save Changes"}).click();
-  const disclosure=page.locator("details.crm-profile-disclosure");
-  if(await disclosure.getAttribute("open")===null){
-    await disclosure.locator("summary").click();
-  }
-  await expect(disclosure).toHaveAttribute("open","");
-  await expect(disclosure.getByText("Teacher")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
+  await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   const row=page.getByRole("row",{name:new RegExp(label)});
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
-  if(await disclosure.getAttribute("open")===null){
-    await disclosure.locator("summary").click();
-  }
-  await expect(disclosure).toHaveAttribute("open","");
-  await expect(disclosure.getByText("Teacher")).toBeVisible();
+  await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
 });
 
 test("Mark Active auto-requests a two-minute four-digit OTP and shows complete phone",async ({page})=>{
@@ -396,7 +388,7 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
   const phone=uniqueProspectMobile();
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(prospect);
-  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(phone);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(phone);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(new RegExp("/prospects/[0-9a-f-]{36}$"));
   const pendingId=crypto.randomUUID();
@@ -452,7 +444,7 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
 test("OTP activation POST passes through prospect API gateway instead of a 404",async ({page})=>{
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill("Gateway OTP Candidate");
-  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   const prospectId=page.url().split("/").at(-1);
@@ -497,26 +489,23 @@ test("Same-name prospects require different mobile numbers across registrations 
   await expect(page.getByRole("row").filter({hasText:label})).toHaveCount(2);
 });
 
-test("Admin can archive and restore a prospect without deleting its record",async ({page})=>{
-  const label="Archive Browser Candidate "+(Date.now()%1000000);
+test("Admin can permanently delete an unused prospect with confirmation",async ({page})=>{
+  const label="Unused Browser Candidate "+(Date.now()%1000000);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(label);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await page.getByRole("button",{name:/^Delete\b/}).click();
-  await expect(page.getByRole("dialog",{name:"Confirm prospect archive"})).toBeVisible();
-  await page.getByRole("button",{name:"Archive prospect",exact:true}).click();
-  const detailsUrl=page.url();
-  await expect(page.getByText("Archived",{exact:true})).toBeVisible();
-  await page.goto("/prospects");
+  await expect(page).toHaveURL(/\\/prospects\\/[0-9a-f-]{36}$/);
+  await page.getByRole("button",{name:"Delete prospect"}).click();
+  const confirmation=page.getByRole("dialog",{name:"Confirm permanent prospect deletion"});
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button",{name:"Cancel"}).click();
+  await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
+  await page.getByRole("button",{name:"Delete prospect"}).click();
+  await confirmation.getByRole("button",{name:"Yes, delete permanently"}).click();
+  await expect(page).toHaveURL(/\\/prospects$/);
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
-  await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
-  await page.goto(detailsUrl);
-  await page.getByRole("button",{name:/^Restore\b/}).click();
-  await page.getByRole("dialog",{name:"Confirm prospect archive"}).getByRole("button",{name:"Restore prospect"}).click();
-  await expect(page.getByText("Inactive",{exact:true}).first()).toBeVisible();
 });
 
 test("Prospect listing shows contribution, follow-ups and selected CSV export",async ({page})=>{
@@ -677,8 +666,8 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Personal information"})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Activity timeline"})).toHaveCount(0);
   await expect(page.getByRole("region",{name:"Internal promoter notes"})).toBeVisible();
   await expect(page.getByText("Communication preferences")).toHaveCount(0);
   await expect(page.locator(".crm-summary-strip")).toHaveCount(0);
@@ -690,7 +679,7 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.reload();
   await expect(page.getByRole("textbox",{name:"Notes about this promoter"}))
     .toHaveValue("Promoter confirmed the next visit.");
-  await page.getByRole("button",{name:"Edit",exact:true}).click();
+  await page.getByRole("button",{name:"Edit details"}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText("Architect")).toBeVisible();
@@ -1092,10 +1081,11 @@ test("Payout requires a valid UTR and does not initiate a transfer",async ({page
   await page.getByRole("button",{name:"Save Payout"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
 });
-test("Payout entry uses visible DD/MM/YY and no first payment month",async ({page})=>{
+test("Payout date is selected from a calendar",async ({page})=>{
   await page.goto("/payouts");
-  const entry=page.getByRole("textbox",{name:"Payout date (DD/MM/YY)"});
-  await expect(entry).toHaveValue(/^\d{2}\/\d{2}\/\d{2}$/);
+  const entry=page.getByLabel("Payout date");
+  await expect(entry).toHaveAttribute("type","date");
+  await expect(entry).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
   await expect(page.getByText("First Payment Month")).toHaveCount(0);
   await expect(page.getByRole("textbox",{name:"Payee First Name"})).toBeVisible();
   await expect(page.getByRole("textbox",{name:"Payee Last Name"})).toBeVisible();
@@ -1420,7 +1410,7 @@ test("Prospect bulk import previews before atomically saving two unique contacts
   const suffix=Date.now().toString().slice(-8);
   const p1="+9190"+suffix,p2="+9191"+suffix;
   await page.goto("/prospects");
-  await page.getByRole("link",{name:"Bulk add"}).click();
+  await page.getByRole("link",{name:"Import prospects"}).click();
   await expect(page.getByRole("heading",{name:"Bulk add prospects"})).toBeVisible();
   const csv=["Name,Mobile,City,Email,Sponsorship INR,Start Month",
     `"Bulk Test Shared",${p1},Bengaluru,,250,`,
