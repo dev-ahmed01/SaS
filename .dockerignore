@@ -26,3 +26,7 @@
 **/*.zip
 **/*.pdf
 **/*.mp4
+
+# Exclude private single-VPS staging credentials and locally generated TLS material.
+ops/staging/.env.db
+ops/staging/postgres-tls

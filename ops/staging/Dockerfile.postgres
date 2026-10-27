@@ -1,0 +1,4 @@
+FROM postgres:16-bookworm
+COPY ops/staging/postgres-with-tls.sh /usr/local/bin/postgres-with-tls.sh
+RUN chmod 700 /usr/local/bin/postgres-with-tls.sh
+ENTRYPOINT ["/usr/local/bin/postgres-with-tls.sh"]

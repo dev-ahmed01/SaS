@@ -38,3 +38,31 @@ jobs:
         run: docker build --pull -f ops/staging/Dockerfile.api -t sas-api-ci .
       - name: Build Next.js staging container
         run: docker build --pull -f ops/staging/Dockerfile.web -t sas-web-ci .
+      - name: Prepare single-VPS private staging secrets (CI-only)
+        run: |
+          rm ops/staging/.env ops/staging/.env.api
+          bash ops/staging/prepare-single-vps.sh sas-staging.example.org ops@example.org
+      - name: Validate one-VPS Compose topology
+        run: |
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.yaml \
+            -f ops/staging/compose.single-vps.yaml config --quiet
+      - name: Build TLS PostgreSQL container
+        run: docker build --pull -f ops/staging/Dockerfile.postgres -t sas-postgres-ci .
+      - name: Exercise TLS database initialization and schema migrations
+        run: |
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.yaml \
+            -f ops/staging/compose.single-vps.yaml up -d --wait --build db
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.yaml \
+            -f ops/staging/compose.single-vps.yaml exec -T db \
+            psql -U sas_staging -d sas_staging -tAc "SHOW ssl" | grep -qx 'on'
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.yaml \
+            -f ops/staging/compose.single-vps.yaml run --rm api \
+            python -m alembic -c alembic.ini upgrade head
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.yaml \
+            -f ops/staging/compose.single-vps.yaml run --rm api \
+            python -m alembic -c alembic.ini current
