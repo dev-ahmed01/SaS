@@ -12,6 +12,7 @@ type Payment = {
   sponsor_mobile: string;
   amount_paise: number;
   received_on: string;
+  recorded_at: string;
   period_month: string;
   payment_method: string;
   reference_mask: string;
@@ -186,15 +187,17 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
       <table className="data-table">
         <thead><tr><th scope="col">Sponsor</th><th scope="col">Amount</th>
           <th scope="col">Month</th><th scope="col">Reference</th>
-          <th scope="col">Entry</th><th scope="col">WhatsApp</th>
+          <th scope="col">Recorded</th><th scope="col">Status</th><th scope="col">WhatsApp</th>
           <th scope="col">Action</th></tr></thead>
-        <tbody>{loading&&!data?<tr><td colSpan={7}>Loading collection history…</td></tr>
+        <tbody>{loading&&!data?<tr><td colSpan={8}>Loading collection history…</td></tr>
           :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong><span className="table-subtitle">{row.sponsor_mobile}</span></td>
             <td>{rupees(row.amount_paise)}</td>
             <td>{formatCRMDate(row.period_month)}</td>
             <td>{row.reference_mask}</td>
+            <td title={"Recorded at "+new Date(row.recorded_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})}>
+              {formatCRMDate(row.recorded_at)}</td>
             <td><span className={"status-pill "+(row.reversed?"archived":"active")}>
               {row.reversed?"Reversed":"Recorded"}</span></td>
             <td>{deliveryLabel(row.message_status)}</td>
