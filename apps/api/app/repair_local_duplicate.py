@@ -13,8 +13,6 @@ from sqlalchemy.engine import make_url
 
 from app.config import get_settings
 
-REMOVE_PREFIX = "dc39e38b"
-KEEP_PREFIX = "371d52c2"
 EXPECTED_LINKS = {
     "prospect_stage_transitions.prospect_id": 1,
     "sponsorship_rates.prospect_id": 1,
@@ -25,16 +23,16 @@ APPROVAL = "REMOVE FIRST PROSPECT"
 def validate_records(rows: list[dict]) -> tuple[dict, dict]:
     if len(rows) != 2:
         raise RuntimeError("STOP: the two expected legacy prospects are not present")
-    by_prefix = {str(row["id"])[:8]: row for row in rows}
-    if set(by_prefix) != {REMOVE_PREFIX, KEEP_PREFIX}:
-        raise RuntimeError("STOP: unexpected prospect IDs")
-    remove, keep = by_prefix[REMOVE_PREFIX], by_prefix[KEEP_PREFIX]
+    disposable = [row for row in rows if row["full_name"] == "First Prospect"]
+    if len(disposable) != 1:
+        raise RuntimeError("STOP: expected one disposable seeded test identity")
+    remove = disposable[0]
+    keep = next(row for row in rows if row["id"] != remove["id"])
     if not (
         remove["full_name"] == "First Prospect"
-        and keep["full_name"] == "Mudassir AHMED"
+        and keep["full_name"] != remove["full_name"]
         and remove["organization_id"] == keep["organization_id"]
         and remove["mobile_number"] == keep["mobile_number"]
-        and remove["mobile_number"].endswith("8648")
         and remove["crm_stage"] == keep["crm_stage"] == "inactive"
         and remove["archived_at"] is None
         and keep["archived_at"] is None
@@ -101,11 +99,13 @@ def main() -> None:
                 SELECT id, organization_id, full_name, mobile_number, crm_stage,
                        archived_at, whatsapp_opt_in, whatsapp_verified_at, version
                 FROM prospects
-                WHERE LEFT(id::text, 8) IN (:remove_prefix, :keep_prefix)
+                WHERE (organization_id, mobile_number) IN (
+                    SELECT organization_id, mobile_number
+                    FROM prospects
+                    GROUP BY organization_id, mobile_number HAVING COUNT(*) > 1
+                )
                 FOR UPDATE
-            """), {
-                "remove_prefix": REMOVE_PREFIX, "keep_prefix": KEEP_PREFIX,
-            }).mappings().all())
+            """)).mappings().all())
             remove, keep = validate_records(rows)
             column_rows = db.execute(text("""
                 SELECT table_name, column_name
@@ -165,6 +165,7 @@ def main() -> None:
             """), {"id": str(remove["id"])}) or 0
 
             print(f"Validated backup: {backup.name} ({backup.stat().st_size} bytes)")
+            print(f"DUPLICATE MOBILE ENDS IN: {remove['mobile_number'][-4:]}")
             print(f"KEEP: {keep['full_name']} ({str(keep['id'])[:8]})")
             print(f"KEEP promoter assignments: {assignments}")
             print(f"REMOVE: {remove['full_name']} ({str(remove['id'])[:8]})")
@@ -182,7 +183,8 @@ def main() -> None:
 
             snapshot = {
                 "removed_id": str(remove["id"]), "name": remove["full_name"],
-                "mobile_last4": "8648", "version": remove["version"],
+                "mobile_last4": remove["mobile_number"][-4:],
+                "version": remove["version"],
                 "sponsorship_rate": {
                     "id": str(rate["id"]),
                     "effective_month": rate["effective_month"].isoformat(),
