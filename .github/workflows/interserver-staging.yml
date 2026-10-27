@@ -53,7 +53,7 @@ jobs:
         run: |
           docker compose --env-file ops/staging/.env \
             -f ops/staging/compose.yaml \
-            -f ops/staging/compose.single-vps.yaml up -d --build db
+            -f ops/staging/compose.single-vps.yaml up -d --wait --build db
           docker compose --env-file ops/staging/.env \
             -f ops/staging/compose.yaml \
             -f ops/staging/compose.single-vps.yaml exec -T db \
