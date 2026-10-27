@@ -7,3 +7,5 @@
 *.sql
 *.dump
 backups/
+.env.db
+postgres-tls/
