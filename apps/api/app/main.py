@@ -71,8 +71,9 @@ def readiness() -> JSONResponse:
     try:
         with get_engine().connect() as connection:
             connection.execute(text("SELECT 1"))
-            if get_settings().app_env in ("staging", "production"):
-                # A responsive DB with old/missing tables must not receive traffic.
+            if get_settings().app_env != "test":
+                # Development also needs up-to-date Alembic schema. A healthy
+                # TCP/SQL connection alone is not application readiness.
                 actual = set(
                     connection.execute(text("SELECT version_num FROM alembic_version"))
                     .scalars()
