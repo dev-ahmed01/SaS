@@ -110,7 +110,7 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
       <span className="promoter-empty-icon"><Icon name="users" size={26}/></span>
       <p>No assigned {kind}.</p>
       <small>{kind==="sponsors"
-        ?"Contributors will appear here after a recorded payment."
+        ?"Activated sponsors assigned to this promoter will appear here."
         :"Registered prospects assigned to this promoter will appear here."}</small>
     </div>:<p role="status">Loading assignments…</p>}
     {links&&links.total>20&&<div className="paging-footer">
