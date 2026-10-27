@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { Prospect } from "./prospects-types";
 import { pipelineStages, type PipelineStage } from "./pipeline-types";
-import { dateInputFromISO, dateInputToISO, formatCRMDate, todayISTISO } from "../../lib/crm-dates";
+import { formatCRMDate, todayISTISO } from "../../lib/crm-dates";
 
 type FollowUp={
   id:string;occurred_on:string;notes:string;created_at:string;
@@ -23,7 +23,7 @@ export function FollowUpLog({prospect,onSaved}:{prospect:Prospect;onSaved:()=>vo
   const [items,setItems]=useState<FollowUp[]>([]);
   const [stages,setStages]=useState<PipelineStage[]>([]);
   const [stageId,setStageId]=useState(prospect.pipeline_stage_id??"");
-  const [occurred,setOccurred]=useState(()=>dateInputFromISO(todayISTISO()));
+  const [occurred,setOccurred]=useState(()=>todayISTISO());
   const [next,setNext]=useState("");
   const [nextTime,setNextTime]=useState("");
   const [notes,setNotes]=useState("");
@@ -46,10 +46,10 @@ export function FollowUpLog({prospect,onSaved}:{prospect:Prospect;onSaved:()=>vo
   },[prospect.id,prospect.version]);
   async function submit(event:FormEvent){
     event.preventDefault();
-    const date=dateInputToISO(occurred);
-    const nextDate=next.trim()?dateInputToISO(next):null;
+    const date=occurred;
+    const nextDate=next||null;
     if(!date||date>todayISTISO()||(next.trim()&&(!nextDate||nextDate<todayISTISO()))){
-      setError("Dates must use DD/MM/YY; the next follow-up cannot be in the past.");return;
+      setError("Choose valid dates in the calendar; the next follow-up cannot be in the past.");return;
     }
     if(!stageId||!stages.some(s=>s.id===stageId)){
       setError("Select an existing prospect stage.");return;
@@ -83,18 +83,18 @@ export function FollowUpLog({prospect,onSaved}:{prospect:Prospect;onSaved:()=>vo
     <h2>Follow-up &amp; Activity</h2>
     <form onSubmit={submit} className="crm-followup-form">
       <div className="crm-followup-fields">
-        <label className="field"><span className="field-label">Contact date (DD/MM/YY) *</span>
-          <input required value={occurred} pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}"
-            onChange={e=>setOccurred(e.target.value)} placeholder="DD/MM/YY"/></label>
+        <label className="field"><span className="field-label">Contact date *</span>
+          <input type="date" required max={todayISTISO()} value={occurred}
+            onChange={e=>setOccurred(e.target.value)}/></label>
         <label className="field"><span className="field-label">Stage *</span>
           <select aria-label="Follow-up stage" value={stageId} required
             onChange={e=>setStageId(e.target.value)}>
             <option value="">Select stage</option>
             {stages.map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}
           </select></label>
-        <label className="field"><span className="field-label">Next follow-up (DD/MM/YY)</span>
-          <input value={next} pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}"
-            onChange={e=>setNext(e.target.value)} placeholder="DD/MM/YY"/></label>
+        <label className="field"><span className="field-label">Next follow-up</span>
+          <input type="date" min={todayISTISO()} value={next}
+            onChange={e=>setNext(e.target.value)}/></label>
         <label className="field"><span className="field-label">Time (IST)</span>
           <input aria-label="Next follow-up time (IST)" type="time" value={nextTime}
             required={Boolean(next)} disabled={!next}
