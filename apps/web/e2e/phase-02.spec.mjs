@@ -886,9 +886,10 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
   await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption("500");
-  const displayed=await page.getByRole("textbox",{name:"Received date (DD/MM/YY)"}).inputValue();
-  const [day,monthPart,year]=displayed.split("/");
-  const receivedOn="20"+year+"-"+monthPart+"-"+day;
+  const received=page.getByLabel("Received date");
+  await expect(received).toHaveAttribute("type","date");
+  const receivedOn=await received.inputValue();
+  expect(receivedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   const month=await page.locator('input[type="month"]').inputValue();
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
   await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
