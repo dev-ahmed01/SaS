@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { dateInputFromISO, dateInputToISO, todayISTISO } from "../../lib/crm-dates";
+import { todayISTISO } from "../../lib/crm-dates";
 
 type Prospect={id:string;full_name:string;mobile_number:string;monthly_contribution_paise:number;
   lifecycle_status:string;crm_stage:"active"|"inactive";whatsapp_opt_in:boolean};
@@ -31,7 +31,7 @@ export function ManualCollections(){
   const [selected,setSelected]=useState<Prospect|null>(null);
   const [rupees,setRupees]=useState("");
   const [customAmount,setCustomAmount]=useState(false);
-  const [receivedOn,setReceivedOn]=useState(()=>dateInputFromISO(istDate()));
+  const [receivedOn,setReceivedOn]=useState(()=>istDate());
   const [period,setPeriod]=useState(()=>istDate().slice(0,7));
   const [method,setMethod]=useState("upi");
   const [reference,setReference]=useState("");
@@ -68,9 +68,9 @@ export function ManualCollections(){
       setError(inactive?"This prospect is inactive. Reactivate them in Prospects before recording a collection.":
         "This name is not a selected, active prospect. Search and select a registered prospect first.");return;
     }
-    const receivedISO=dateInputToISO(receivedOn);
+    const receivedISO=receivedOn;
     if(!receivedISO||receivedISO>istDate()){
-      setError("Enter a valid received date as DD/MM/YY (not in the future).");return;
+      setError("Select a valid received date, not in the future.");return;
     }
     const trimmed=rupees.trim();
     if(!/^\d{1,8}(?:\.\d{1,2})?$/.test(trimmed)){setError("Enter a valid amount in rupees, in ₹250 steps.");return;}
@@ -151,8 +151,7 @@ export function ManualCollections(){
               value={period} onChange={e=>{setPeriod(e.target.value);update();}}/>
           </label>
           <label className="field collection-date"><span className="field-label">Date Paid (IST) *</span>
-            <input aria-label="Received date (DD/MM/YY)" required type="text" inputMode="numeric"
-              pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" placeholder="DD/MM/YY"
+            <input aria-label="Received date" required type="date" max={istDate()}
               value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/>
           </label>
           <div className="field collection-amount"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
