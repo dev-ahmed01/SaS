@@ -11,9 +11,17 @@ from sqlalchemy import create_engine, text
 
 from app import main as api_main
 from app.repair_local_duplicate import validate_links, validate_records
-from test_prospects import login
 
 pytest_plugins = ("test_prospects",)
+
+
+def login(client):
+    response = client.post("/v1/auth/login", json={
+        "email": "office@foundation.org",
+        "password": "synthetic-long-admin-password",
+    })
+    assert response.status_code == 200
+    return {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
 
 
 def _candidate(*, full_name: str, record_id=None, **overrides) -> dict:
