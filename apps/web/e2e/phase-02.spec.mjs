@@ -358,7 +358,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   const label="Phase4 Browser Candidate "+(Date.now()%1000000);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(label);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("textbox",{name:/City/}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -369,26 +369,18 @@ test("Admin registers and searches a new prospect without fake payment status",a
   );
   expect(acknowledgement.status()).toBe(200);
   expect((await acknowledgement.json()).status).toBe("inactive");
-  await page.getByRole("button",{name:/^Edit\b/}).click();
+  await page.getByRole("button",{name:"Edit details"}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Save Changes"}).click();
-  const disclosure=page.locator("details.crm-profile-disclosure");
-  if(await disclosure.getAttribute("open")===null){
-    await disclosure.locator("summary").click();
-  }
-  await expect(disclosure).toHaveAttribute("open","");
-  await expect(disclosure.getByText("Teacher")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
+  await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   const row=page.getByRole("row",{name:new RegExp(label)});
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
-  if(await disclosure.getAttribute("open")===null){
-    await disclosure.locator("summary").click();
-  }
-  await expect(disclosure).toHaveAttribute("open","");
-  await expect(disclosure.getByText("Teacher")).toBeVisible();
+  await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
 });
 
 test("Mark Active auto-requests a two-minute four-digit OTP and shows complete phone",async ({page})=>{
@@ -396,7 +388,7 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
   const phone=uniqueProspectMobile();
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(prospect);
-  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(phone);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(phone);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(new RegExp("/prospects/[0-9a-f-]{36}$"));
   const pendingId=crypto.randomUUID();
@@ -452,7 +444,7 @@ test("Mark Active auto-requests a two-minute four-digit OTP and shows complete p
 test("OTP activation POST passes through prospect API gateway instead of a 404",async ({page})=>{
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill("Gateway OTP Candidate");
-  await page.getByRole("textbox",{name:"WhatsApp / Mobile"}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   const prospectId=page.url().split("/").at(-1);
@@ -477,7 +469,7 @@ test("Same-name prospects require different mobile numbers across registrations 
   async function register(mobile){
     await page.goto("/prospects/add");
     await page.getByRole("textbox",{name:/First Name/}).fill(label);
-    await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(mobile);
+    await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(mobile);
     await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
     await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
     await expect(page.getByText("Never paid")).toBeVisible();
@@ -486,7 +478,7 @@ test("Same-name prospects require different mobile numbers across registrations 
   await register(second);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill("Different Person");
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(first);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(first);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page.locator(".prospect-form-panel .form-error")).toContainText(
     "That mobile number already belongs to a prospect"
@@ -497,26 +489,23 @@ test("Same-name prospects require different mobile numbers across registrations 
   await expect(page.getByRole("row").filter({hasText:label})).toHaveCount(2);
 });
 
-test("Admin can archive and restore a prospect without deleting its record",async ({page})=>{
-  const label="Archive Browser Candidate "+(Date.now()%1000000);
+test("Admin can permanently delete an unused prospect with confirmation",async ({page})=>{
+  const label="Unused Browser Candidate "+(Date.now()%1000000);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(label);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await page.getByRole("button",{name:/^Delete\b/}).click();
-  await expect(page.getByRole("dialog",{name:"Confirm prospect archive"})).toBeVisible();
-  await page.getByRole("button",{name:"Archive prospect",exact:true}).click();
-  const detailsUrl=page.url();
-  await expect(page.getByText("Archived",{exact:true})).toBeVisible();
-  await page.goto("/prospects");
+  await expect(page).toHaveURL(new RegExp("/prospects/[0-9a-f-]{36}$"));
+  await page.getByRole("button",{name:"Delete prospect"}).click();
+  const confirmation=page.getByRole("dialog",{name:"Confirm permanent prospect deletion"});
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button",{name:"Cancel"}).click();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Delete prospect"}).click();
+  await confirmation.getByRole("button",{name:"Yes, delete permanently"}).click();
+  await expect(page).toHaveURL(new RegExp("/prospects$"));
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
-  await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
-  await page.goto(detailsUrl);
-  await page.getByRole("button",{name:/^Restore\b/}).click();
-  await page.getByRole("dialog",{name:"Confirm prospect archive"}).getByRole("button",{name:"Restore prospect"}).click();
-  await expect(page.getByText("Inactive",{exact:true}).first()).toBeVisible();
 });
 
 test("Prospect listing shows contribution, follow-ups and selected CSV export",async ({page})=>{
@@ -550,12 +539,12 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   expect(columns).toBe(5);
   await tabs.getByRole("link",{name:"Add Prospect"}).click();
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("combobox",{name:"Sponsorship Tokens"}).selectOption("2");
   await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Overview"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
   await expect(page.getByText("Never paid")).toBeVisible();
   await expect(page.getByRole("combobox",{name:"Follow-up stage"})).toHaveValue(/.+/);
@@ -607,7 +596,7 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await expect(page.getByText(renamed,{exact:true})).toBeVisible();
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(person);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await expect(page.getByRole("combobox",{name:"Prospect Stage"})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -677,8 +666,8 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Personal information"})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Activity timeline"})).toHaveCount(0);
   await expect(page.getByRole("region",{name:"Internal promoter notes"})).toBeVisible();
   await expect(page.getByText("Communication preferences")).toHaveCount(0);
   await expect(page.locator(".crm-summary-strip")).toHaveCount(0);
@@ -690,7 +679,7 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.reload();
   await expect(page.getByRole("textbox",{name:"Notes about this promoter"}))
     .toHaveValue("Promoter confirmed the next visit.");
-  await page.getByRole("button",{name:"Edit",exact:true}).click();
+  await page.getByRole("button",{name:"Edit details"}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText("Architect")).toBeVisible();
@@ -714,7 +703,7 @@ test("Promoter details safely assign and unassign a sponsor",async ({page})=>{
   const promoter="Phase5 Liaison "+key;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9676"+String(key).padStart(6,"0"));
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9676"+String(key).padStart(6,"0"));
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/promoters/add");
@@ -739,7 +728,7 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections/all");
@@ -851,7 +840,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9826"+id);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9826"+id);
   await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -888,7 +877,7 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   const name="Receipt Retry Sponsor "+id;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9836"+id);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9836"+id);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await activateNewProspect(page);
@@ -897,9 +886,10 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
   await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption("500");
-  const displayed=await page.getByRole("textbox",{name:"Received date (DD/MM/YY)"}).inputValue();
-  const [day,monthPart,year]=displayed.split("/");
-  const receivedOn="20"+year+"-"+monthPart+"-"+day;
+  const received=page.getByLabel("Received date");
+  await expect(received).toHaveAttribute("type","date");
+  const receivedOn=await received.inputValue();
+  expect(receivedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   const month=await page.locator('input[type="month"]').inputValue();
   await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
   await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
@@ -931,7 +921,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9847"+id);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9847"+id);
   await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -1044,19 +1034,24 @@ test("Recorded one-time payouts remain in All and are excluded from Active recur
   await expect(page.getByRole("region",{name:"All payout plans"})
     .getByRole("row",{name:new RegExp("OneTime "+id)})).toBeVisible();
 });
-test("Add Payout removes recurring planning controls and exposes Type Amount Purpose in one row",async ({page,isMobile})=>{
+test("Add Payout aligns payment method, amount and date with purpose and reference below",async ({page,isMobile})=>{
   await page.goto("/payouts");
   await expect(page.getByRole("combobox",{name:"Payout type"})).toHaveCount(0);
-  const type=page.getByRole("combobox",{name:"Payout payment type"});
+  const method=page.getByRole("combobox",{name:"Payout payment type"});
   const amount=page.getByRole("textbox",{name:"Payout amount (₹)"});
+  const date=page.getByLabel("Payout date");
   const purpose=page.getByRole("textbox",{name:"Payout purpose"});
-  await expect(type).toBeVisible();
-  await expect(amount).toBeVisible();
-  await expect(purpose).toBeVisible();
-  const boxes=await Promise.all([type,amount,purpose].map(x=>x.boundingBox()));
+  const reference=page.getByRole("textbox",{name:"UTR"});
+  for(const field of [method,amount,date,purpose,reference]){
+    await expect(field).toBeVisible();
+  }
+  await expect(date).toHaveAttribute("type","date");
+  const boxes=await Promise.all([method,amount,date,purpose,reference].map(x=>x.boundingBox()));
   if(!isMobile){
     expect(Math.abs(boxes[0].y-boxes[1].y)).toBeLessThan(20);
     expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+    expect(Math.abs(boxes[3].y-boxes[4].y)).toBeLessThan(20);
+    expect(boxes[3].y).toBeGreaterThan(boxes[2].y);
   }
 });
 test("Payout write gateway rejects forged origins, missing CSRF and invalid routes",async ({page})=>{
@@ -1092,10 +1087,11 @@ test("Payout requires a valid UTR and does not initiate a transfer",async ({page
   await page.getByRole("button",{name:"Save Payout"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
 });
-test("Payout entry uses visible DD/MM/YY and no first payment month",async ({page})=>{
+test("Payout date is selected from a calendar",async ({page})=>{
   await page.goto("/payouts");
-  const entry=page.getByRole("textbox",{name:"Payout date (DD/MM/YY)"});
-  await expect(entry).toHaveValue(/^\d{2}\/\d{2}\/\d{2}$/);
+  const entry=page.getByLabel("Payout date");
+  await expect(entry).toHaveAttribute("type","date");
+  await expect(entry).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
   await expect(page.getByText("First Payment Month")).toHaveCount(0);
   await expect(page.getByRole("textbox",{name:"Payee First Name"})).toBeVisible();
   await expect(page.getByRole("textbox",{name:"Payee Last Name"})).toBeVisible();
@@ -1218,7 +1214,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   const sponsor="Consent Campaign "+suffix;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9851"+suffix);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9851"+suffix);
   await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -1420,8 +1416,8 @@ test("Prospect bulk import previews before atomically saving two unique contacts
   const suffix=Date.now().toString().slice(-8);
   const p1="+9190"+suffix,p2="+9191"+suffix;
   await page.goto("/prospects");
-  await page.getByRole("link",{name:"Bulk add"}).click();
-  await expect(page.getByRole("heading",{name:"Bulk add prospects"})).toBeVisible();
+  await page.getByRole("link",{name:"Import prospects"}).click();
+  await expect(page.getByRole("heading",{name:"Import prospects"})).toBeVisible();
   const csv=["Name,Mobile,City,Email,Sponsorship INR,Start Month",
     `"Bulk Test Shared",${p1},Bengaluru,,250,`,
     `"Bulk Test Shared",${p2},Mysuru,,500,`,
@@ -1473,4 +1469,19 @@ test("Received This Month gateway filters by actual date paid",async ({page})=>{
   await expect(page.getByRole("heading",{name:"Received this month"})).toBeVisible();
   await expect(page.locator('input[aria-label="Filter collection history by month"]'))
     .toBeVisible();
+});
+
+test("Pasted spreadsheet rows preview without creating prospects",async ({page})=>{
+  const mobile="+9193"+Date.now().toString().slice(-8);
+  await page.goto("/prospects/bulk");
+  const pasted=[
+    "Name\tMobile\tCity\tEmail\tSponsorship INR\tStart Month",
+    "Pasted Sample\t"+mobile+"\tBengaluru\t\t250\t",
+  ].join("\n");
+  await page.getByRole("textbox",{name:"Paste prospect rows"}).fill(pasted);
+  await page.getByRole("button",{name:"Load pasted rows"}).click();
+  await expect(page.getByText("Pasted spreadsheet",{exact:false})).toBeVisible();
+  await page.getByRole("button",{name:"Preview import"}).click();
+  await expect(page.getByRole("heading",{name:"Preview results"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Confirm & add 1 prospects"})).toBeEnabled();
 });

@@ -4,7 +4,7 @@ import hmac
 import json
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -75,6 +75,7 @@ class CollectionOutput(BaseModel):
     amount_paise: int
     period_month: date
     received_on: date
+    recorded_at: datetime
     payment_method: str
     reference_mask: str
     evidence: Literal["admin_attested"]
@@ -164,7 +165,8 @@ def _view(db: Session, row: ManualCollection) -> CollectionOutput:
         id=row.id, prospect_id=row.prospect_id, sponsor_name=sponsor.full_name,
         sponsor_mobile=sponsor.mobile_number,
         amount_paise=row.amount_paise, period_month=row.period_month,
-        received_on=row.received_on, payment_method=row.payment_method,
+        received_on=row.received_on, recorded_at=row.created_at,
+        payment_method=row.payment_method,
         reference_mask=row.reference_mask, evidence="admin_attested",
         message_status=dispatch.status if dispatch else event.status,
         sponsor_status=sponsor.lifecycle_status,

@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -41,6 +41,7 @@ from app.models import (
     ProspectUpiIdentifier,
     SponsorshipRate,
 )
+from app.permanent_delete import DeleteConfirmation, check_dependencies, require_confirmation
 from app.prospect_defaults import get_registration_stage
 from app.security import utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
@@ -823,6 +824,43 @@ def update_prospect(
             raise HTTPException(status_code=409, detail="Prospect update conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _read(prospect, db=database)
+
+
+@router.post("/{prospect_id}/permanent-delete", status_code=204)
+def permanently_delete_unused_prospect(
+    prospect_id: uuid.UUID,
+    payload: DeleteConfirmation,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> Response:
+    """Remove unused registrations; never erase business/communication history."""
+    require_confirmation(payload.confirmation)
+    admin = context[0]
+    prospect = _get(database, admin, prospect_id, lock=True, allow_archived=True)
+    _check_version(prospect, payload.version)
+    if prospect.crm_stage != "inactive" or prospect.whatsapp_opt_in:
+        raise HTTPException(
+            status_code=409,
+            detail="Only unused inactive prospects without communication consent can be deleted",
+        )
+    check_dependencies(
+        database, admin.organization_id, prospect.id, kind="prospect",
+    )
+    # Registration creates one rate by design. Historical rates (>1) are
+    # prohibited by check_dependencies and cannot be erased.
+    database.execute(delete(SponsorshipRate).where(
+        SponsorshipRate.organization_id == admin.organization_id,
+        SponsorshipRate.prospect_id == prospect.id,
+    ))
+    _audit(database, admin, prospect, "prospect.permanently_deleted",
+           before={"version": prospect.version}, after={"unused_registration": True})
+    try:
+        database.delete(prospect)
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(status_code=409, detail="Linked history prevents deletion") from exc
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 @router.delete("/{prospect_id}", status_code=204)

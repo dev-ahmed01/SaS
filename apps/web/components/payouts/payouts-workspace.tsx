@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
-import { dateInputFromISO, dateInputToISO, formatCRMDate } from "../../lib/crm-dates";
+import { formatCRMDate } from "../../lib/crm-dates";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -41,7 +41,7 @@ export function PayoutAdd(){
   const [purpose,setPurpose]=useState("");
   const [method,setMethod]=useState<PaymentMethod>("upi");
   const [value,setValue]=useState("");
-  const [paidOn,setPaidOn]=useState(()=>dateInputFromISO(dateIST()));
+  const [paidOn,setPaidOn]=useState(()=>dateIST());
   const [utr,setUtr]=useState("");
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
@@ -52,9 +52,9 @@ export function PayoutAdd(){
     event.preventDefault();
     if(saving)return;
     const paise=amountPaise(value);
-    const paid=dateInputToISO(paidOn);
+    const paid=paidOn;
     if(!paise){setError("Enter a valid positive payout amount.");return;}
-    if(!paid||paid>dateIST()){setError("Enter the actual payment date in DD/MM/YY, not in the future.");return;}
+    if(!paid||paid>dateIST()){setError("Select a valid payment date, not in the future.");return;}
     if(first.trim().length<2||purpose.trim().length<3||utr.trim().length<6){
       setError("Enter the payee, purpose and UTR/reference number.");return;
     }
@@ -86,7 +86,7 @@ export function PayoutAdd(){
           <input maxLength={80} aria-label="Payee Last Name"
             value={last} onChange={e=>{setLast(e.target.value);change();}}/></label>
         <div className="payout-inline-row form-cell full">
-          <label className="field"><span className="field-label">Type *</span>
+          <label className="field"><span className="field-label">Payment method *</span>
             <select aria-label="Payout payment type" value={method}
               onChange={e=>{setMethod(e.target.value as PaymentMethod);change();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
@@ -95,17 +95,18 @@ export function PayoutAdd(){
           <label className="field"><span className="field-label">Amount (₹) *</span>
             <input required inputMode="decimal" aria-label="Payout amount (₹)"
               value={value} onChange={e=>{setValue(e.target.value);change();}}/></label>
+          <label className="field"><span className="field-label">Date paid *</span>
+            <input type="date" max={dateIST()} required value={paidOn}
+              aria-label="Payout date" onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
+        </div>
+        <div className="payout-inline-row payout-last-row form-cell full">
           <label className="field"><span className="field-label">Purpose *</span>
             <input required minLength={3} maxLength={240} aria-label="Payout purpose"
               value={purpose} onChange={e=>{setPurpose(e.target.value);change();}}/></label>
+          <label className="field"><span className="field-label">UTR / Reference Number *</span>
+            <input required minLength={6} maxLength={100} aria-label="UTR"
+              value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
         </div>
-        <label className="field"><span className="field-label">Date (DD/MM/YY) *</span>
-          <input required value={paidOn} placeholder="DD/MM/YY"
-            pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" aria-label="Payout date (DD/MM/YY)"
-            onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
-        <label className="field"><span className="field-label">UTR / Reference Number *</span>
-          <input required minLength={6} maxLength={100} aria-label="UTR"
-            value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
@@ -127,7 +128,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const [notice,setNotice]=useState("");
   const [chosen,setChosen]=useState<Plan|null>(null);
   const [mode,setMode]=useState<"paid"|"pause"|"resume"|"close">("paid");
-  const [paymentDate,setPaymentDate]=useState(()=>dateInputFromISO(dateIST()));
+  const [paymentDate,setPaymentDate]=useState(()=>dateIST());
   const [method,setMethod]=useState<PaymentMethod>("upi");
   const [reference,setReference]=useState("");
   const [confirmed,setConfirmed]=useState(false);
@@ -151,7 +152,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   },[view,period,offset,refresh]);
   function open(plan:Plan,action:typeof mode){
     if(loading)return; // Stale navigation snapshots are read-only until refresh completes.
-    setChosen(plan);setMode(action);setPaymentDate(dateInputFromISO(dateIST()));setMethod("upi");
+    setChosen(plan);setMode(action);setPaymentDate(dateIST());setMethod("upi");
     setReference("");setConfirmed(false);setError("");setNotice("");request.current=null;
   }
   function close(){if(!saving){setChosen(null);request.current=null;}}
@@ -159,9 +160,9 @@ export function PayoutList({view}:{view:"all"|"active"}){
     event.preventDefault();
     if(!chosen||saving)return;
     if(mode==="paid"&&!confirmed){setError("Confirm the money was actually disbursed.");return;}
-    const normalizedPaymentDate=dateInputToISO(paymentDate);
+    const normalizedPaymentDate=paymentDate;
     if(mode==="paid"&&(!normalizedPaymentDate||normalizedPaymentDate>dateIST())){
-      setError("Use an actual payment date in DD/MM/YY.");return;
+      setError("Select an actual payment date.");return;
     }
     setSaving(true);setError("");setNotice("");
     if(!request.current)request.current=crypto.randomUUID();
@@ -265,8 +266,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
         <form onSubmit={submit} aria-label="Confirm payout action">
           {mode==="paid"?<>
             <label className="field"><span className="field-label">Date funds left account (IST) *</span>
-              <input required type="text" inputMode="numeric" placeholder="DD/MM/YY"
-                pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" aria-label="Date funds left account (DD/MM/YY)"
+              <input required type="date" max={dateIST()} aria-label="Date funds left account"
                 value={paymentDate}
                 onChange={e=>{setPaymentDate(e.target.value);request.current=null;}}/>
             </label>

@@ -164,9 +164,9 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   }
 
 
-  return <section className="prospect-form-panel" aria-label={isEdit?"Edit Prospect":"Add Prospect"}>
+  return <section className="prospect-form-panel" aria-label={isEdit?"Edit personal details":"Add Prospect"}>
     <div className="prospect-form-intro">
-      <h2>{isEdit?"Edit prospect":"New prospect"}</h2>
+      <h2>{isEdit?"Edit personal details":"New prospect"}</h2>
       <p>Contact and sponsorship information</p>
     </div>
     <form onSubmit={submit}>
@@ -184,7 +184,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             <select aria-label="Country Code" value={values.country_code} onChange={e=>set("country_code",e.target.value)}>
               {codes.map(([name,code])=><option value={code} key={code}>{code} · {name}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">WhatsApp / Mobile *</span>
+          <label className="field"><span className="field-label">Mobile (WhatsApp) *</span>
             <input required inputMode="tel" autoComplete="tel-national" value={values.phone}
               onChange={e=>set("phone",e.target.value)} placeholder="98765 43210"/></label>
           <label className="field"><span className="field-label">Email</span>
@@ -236,11 +236,11 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             </select></label>
         </div>
         {promotersError&&<p className="form-error" role="status">{promotersError}</p>}
-        <label className="prospect-consent">
+        {!isEdit&&<label className="prospect-consent">
           <input type="checkbox" checked={values.whatsapp_opt_in}
             onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>
           <span>I confirm the sponsor has explicitly agreed to receive WhatsApp reminders and updates. Record this permission once.</span>
-        </label>
+        </label>}
 
       </div>
       {error&&<p className="form-error" role="alert">{error}</p>}

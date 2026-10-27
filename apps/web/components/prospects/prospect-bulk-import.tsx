@@ -47,7 +47,12 @@ function parseCSV(input:string):string[][]{
 }
 
 function parsePeople(text:string):BulkPerson[]{
-  const matrix=parseCSV(text);
+  // Spreadsheet copy-paste is usually tab-separated; file uploads remain CSV.
+  const firstLine=text.split(/\r?\n/,1)[0];
+  const matrix=firstLine.includes("\t")&&!firstLine.includes(",")
+    ?text.replace(/\r/g,"").split("\n").filter(row=>row.trim())
+      .map(row=>row.split("\t"))
+    :parseCSV(text);
   if(matrix.length<2)throw Error("CSV needs a header and at least one person.");
   if(matrix.length>101)throw Error("Use a maximum of 100 people in one import.");
   const header=matrix[0].map(s=>s.trim().toLowerCase());
@@ -97,6 +102,7 @@ export function ProspectBulkImport(){
   const [rows,setRows]=useState<BulkPerson[]>([]);
   const [batchId,setBatchId]=useState("");
   const [fileName,setFileName]=useState("");
+  const [pasted,setPasted]=useState("");
   const [preview,setPreview]=useState<BulkResult|null>(null);
   const [result,setResult]=useState<BulkResult|null>(null);
   const [error,setError]=useState("");
@@ -112,6 +118,15 @@ export function ProspectBulkImport(){
       const parsed=parsePeople(await file.text());
       setRows(parsed);setBatchId(crypto.randomUUID());setChanged(true);
     }catch(err){setError(err instanceof Error?err.message:"Invalid CSV file.");}
+  }
+  function loadPasted(){
+    setError("");setPreview(null);setResult(null);setRows([]);setChanged(false);
+    if(pasted.length>64000){setError("Paste at most 64 KB and 100 rows.");return;}
+    try{
+      const parsed=parsePeople(pasted);
+      setFileName("Pasted spreadsheet");
+      setRows(parsed);setBatchId(crypto.randomUUID());setChanged(true);
+    }catch(err){setError(err instanceof Error?err.message:"Invalid pasted table.");}
   }
   async function submit(commit:boolean){
     if(!rows.length||!batchId||busy||commit&&(!preview||preview.blocked>0||result))return;
@@ -157,8 +172,8 @@ export function ProspectBulkImport(){
   const shown=result??preview;
   return <section className="crm-list crm-bulk-import" aria-label="Bulk import prospects">
     <div className="crm-panel-heading">
-      <div><h2>Bulk add prospects</h2><p className="panel-description">
-        Upload up to 100 contacts, review them, then add them together.</p></div>
+      <div><h2>Import prospects</h2><p className="panel-description">
+        Upload a CSV or paste rows from a spreadsheet. Review before saving up to 100 contacts.</p></div>
       <Link href="/prospects" className="btn btn-secondary">Back to Prospects</Link>
     </div>
     <div className="crm-bulk-toolbar">
@@ -170,6 +185,17 @@ export function ProspectBulkImport(){
       <button className="btn btn-primary" type="button" disabled={!rows.length||busy||!!result}
         onClick={()=>void submit(false)}>
         {busy?"Checking…":"Preview import"}</button>
+    </div>
+    <div className="crm-bulk-paste">
+      <label className="field"><span className="field-label">Or paste spreadsheet rows</span>
+        <textarea aria-label="Paste prospect rows" rows={4} value={pasted}
+          disabled={busy||Boolean(result)}
+          placeholder={'Name,Mobile,City,Email,Sponsorship INR,Start Month\nExample Sponsor,+919876543210,Bengaluru,,250,'}
+          onChange={e=>setPasted(e.target.value)}/></label>
+      <button type="button" className="btn btn-secondary" disabled={!pasted.trim()||busy||Boolean(result)}
+        onClick={loadPasted}>Load pasted rows</button>
+      <p className="field-helper">Paste the CSV header and rows, or copy columns directly
+        from a spreadsheet (tab-separated). Preview and confirm to save.</p>
     </div>
     <p className="panel-description">
       Names may repeat, but mobile numbers must be unique. Blank sponsorship amounts use the CRM

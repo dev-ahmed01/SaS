@@ -14,7 +14,7 @@ const tabs=[
 export function PromotersWorkspace({view}:{view:"add"|"active"|"all"|"inactive"}){
   const router=useRouter();
   return <AppShell>
-    <div className="prospect-tabs"><ModuleTabs current={view} tabs={tabs}/></div>
+    <div className="prospect-tabs promoter-tabs"><ModuleTabs current={view} tabs={tabs}/></div>
     <div className="prospects-workspace">
       {view==="add"
         ?<PromoterEditor onSaved={saved=>router.push("/promoters/"+saved.id)}/>

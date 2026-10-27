@@ -74,9 +74,9 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
     finally{setSaving(false);}
   }
   return <section className="prospect-form-panel promoter-form-panel"
-    aria-label={edit?"Edit Promoter":"Add Promoter"}>
+    aria-label={edit?"Edit personal details":"Add Promoter"}>
     <div className="prospect-form-intro">
-      <h2>{edit?"Edit promoter":"New promoter"}</h2>
+      <h2>{edit?"Edit personal details":"New promoter"}</h2>
       <p>Promoter contact information</p>
     </div>
     <form onSubmit={submit}>
@@ -97,7 +97,7 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
               {countryCodes.map(([country,code])=>
                 <option key={code} value={code}>{code} · {country}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">Mobile *</span>
+          <label className="field"><span className="field-label">Mobile (WhatsApp) *</span>
             <input type="tel" required inputMode="tel" autoComplete="tel-national"
               value={form.mobile} onChange={e=>set("mobile",e.target.value)}
               placeholder="98765 43210"/></label>
@@ -114,11 +114,11 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
             <input maxLength={120} value={form.occupation}
               onChange={e=>set("occupation",e.target.value)} placeholder="Occupation"/></label>
         </div>
-        <label className="prospect-consent"><input type="checkbox"
+        {!edit&&<label className="prospect-consent"><input type="checkbox"
           checked={form.whatsapp_opt_in}
           onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>
           <span>WhatsApp communication consent recorded</span>
-        </label>
+        </label>}
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       <div className="form-actions prospect-form-actions">
