@@ -6,13 +6,11 @@ import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
 import { PromoterEditor } from "./promoter-editor";
 import { PromoterNotes } from "./promoter-notes";
-import { ContactConsent } from "../communication/contact-consent";
 import { PromoterSponsors } from "./promoter-sponsors";
 import { PromoterStatusDialog } from "./promoter-status-dialog";
 import type { Promoter } from "./promoter-types";
 import { formatCRMDate } from "../../lib/crm-dates";
 
-type Activity={id:string;kind:string;title:string;detail:string;occurred_at:string};
 function Fact({label,children}:{label:string;children:React.ReactNode}){
   return <div className="promoter-profile-fact"><dt>{label}</dt><dd>{children}</dd></div>;
 }
@@ -30,16 +28,14 @@ function Stat({label,value,icon,onClick}:{
 }
 export function PromoterDetails({id}:{id:string}){
   const [record,setRecord]=useState<Promoter|null>(null);
-  const [activity,setActivity]=useState<Activity[]>([]);
-  const [filter,setFilter]=useState("all");
-  const [showOlder,setShowOlder]=useState(false);
   const [sponsorCount,setSponsorCount]=useState<number|null>(null);
   const [prospectCount,setProspectCount]=useState<number|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [editing,setEditing]=useState(false);
-  const [consentOpen,setConsentOpen]=useState(false);
   const [confirm,setConfirm]=useState(false);
+  const [deleteOpen,setDeleteOpen]=useState(false);
+  const [deleting,setDeleting]=useState(false);
   const [revision,setRevision]=useState(0);
   const refresh=()=>setRevision(x=>x+1);
   const load=useCallback(async(signal?:AbortSignal)=>{
@@ -50,18 +46,12 @@ export function PromoterDetails({id}:{id:string}){
   useEffect(()=>{
     const controller=new AbortController();
     setError("");
-    Promise.all([
-      load(controller.signal),
-      fetch("/api/admin/promoters/"+id+"/activity",{cache:"no-store",signal:controller.signal})
-        .then(async r=>{if(!r.ok)throw Error("Activity timeline unavailable.");return r.json() as Promise<Activity[]>;}),
-    ]).then(([person,events])=>{
-      if(!controller.signal.aborted){setRecord(person);setActivity(events);}
+    load(controller.signal).then(person=>{
+      if(!controller.signal.aborted)setRecord(person);
     }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load promoter.");})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[load,revision]);
-  const entries=filter==="all"?activity:activity.filter(entry=>entry.kind===filter);
-  const visibleEntries=showOlder?entries:entries.slice(0,12);
   const scrollTo=(elementId:string)=>document.getElementById(elementId)?.scrollIntoView({behavior:"smooth",block:"start"});
   const initials=record?.full_name.split(/\s+/).map(n=>n[0]).slice(0,2).join("").toUpperCase()??"";
   return <AppShell><div className="crm-details crm-redesign promoter-modern-detail">
@@ -80,8 +70,6 @@ export function PromoterDetails({id}:{id:string}){
           <p>{record.mobile_number} · Joined {formatCRMDate(record.created_at)}</p>
         </div>
       </header>
-      {editing&&<PromoterEditor initial={record} onCancel={()=>setEditing(false)}
-        onSaved={()=>{setEditing(false);refresh();}}/>}
       <div className="promoter-metrics" aria-label="Current promoter assignments">
         <Stat label="Sponsors" icon="users" value={sponsorCount??"—"}
           onClick={()=>scrollTo("promoter-sponsors")}/>
@@ -89,59 +77,41 @@ export function PromoterDetails({id}:{id:string}){
           onClick={()=>scrollTo("promoter-prospects")}/>
         <Stat label="Total assigned" icon="check" value={record.sponsor_count}/>
       </div>
-      <div className="crm-redesign-columns promoter-information-row">
-        <section className="crm-detail-card promoter-profile-card" aria-label="Personal information">
-          <h2>Personal information</h2>
+      <section className="crm-detail-card promoter-profile-card" aria-label="Personal details">
+        <div className="crm-panel-heading"><h2>Personal details</h2>
+          <button type="button" className="btn btn-secondary" onClick={()=>setEditing(v=>!v)}
+            aria-expanded={editing}>
+            <Icon name="pencil" size={16}/> {editing?"Close edit":"Edit details"}
+          </button>
+        </div>
+        {editing?<PromoterEditor initial={record} onCancel={()=>setEditing(false)}
+          onSaved={()=>{setEditing(false);refresh();}}/>:
           <dl className="promoter-profile-facts">
-            <Fact label="Phone (WhatsApp)">{record.mobile_number}</Fact>
+            <Fact label="Full name">{record.full_name}</Fact>
+            <Fact label="Mobile (WhatsApp)">{record.mobile_number}</Fact>
             {record.whatsapp_number&&record.whatsapp_number!==record.mobile_number&&
               <Fact label="WhatsApp">{record.whatsapp_number}</Fact>}
-            {record.email&&<Fact label="Email">{record.email}</Fact>}
-            {record.area_city&&<Fact label="City">{record.area_city}</Fact>}
-            {record.occupation&&<Fact label="Occupation">{record.occupation}</Fact>}
-          </dl>
-        </section>
-        <section className="crm-detail-card promoter-timeline-card">
-          <div className="crm-panel-heading"><h2>Activity timeline</h2>
-            <select aria-label="Filter promoter activity" value={filter}
-              onChange={e=>{setFilter(e.target.value);setShowOlder(false);}}>
-              <option value="all">All activity</option>
-              <option value="assignment">Assignments</option>
-              <option value="updated">Updates</option>
-            </select></div>
-          <ol className="crm-activity-timeline">
-            {visibleEntries.map(item=><li key={item.id}>
-              <span className={"crm-activity-dot "+item.kind} aria-hidden="true"/>
-              <div><strong>{item.title}</strong><p>{item.detail}</p>
-                <small>{formatCRMDate(item.occurred_at)} · {new Date(item.occurred_at).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit"})} IST</small>
-              </div>
-            </li>)}
-          </ol>
-          {entries.length===0&&<p className="crm-muted">No recorded activity of this type.</p>}
-          {entries.length>12&&<button type="button" className="text-action"
-            onClick={()=>setShowOlder(v=>!v)}>{showOlder?"Show recent 12":
-            "Show all "+entries.length+" activities"}</button>}
-        </section>
-      </div>
+            <Fact label="Email">{record.email||"—"}</Fact>
+            <Fact label="City">{record.area_city||"—"}</Fact>
+            <Fact label="Occupation">{record.occupation||"—"}</Fact>
+          </dl>}
+      </section>
       <div className="crm-redesign-columns crm-assignment-panels promoter-assignments-grid">
-        <div id="promoter-sponsors" className="crm-detail-card crm-assignment-card">
-          <PromoterSponsors promoter={record} kind="sponsors" onChanged={refresh}
-            onCount={setSponsorCount}/>
-        </div>
         <div id="promoter-prospects" className="crm-detail-card crm-assignment-card">
           <PromoterSponsors promoter={record} kind="prospects" onChanged={refresh}
             onCount={setProspectCount}/>
+        </div>
+        <div id="promoter-sponsors" className="crm-detail-card crm-assignment-card">
+          <PromoterSponsors promoter={record} kind="sponsors" onChanged={refresh}
+            onCount={setSponsorCount}/>
         </div>
       </div>
       <div className="promoter-final-row">
         <PromoterNotes promoter={record} onChanged={refresh}/>
         <div className="crm-redesign-actions" aria-label="Promoter actions">
-          <button type="button" className="btn btn-secondary"
-            aria-expanded={consentOpen} onClick={()=>setConsentOpen(open=>!open)}>
-            Communication permissions
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={()=>setEditing(v=>!v)}>
-            <Icon name="pencil" size={17}/> Edit
+          <button type="button" className="btn btn-secondary crm-danger-btn"
+            onClick={()=>setDeleteOpen(true)}>
+            <Icon name="trash" size={17}/> Delete promoter
           </button>
           <button type="button"
             className={"btn "+(record.is_active?"btn-secondary crm-danger-btn":"btn-primary")}
@@ -150,9 +120,39 @@ export function PromoterDetails({id}:{id:string}){
           </button>
         </div>
       </div>
-      {consentOpen&&<ContactConsent recipientKind="promoter" recipientId={record.id}
-        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={record.is_active} onChanged={refresh}/>}
     </>}
+    {deleteOpen&&record&&<div className="crm-dialog-scrim">
+      <section className="crm-dialog" role="dialog" aria-modal="true"
+        aria-label="Confirm permanent promoter deletion">
+        <h2>Are you sure you want to delete this promoter?</h2>
+        <p>This is permanent, not deactivation. Promoters with any sponsor
+          assignment history cannot be deleted. Reassignment does not erase
+          that historical record.</p>
+        <div className="form-actions">
+          <button type="button" className="btn btn-secondary" disabled={deleting}
+            onClick={()=>setDeleteOpen(false)}>Cancel</button>
+          <button type="button" className="btn btn-danger" disabled={deleting}
+            onClick={async()=>{
+              setDeleting(true);setError("");
+              try{
+                const token=await (await fetch("/api/admin/session",{cache:"no-store"})).json();
+                const res=await fetch("/api/admin/promoters/"+id+"/permanent-delete",{
+                  method:"POST",credentials:"same-origin",
+                  headers:{"Content-Type":"application/json","X-CSRF-Token":token.csrf_token},
+                  body:JSON.stringify({version:record.version,confirmation:"DELETE"}),
+                });
+                if(!res.ok){
+                  const payload=await res.json().catch(()=>null);
+                  throw Error(typeof payload?.detail==="string"?payload.detail:
+                    "Could not permanently delete promoter.");
+                }
+                window.location.assign("/promoters");
+              }catch(e){setError(e instanceof Error?e.message:"Deletion failed.");}
+              finally{setDeleting(false);setDeleteOpen(false);}
+            }}>Yes, delete permanently</button>
+        </div>
+      </section>
+    </div>}
     {confirm&&record&&<PromoterStatusDialog promoter={record} onClose={()=>setConfirm(false)}
       onChanged={()=>{setConfirm(false);refresh();}}/>}
   </div></AppShell>;
