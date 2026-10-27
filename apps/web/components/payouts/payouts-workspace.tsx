@@ -128,7 +128,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const [notice,setNotice]=useState("");
   const [chosen,setChosen]=useState<Plan|null>(null);
   const [mode,setMode]=useState<"paid"|"pause"|"resume"|"close">("paid");
-  const [paymentDate,setPaymentDate]=useState(()=>dateInputFromISO(dateIST()));
+  const [paymentDate,setPaymentDate]=useState(()=>dateIST());
   const [method,setMethod]=useState<PaymentMethod>("upi");
   const [reference,setReference]=useState("");
   const [confirmed,setConfirmed]=useState(false);
