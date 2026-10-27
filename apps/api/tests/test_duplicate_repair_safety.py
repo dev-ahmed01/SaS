@@ -9,9 +9,10 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import create_engine, text
 
+from test_prospects import login
+
 from app import main as api_main
 from app.repair_local_duplicate import validate_links, validate_records
-from test_prospects import login, system
 
 pytest_plugins = ("test_prospects",)
 
