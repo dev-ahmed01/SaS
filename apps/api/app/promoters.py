@@ -13,7 +13,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
-from app.permanent_delete import DeleteConfirmation, check_dependencies, require_confirmation
 from app.models import (
     AdminSession,
     AdminUser,
@@ -23,6 +22,7 @@ from app.models import (
     PromoterAssignment,
     Prospect,
 )
+from app.permanent_delete import DeleteConfirmation, check_dependencies, require_confirmation
 from app.prospects import ProspectFields, _clean_text, _project_statuses
 from app.security import utc_now
 
