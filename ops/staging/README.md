@@ -1,5 +1,9 @@
 # SaS — InterServer VPS protected staging
 
+**Starting with one InterServer VPS? Use [SINGLE_VPS.md](SINGLE_VPS.md)** for the
+private PostgreSQL + Caddy + API + Next.js deployment. The instructions below
+are for deployments with an already provisioned **external TLS PostgreSQL** service.
+
 Deploys **Next.js + FastAPI** on an InterServer Linux VPS behind **Caddy HTTPS**.
 This is a staging bundle for Amaan's team to test workflows and performance,
 **not** production approval. It does not provision an InterServer account, domain,
