@@ -1411,7 +1411,7 @@ test("Prospect bulk import previews before atomically saving two unique contacts
   const p1="+9190"+suffix,p2="+9191"+suffix;
   await page.goto("/prospects");
   await page.getByRole("link",{name:"Import prospects"}).click();
-  await expect(page.getByRole("heading",{name:"Bulk add prospects"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Import prospects"})).toBeVisible();
   const csv=["Name,Mobile,City,Email,Sponsorship INR,Start Month",
     `"Bulk Test Shared",${p1},Bengaluru,,250,`,
     `"Bulk Test Shared",${p2},Mysuru,,500,`,
