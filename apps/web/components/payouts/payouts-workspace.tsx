@@ -86,7 +86,7 @@ export function PayoutAdd(){
           <input maxLength={80} aria-label="Payee Last Name"
             value={last} onChange={e=>{setLast(e.target.value);change();}}/></label>
         <div className="payout-inline-row form-cell full">
-          <label className="field"><span className="field-label">Type *</span>
+          <label className="field"><span className="field-label">Payment method *</span>
             <select aria-label="Payout payment type" value={method}
               onChange={e=>{setMethod(e.target.value as PaymentMethod);change();}}>
               <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
@@ -95,17 +95,18 @@ export function PayoutAdd(){
           <label className="field"><span className="field-label">Amount (₹) *</span>
             <input required inputMode="decimal" aria-label="Payout amount (₹)"
               value={value} onChange={e=>{setValue(e.target.value);change();}}/></label>
-          
+          <label className="field"><span className="field-label">Date paid *</span>
+            <input type="date" max={dateIST()} required value={paidOn}
+              aria-label="Payout date" onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
         </div>
-        <label className="field"><span className="field-label">Date paid *</span>
-          <input type="date" max={dateIST()} required value={paidOn}
-            aria-label="Payout date" onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
-        <label className="field"><span className="field-label">Purpose *</span>
-          <input required minLength={3} maxLength={240} aria-label="Payout purpose"
-            value={purpose} onChange={e=>{setPurpose(e.target.value);change();}}/></label>
-        <label className="field"><span className="field-label">UTR / Reference Number *</span>
-          <input required minLength={6} maxLength={100} aria-label="UTR"
-            value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
+        <div className="payout-inline-row payout-last-row form-cell full">
+          <label className="field"><span className="field-label">Purpose *</span>
+            <input required minLength={3} maxLength={240} aria-label="Payout purpose"
+              value={purpose} onChange={e=>{setPurpose(e.target.value);change();}}/></label>
+          <label className="field"><span className="field-label">UTR / Reference Number *</span>
+            <input required minLength={6} maxLength={100} aria-label="UTR"
+              value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
+        </div>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
@@ -265,8 +266,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
         <form onSubmit={submit} aria-label="Confirm payout action">
           {mode==="paid"?<>
             <label className="field"><span className="field-label">Date funds left account (IST) *</span>
-              <input required type="text" inputMode="numeric" placeholder="DD/MM/YY"
-                pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" aria-label="Date funds left account (DD/MM/YY)"
+              <input required type="date" max={dateIST()} aria-label="Date funds left account"
                 value={paymentDate}
                 onChange={e=>{setPaymentDate(e.target.value);request.current=null;}}/>
             </label>
