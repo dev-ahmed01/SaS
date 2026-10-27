@@ -1784,3 +1784,16 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .collection-row-actions .text-action{white-space:nowrap;font-size:11px;}
 .collection-row-actions .text-action:disabled{cursor:wait;opacity:.55;}
 .collection-review .form-success a{font-weight:600;text-decoration:underline;text-underline-offset:3px;}
+
+/* CRM detail and list revisions — consistent tabs and right-side actions. */
+.promoter-tabs .module-tabs{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.promoter-tabs .module-tab{min-width:0;width:100%;justify-content:center;}
+.crm-list-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-left:auto;flex-wrap:wrap;}
+.crm-list-actions .btn{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+.promoter-modern-detail .promoter-profile-card{margin-top:20px;width:100%;}
+.promoter-modern-detail .promoter-profile-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;}
+.promoter-modern-detail .promoter-assign-search{margin:5px 0 23px;padding:0 0 22px;border-bottom:1px solid var(--line);}
+.crm-redesign .crm-detail-card>.prospect-form-panel,.promoter-profile-card>.prospect-form-panel{margin:12px 0 0;box-shadow:none;max-width:none;}
+.crm-redesign .crm-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+@media(max-width:760px){.promoter-modern-detail .promoter-profile-facts{grid-template-columns:repeat(2,minmax(0,1fr));}.crm-list-actions{margin-left:0;width:100%;justify-content:flex-start;}}
+@media(max-width:500px){.promoter-modern-detail .promoter-profile-facts{grid-template-columns:1fr;}.crm-list-actions .btn{flex:1;justify-content:center;}}
