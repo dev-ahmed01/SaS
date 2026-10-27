@@ -32,6 +32,10 @@ function resolveRoute(segments: string[], method: string): string | null {
        ["request", "verify", "activate"].includes(segments[2]) && method === "POST")) {
     return "/" + segments[0] + "/otp/" + segments[2];
   }
+  if (segments.length === 2 && UUID.test(segments[0]) &&
+      segments[1] === "permanent-delete" && method === "POST") {
+    return "/" + segments[0] + "/permanent-delete";
+  }
   if (segments.length === 1 && UUID.test(segments[0]) &&
       ["GET", "PATCH", "DELETE"].includes(method)) return "/" + segments[0];
   if (segments.length === 2 && UUID.test(segments[0]) &&
