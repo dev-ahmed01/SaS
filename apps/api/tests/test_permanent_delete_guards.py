@@ -2,7 +2,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Promoter, Prospect
+from app.models import Promoter, Prospect, SponsorshipRate
 
 pytest_plugins = ("test_prospects",)
 
@@ -56,3 +56,49 @@ def test_assigned_promoter_cannot_be_deleted(system):
     assert r.status_code == 409, r.text
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Promoter)) == 1
+
+
+def test_nontrivial_sponsorship_history_blocks_prospect_deletion(system):
+    client, engine = system
+    csrf = session_token(client)
+    created = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "History Contact", "mobile_number": "+919899999994",
+    })
+    assert created.status_code == 201
+    person = created.json()
+    with Session(engine) as db:
+        rate = db.scalars(select(SponsorshipRate)).one()
+        db.add(SponsorshipRate(
+            organization_id=rate.organization_id,
+            prospect_id=rate.prospect_id,
+            effective_month=rate.effective_month.replace(year=rate.effective_month.year + 1),
+            amount_paise=rate.amount_paise,
+        ))
+        db.commit()
+    result = client.post(
+        "/v1/prospects/" + person["id"] + "/permanent-delete",
+        headers=csrf,
+        json={"version": person["version"], "confirmation": "DELETE"},
+    )
+    assert result.status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 1
+        assert db.scalar(select(func.count()).select_from(SponsorshipRate)) == 2
+
+
+def test_unused_promoter_may_be_permanently_deleted(system):
+    client, engine = system
+    csrf = session_token(client)
+    created = client.post("/v1/promoters", headers=csrf, json={
+        "full_name": "Unused Promoter", "mobile_number": "+919899999995",
+    })
+    assert created.status_code == 201
+    record = created.json()
+    result = client.post(
+        "/v1/promoters/" + record["id"] + "/permanent-delete",
+        headers=csrf,
+        json={"version": record["version"], "confirmation": "DELETE"},
+    )
+    assert result.status_code == 204
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Promoter)) == 0
