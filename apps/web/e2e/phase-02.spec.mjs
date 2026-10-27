@@ -372,7 +372,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await page.getByRole("button",{name:"Edit details"}).click();
   await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
   await page.getByRole("button",{name:"Save Changes"}).click();
-  await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
   await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
@@ -500,7 +500,7 @@ test("Admin can permanently delete an unused prospect with confirmation",async (
   const confirmation=page.getByRole("dialog",{name:"Confirm permanent prospect deletion"});
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button",{name:"Cancel"}).click();
-  await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Delete prospect"}).click();
   await confirmation.getByRole("button",{name:"Yes, delete permanently"}).click();
   await expect(page).toHaveURL(new RegExp("/prospects$"));
@@ -544,7 +544,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Overview"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Activity timeline"})).toBeVisible();
   await expect(page.getByText("Never paid")).toBeVisible();
   await expect(page.getByRole("combobox",{name:"Follow-up stage"})).toHaveValue(/.+/);
@@ -666,7 +666,7 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Activity timeline"})).toHaveCount(0);
   await expect(page.getByRole("region",{name:"Internal promoter notes"})).toBeVisible();
   await expect(page.getByText("Communication preferences")).toHaveCount(0);
