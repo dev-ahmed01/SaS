@@ -53,7 +53,8 @@ def test_repair_selects_only_seeded_test_record_and_retains_other_identity():
     {"full_name": "Actual Sponsor"},
 ])
 def test_repair_fails_closed_if_disposable_identity_changed(change):
-    removed = _candidate(full_name="First Prospect", **change)
+    removed = _candidate(full_name="First Prospect")
+    removed.update(change)
     kept = _candidate(full_name="Retained Contact")
     with pytest.raises(RuntimeError, match="STOP"):
         validate_records([removed, kept])
