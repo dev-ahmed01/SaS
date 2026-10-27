@@ -72,6 +72,22 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
         {title} ({links?.total??"…"})</h3>
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
+    {promoter.is_active&&kind==="prospects"&&<div className="promoter-assign-search">
+      <h3>Assign a prospect</h3>
+      <p className="panel-description">Search a registered person to assign.</p>
+      <label className="field"><span className="field-label">Search registered prospects</span>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Search name, phone or city" aria-label="Find sponsor"/></label>
+      {search.trim().length>=2&&<div className="promoter-candidate-list">
+        {available.length===0&&<span className="muted">No matching prospects found.</span>}
+        {available.filter(p=>!p.archived_at).map(candidate=>
+          <div key={candidate.id} className="promoter-sponsor-row">
+            <div><strong>{candidate.full_name}</strong><span>{candidate.mobile_number}</span></div>
+            <button type="button" className="btn btn-secondary" disabled={busy}
+              onClick={()=>change(candidate,false)}>Assign</button>
+          </div>)}
+      </div>}
+    </div>}
     {links?.items.length?<div className="promoter-assignment-scroll">
       <table className="promoter-assignment-table">
         <thead><tr><th scope="col">Name</th><th scope="col">City</th>
@@ -106,21 +122,6 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
           onClick={()=>setOffset(n=>n+20)}>Next</button>
       </div>
     </div>}
-    {promoter.is_active&&kind==="prospects"&&<div className="promoter-assign-search">
-      <h3>Assign a prospect</h3>
-      <p className="panel-description">Search a registered person to assign.</p>
-      <label className="field"><span className="field-label">Search registered prospects</span>
-        <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search name, phone or city" aria-label="Find sponsor"/></label>
-      {search.trim().length>=2&&<div className="promoter-candidate-list">
-        {available.length===0&&<span className="muted">No matching prospects found.</span>}
-        {available.filter(p=>!p.archived_at).map(candidate=>
-          <div key={candidate.id} className="promoter-sponsor-row">
-            <div><strong>{candidate.full_name}</strong><span>{candidate.mobile_number}</span></div>
-            <button type="button" className="btn btn-secondary" disabled={busy}
-              onClick={()=>change(candidate,false)}>Assign</button>
-          </div>)}
-      </div>}
-    </div>}
+
   </section>;
 }
