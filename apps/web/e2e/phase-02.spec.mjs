@@ -495,7 +495,7 @@ test("Admin can permanently delete an unused prospect with confirmation",async (
   await page.getByRole("textbox",{name:/First Name/}).fill(label);
   await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
-  await expect(page).toHaveURL(/\\/prospects\\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(new RegExp("/prospects/[0-9a-f-]{36}$"));
   await page.getByRole("button",{name:"Delete prospect"}).click();
   const confirmation=page.getByRole("dialog",{name:"Confirm permanent prospect deletion"});
   await expect(confirmation).toBeVisible();
@@ -503,7 +503,7 @@ test("Admin can permanently delete an unused prospect with confirmation",async (
   await expect(page.getByRole("heading",{name:"Personal details"})).toBeVisible();
   await page.getByRole("button",{name:"Delete prospect"}).click();
   await confirmation.getByRole("button",{name:"Yes, delete permanently"}).click();
-  await expect(page).toHaveURL(/\\/prospects$/);
+  await expect(page).toHaveURL(new RegExp("/prospects$"));
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
 });
