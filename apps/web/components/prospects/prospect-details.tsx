@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "../app-shell";
 import { Icon } from "../ui/icon";
 import { FollowUpLog } from "./followup-log";
-import { ContactConsent } from "../communication/contact-consent";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { ProspectEditor } from "./prospect-editor";
 import { StageDialog } from "./stage-dialog";
@@ -38,9 +37,8 @@ export function ProspectDetails({id}:{id:string}){
   const [activationNotice,setActivationNotice]=useState("");
   const [noticeRecord,setNoticeRecord]=useState<NoticeStatus|null>(null);
   const [editing,setEditing]=useState(false);
-  const [consentOpen,setConsentOpen]=useState(false);
   const [stageOpen,setStageOpen]=useState(false);
-  const [archiveOpen,setArchiveOpen]=useState(false);
+  const [deleteOpen,setDeleteOpen]=useState(false);
   const [busy,setBusy]=useState(false);
   const [revision,setRevision]=useState(0);
   const refresh=()=>setRevision(v=>v+1);
@@ -71,22 +69,28 @@ export function ProspectDetails({id}:{id:string}){
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[load,revision,id]);
-  async function archive(){
+  async function permanentlyDelete(){
     if(!record||busy)return;
     setBusy(true);setError("");
     try{
       const session=await fetch("/api/admin/session",{cache:"no-store"});
       if(!session.ok)throw Error("Session expired. Sign in again.");
       const {csrf_token}=await session.json();
-      const restore=Boolean(record.archived_at);
-      const response=await fetch("/api/admin/prospects/"+id+(restore?"/restore":""),{
-        method:restore?"POST":"DELETE",credentials:"same-origin",
-        headers:{"X-CSRF-Token":csrf_token,"If-Match":String(record.version)},
+      const response=await fetch("/api/admin/prospects/"+id+"/permanent-delete",{
+        method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json","X-CSRF-Token":csrf_token},
+        body:JSON.stringify({version:record.version,confirmation:"DELETE"}),
       });
-      if(!response.ok)throw Error(response.status===409?"Prospect changed elsewhere. Reload and retry.":"Could not update prospect.");
-      setArchiveOpen(false);refresh();
-    }catch(e){setError(e instanceof Error?e.message:"Could not update prospect.");}
-    finally{setBusy(false);}
+      if(!response.ok){
+        const payload=await response.json().catch(()=>null);
+        throw Error(response.status===409
+          ?(typeof payload?.detail==="string"?payload.detail:
+            "This prospect has linked history and cannot be permanently deleted.")
+          :"Could not permanently delete this prospect.");
+      }
+      window.location.assign("/prospects");
+    }catch(e){setError(e instanceof Error?e.message:"Could not delete prospect.");}
+    finally{setBusy(false);setDeleteOpen(false);}
   }
   const entries=filter==="all"?activity:activity.filter(item=>item.kind===filter);
   return <AppShell><div className="crm-details crm-redesign">
@@ -109,8 +113,6 @@ export function ProspectDetails({id}:{id:string}){
             </p>}
         </div>
       </div>
-      {editing&&<ProspectEditor initial={record}
-        onCancel={()=>setEditing(false)} onSaved={()=>{setEditing(false);refresh();}}/>}
       <div className="crm-summary-strip">
         <Tile label="Assigned promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
         <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)}
@@ -123,24 +125,26 @@ export function ProspectDetails({id}:{id:string}){
       </section>
       <div className="crm-redesign-columns">
         <section className="crm-detail-card">
-          <h2>Overview</h2>
-          <div className="crm-overview-grid">
-            <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)} / month</Tile>
-            <Tile label="Promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
-            <div className="crm-overview-total">
-              <Tile label="Total contribution">{money(record.total_contribution_paise)}</Tile>
-            </div>
+          <div className="crm-panel-heading"><h2>Personal details</h2>
+            {!record.archived_at&&<button type="button" className="btn btn-secondary"
+              onClick={()=>setEditing(v=>!v)} aria-expanded={editing}>
+              <Icon name="pencil" size={16}/> {editing?"Close edit":"Edit details"}
+            </button>}
           </div>
-          <details className="crm-profile-disclosure">
-            <summary>Contact &amp; profile</summary>
+          {editing?<ProspectEditor initial={record}
+            onCancel={()=>setEditing(false)} onSaved={()=>{setEditing(false);refresh();}}/>:
             <div className="crm-overview-grid">
               <Tile label="Full name">{record.full_name}</Tile>
+              <Tile label="Mobile (WhatsApp)">{record.mobile_number}</Tile>
+              <Tile label="Email">{record.email||"—"}</Tile>
               <Tile label="City">{record.area_city||"—"}</Tile>
-              <Tile label="Contact"><span>{record.mobile_number}</span>
-                {record.email&&<small>{record.email}</small>}</Tile>
-              {record.occupation&&<Tile label="Occupation">{record.occupation}</Tile>}
-            </div>
-          </details>
+              <Tile label="Occupation">{record.occupation||"—"}</Tile>
+              <Tile label="Assigned promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
+              <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)} / month</Tile>
+              <div className="crm-overview-total">
+                <Tile label="Total contribution">{money(record.total_contribution_paise)}</Tile>
+              </div>
+            </div>}
         </section>
         <section className="crm-detail-card">
           <div className="crm-panel-heading"><h2>Activity timeline</h2>
@@ -164,32 +168,29 @@ export function ProspectDetails({id}:{id:string}){
         </section>
       </div>
       <div className="crm-redesign-actions" aria-label="Prospect actions">
-        <button type="button" className="btn btn-secondary"
-          aria-expanded={consentOpen} onClick={()=>setConsentOpen(open=>!open)}>
-          Communication permissions
-        </button>
-        <button type="button" className="btn btn-secondary" disabled={Boolean(record.archived_at)}
-          onClick={()=>setEditing(v=>!v)}><Icon name="file" size={17}/> Edit</button>
-        <button type="button" className="btn btn-secondary crm-danger-btn" onClick={()=>setArchiveOpen(true)}>
-          <Icon name="trash" size={17}/> {record.archived_at?"Restore":"Delete"}</button>
+        <button type="button" className="btn btn-secondary crm-danger-btn"
+          onClick={()=>setDeleteOpen(true)}>
+          <Icon name="trash" size={17}/> Delete prospect</button>
         <button type="button" className="btn btn-primary" disabled={Boolean(record.archived_at)}
           onClick={()=>setStageOpen(true)}>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</button>
       </div>
-      {consentOpen&&<ContactConsent recipientKind="prospect" recipientId={record.id}
-        legacyWhatsAppOptIn={record.whatsapp_opt_in} allowGrant={!record.archived_at} onChanged={refresh}/>}
     </>}
     {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}
       onChanged={message=>{setStageOpen(false);setActivationNotice(message??"");refresh();}}/>}
-    {archiveOpen&&record&&<div className="crm-dialog-scrim">
-      <section className="crm-dialog" role="dialog" aria-modal="true" aria-label="Confirm prospect archive">
-        <h2>{record.archived_at?"Restore prospect?":"Archive this prospect?"}</h2>
-        <p>{record.archived_at?"This returns the prospect to normal lists.":
-          "The prospect will be hidden without deleting collections or activity history."}</p>
+    {deleteOpen&&record&&<div className="crm-dialog-scrim">
+      <section className="crm-dialog" role="dialog" aria-modal="true"
+        aria-label="Confirm permanent prospect deletion">
+        <h2>Are you sure you want to delete this prospect?</h2>
+        <p>This permanently deletes the record, not archives it. Records with
+          payment, communications, follow-up or assignment history cannot be
+          permanently deleted; the app will explain any restriction.</p>
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" disabled={busy}
-            onClick={()=>setArchiveOpen(false)}>Cancel</button>
-          <button type="button" className="btn btn-primary" disabled={busy}
-            onClick={archive}>{busy?"Saving…":record.archived_at?"Restore prospect":"Archive prospect"}</button>
+            onClick={()=>setDeleteOpen(false)}>Cancel</button>
+          <button type="button" className="btn btn-danger" disabled={busy}
+            onClick={()=>void permanentlyDelete()}>
+            {busy?"Deleting…":"Yes, delete permanently"}
+          </button>
         </div>
       </section>
     </div>}
