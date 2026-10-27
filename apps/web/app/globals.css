@@ -1784,3 +1784,14 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .collection-row-actions .text-action{white-space:nowrap;font-size:11px;}
 .collection-row-actions .text-action:disabled{cursor:wait;opacity:.55;}
 .collection-review .form-success a{font-weight:600;text-decoration:underline;text-underline-offset:3px;}
+
+/* Fathom 27-Oct: align Promoter tabs and Prospect file actions. */
+.promoter-tabs .module-tabs{grid-template-columns:repeat(3,minmax(0,1fr));}
+.crm-list-tools-right{display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+.crm-list-tools-right .btn{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+.crm-personal-card .prospect-form-panel,
+.promoter-profile-card .prospect-form-panel{box-shadow:none;border:0;padding:0;}
+.crm-personal-card .prospect-form-intro,
+.promoter-profile-card .prospect-form-intro{margin-bottom:15px;}
+.promoter-modern-detail .promoter-profile-card{width:100%;}
+@media(max-width:780px){.crm-list-tools-right{width:100%;justify-content:flex-end;}}
