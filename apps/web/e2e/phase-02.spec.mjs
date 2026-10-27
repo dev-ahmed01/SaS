@@ -358,7 +358,7 @@ test("Admin registers and searches a new prospect without fake payment status",a
   const label="Phase4 Browser Candidate "+(Date.now()%1000000);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(label);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("textbox",{name:/City/}).fill("Bengaluru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -469,7 +469,7 @@ test("Same-name prospects require different mobile numbers across registrations 
   async function register(mobile){
     await page.goto("/prospects/add");
     await page.getByRole("textbox",{name:/First Name/}).fill(label);
-    await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(mobile);
+    await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(mobile);
     await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
     await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
     await expect(page.getByText("Never paid")).toBeVisible();
@@ -478,7 +478,7 @@ test("Same-name prospects require different mobile numbers across registrations 
   await register(second);
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill("Different Person");
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(first);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(first);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page.locator(".prospect-form-panel .form-error")).toContainText(
     "That mobile number already belongs to a prospect"
@@ -539,7 +539,7 @@ test("Prospect CRM tabs, profile cards and reasoned inactivity work without chan
   expect(columns).toBe(5);
   await tabs.getByRole("link",{name:"Add Prospect"}).click();
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("combobox",{name:"Sponsorship Tokens"}).selectOption("2");
   await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
@@ -596,7 +596,7 @@ test("Prospect pipeline stages can be added, edited, assigned and safely deleted
   await expect(page.getByText(renamed,{exact:true})).toBeVisible();
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(person);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await expect(page.getByRole("combobox",{name:"Prospect Stage"})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -703,7 +703,7 @@ test("Promoter details safely assign and unassign a sponsor",async ({page})=>{
   const promoter="Phase5 Liaison "+key;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9676"+String(key).padStart(6,"0"));
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9676"+String(key).padStart(6,"0"));
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/promoters/add");
@@ -728,7 +728,7 @@ test("Collections All shows real monthly commitments, not imaginary deposits",as
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill(uniqueProspectMobile());
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await page.goto("/collections/all");
@@ -840,7 +840,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9826"+id);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9826"+id);
   await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -877,7 +877,7 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   const name="Receipt Retry Sponsor "+id;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9836"+id);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9836"+id);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await activateNewProspect(page);
@@ -921,7 +921,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9847"+id);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9847"+id);
   await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
@@ -1209,7 +1209,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   const sponsor="Consent Campaign "+suffix;
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
-  await page.getByRole("textbox",{name:/WhatsApp \/ Mobile/}).fill("9851"+suffix);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9851"+suffix);
   await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
