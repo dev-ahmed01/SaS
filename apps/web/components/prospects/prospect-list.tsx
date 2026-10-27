@@ -83,11 +83,15 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
       <label className="search-control"><Icon name="search" size={18}/><span className="sr-only">Search prospects</span>
         <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search names, WhatsApp, city, email…"/></label>
-      {view==="all"&&<Link href="/prospects/bulk" className="btn btn-secondary">Bulk add</Link>}
-      <button type="button" className="btn btn-secondary"
-        disabled={selectedIds.length===0} onClick={exportSelected}>
-        Export selected ({selectedIds.length}) CSV
-      </button>
+      <div className="crm-list-tools-right">
+        {view==="all"&&<Link href="/prospects/bulk" className="btn btn-secondary">
+          <Icon name="upload" size={16}/> Import CSV
+        </Link>}
+        <button type="button" className="btn btn-secondary"
+          disabled={selectedIds.length===0} onClick={exportSelected}>
+          <Icon name="download" size={16}/> Export selected ({selectedIds.length}) CSV
+        </button>
+      </div>
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
     <div className="table-scroll crm-table-scroll">
