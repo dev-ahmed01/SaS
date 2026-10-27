@@ -114,10 +114,11 @@ test("Consent and campaign review never send before explicit approval", () => {
   assert.doesNotMatch(campaigns,/Confirm existing WhatsApp permissions/);
   assert.doesNotMatch(templates,/Provider-approved template ID/);
   assert.match(proxy,/name==="consent-events"/);
-  assert.match(prospect,/ContactConsent/);
-  assert.match(promoter,/ContactConsent/);
-  assert.match(prospect,/Communication permissions/);
-  assert.match(promoter,/Communication permissions/);
+  // Consent recording still lives in the Communication module, not on
+  // the high-frequency Prospect and Promoter details pages.
+  assert.doesNotMatch(prospect,/ContactConsent|Communication permissions/);
+  assert.doesNotMatch(promoter,/ContactConsent|Communication permissions/);
+  assert.match(consent,/recipientKind/);
   assert.match(promoter,/PromoterSponsors/);
   assert.doesNotMatch(campaigns,/\/send|\/dispatch/);
 });
