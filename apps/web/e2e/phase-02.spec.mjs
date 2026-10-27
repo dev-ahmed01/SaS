@@ -1034,19 +1034,24 @@ test("Recorded one-time payouts remain in All and are excluded from Active recur
   await expect(page.getByRole("region",{name:"All payout plans"})
     .getByRole("row",{name:new RegExp("OneTime "+id)})).toBeVisible();
 });
-test("Add Payout removes recurring planning controls and exposes Type Amount Purpose in one row",async ({page,isMobile})=>{
+test("Add Payout aligns payment method, amount and date with purpose and reference below",async ({page,isMobile})=>{
   await page.goto("/payouts");
   await expect(page.getByRole("combobox",{name:"Payout type"})).toHaveCount(0);
-  const type=page.getByRole("combobox",{name:"Payout payment type"});
+  const method=page.getByRole("combobox",{name:"Payout payment type"});
   const amount=page.getByRole("textbox",{name:"Payout amount (₹)"});
+  const date=page.getByLabel("Payout date");
   const purpose=page.getByRole("textbox",{name:"Payout purpose"});
-  await expect(type).toBeVisible();
-  await expect(amount).toBeVisible();
-  await expect(purpose).toBeVisible();
-  const boxes=await Promise.all([type,amount,purpose].map(x=>x.boundingBox()));
+  const reference=page.getByRole("textbox",{name:"UTR"});
+  for(const field of [method,amount,date,purpose,reference]){
+    await expect(field).toBeVisible();
+  }
+  await expect(date).toHaveAttribute("type","date");
+  const boxes=await Promise.all([method,amount,date,purpose,reference].map(x=>x.boundingBox()));
   if(!isMobile){
     expect(Math.abs(boxes[0].y-boxes[1].y)).toBeLessThan(20);
     expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+    expect(Math.abs(boxes[3].y-boxes[4].y)).toBeLessThan(20);
+    expect(boxes[3].y).toBeGreaterThan(boxes[2].y);
   }
 });
 test("Payout write gateway rejects forged origins, missing CSRF and invalid routes",async ({page})=>{
