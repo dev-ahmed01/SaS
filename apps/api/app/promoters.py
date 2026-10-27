@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin, require_csrf
+from app.permanent_delete import DeleteConfirmation, check_dependencies, require_confirmation
 from app.models import (
     AdminSession,
     AdminUser,
@@ -435,6 +436,32 @@ def update_promoter(
         raise HTTPException(status_code=409, detail="Promoter phone already registered") from exc
     response.headers["Cache-Control"] = "no-store"
     return _present(database, promoter)
+
+
+@router.post("/{promoter_id}/permanent-delete", status_code=204)
+def permanently_delete_unused_promoter(
+    promoter_id: uuid.UUID,
+    payload: DeleteConfirmation,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> Response:
+    """Delete only unused promoters, never those with assignment history."""
+    require_confirmation(payload.confirmation)
+    admin = context[0]
+    promoter = _load(database, admin, promoter_id, lock=True)
+    _version(promoter, payload.version)
+    if promoter.whatsapp_opt_in:
+        raise HTTPException(status_code=409, detail="Promoter consent history must be retained")
+    check_dependencies(database, admin.organization_id, promoter.id, kind="promoter")
+    _audit(database, admin, promoter, "promoter.permanently_deleted",
+           before={"version": promoter.version}, after={"unused_registration": True})
+    try:
+        database.delete(promoter)
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(status_code=409, detail="Linked history prevents deletion") from exc
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/{promoter_id}/sponsors", response_model=SponsorPage)
