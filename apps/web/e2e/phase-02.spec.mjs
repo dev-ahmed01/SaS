@@ -1464,3 +1464,18 @@ test("Received This Month gateway filters by actual date paid",async ({page})=>{
   await expect(page.locator('input[aria-label="Filter collection history by month"]'))
     .toBeVisible();
 });
+
+test("Pasted spreadsheet rows preview without creating prospects",async ({page})=>{
+  const mobile="+9193"+Date.now().toString().slice(-8);
+  await page.goto("/prospects/bulk");
+  const pasted=[
+    "Name\tMobile\tCity\tEmail\tSponsorship INR\tStart Month",
+    "Pasted Sample\t"+mobile+"\tBengaluru\t\t250\t",
+  ].join("\n");
+  await page.getByRole("textbox",{name:"Paste prospect rows"}).fill(pasted);
+  await page.getByRole("button",{name:"Load pasted rows"}).click();
+  await expect(page.getByText("Pasted spreadsheet",{exact:false})).toBeVisible();
+  await page.getByRole("button",{name:"Preview import"}).click();
+  await expect(page.getByRole("heading",{name:"Preview results"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Confirm & add 1 prospects"})).toBeEnabled();
+});
