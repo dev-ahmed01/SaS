@@ -11,8 +11,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
-from app.models import Base, ManualCollection, Organization, Promoter, PromoterAssignment, Prospect
-from app.models import VerifiedCredit
+from app.models import (
+    Base,
+    ManualCollection,
+    Organization,
+    Promoter,
+    PromoterAssignment,
+    Prospect,
+    VerifiedCredit,
+)
 from app.mysql_trial_schema import assert_disposable_target, create_trial_schema, trial_metadata
 
 
