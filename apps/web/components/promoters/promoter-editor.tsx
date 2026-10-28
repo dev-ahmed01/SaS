@@ -12,7 +12,7 @@ const countryCodes=[
 ];
 type Values={
   first:string;last:string;code:string;mobile:string;email:string;
-  city:string;occupation:string;whatsapp_opt_in:boolean;
+  city:string;whatsapp_opt_in:boolean;
 };
 function starting(initial?:Promoter):Values{
   const number=initial?.mobile_number??"";
@@ -22,7 +22,7 @@ function starting(initial?:Promoter):Values{
   const last=initial?.last_name??initial?.full_name.split(" ").slice(1).join(" ")??"";
   return {
     first,last,code,mobile:number?number.slice(code.length):"",email:initial?.email??"",
-    city:initial?.area_city??"",occupation:initial?.occupation??"",
+    city:initial?.area_city??"",
     whatsapp_opt_in:initial?.whatsapp_opt_in??false,
   };
 }
@@ -53,7 +53,7 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
         first_name:first,last_name:last||null,
         mobile_number:mobile,whatsapp_number:mobile,
         email:form.email.trim()||null,
-        area_city:form.city.trim(),occupation:form.occupation.trim()||null,
+        area_city:form.city.trim(),
         whatsapp_opt_in:form.whatsapp_opt_in,
         ...(initial?{version:initial.version}:{}),
       };
@@ -106,13 +106,10 @@ export function PromoterEditor({initial,onSaved,onCancel}:{
               value={form.email} onChange={e=>set("email",e.target.value)}
               placeholder="name@example.com"/></label>
         </div>
-        <div className="prospect-field-row two">
+        <div className="prospect-field-row one">
           <label className="field"><span className="field-label">City</span>
             <input maxLength={120} autoComplete="address-level2" value={form.city}
               onChange={e=>set("city",e.target.value)} placeholder="City"/></label>
-          <label className="field"><span className="field-label">Occupation</span>
-            <input maxLength={120} value={form.occupation}
-              onChange={e=>set("occupation",e.target.value)} placeholder="Occupation"/></label>
         </div>
         {!edit&&<label className="prospect-consent"><input type="checkbox"
           checked={form.whatsapp_opt_in}
