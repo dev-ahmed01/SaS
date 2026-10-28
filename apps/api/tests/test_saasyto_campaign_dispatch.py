@@ -23,8 +23,8 @@ from app.models import (
     SaasytoCampaignRun,
     SaasytoDispatchThrottle,
 )
-from app.saasyto_client import Submission
 from app.saasyto_campaigns import _reserve_sender_slot
+from app.saasyto_client import Submission
 from app.security import utc_now
 
 RUNNER = "synthetic-saasyto-runner-secret-exactly-long-enough"
