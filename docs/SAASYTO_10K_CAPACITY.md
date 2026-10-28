@@ -16,6 +16,13 @@ claims of unlimited sends are not a guaranteed throughput or delivery SLA.
 Saasyto's product categories (Official, Personal, Virtual) are not
 interchangeable and must not be used to infer one another's quotas.
 
+Saasyto's public **personal-account campaign guide** recommends a **90-120
+second gap** between messages to reduce sender blocking risk:
+https://saasyto.com/product/saasyto-personal-whatsapp-subscription/
+This is **not a documented rate limit for our exact direct-send API**. Until
+Saasyto confirms which service our instance uses, production defaults to
+conservative sender-wide spacing; a 10k daily turnaround is **not promised**.
+
 Ask Saasyto for written confirmation of the sending rate, burst limits,
 429 behavior and Retry-After handling, sender/account quotas, webhook
 signatures, delivery/read receipts, opt-in requirements and service policy
@@ -34,14 +41,19 @@ consent or anti-spam policies.
 - Configurable campaign worker throughput with conservative defaults:
   `SAASYTO_CAMPAIGN_BATCH_SIZE=10` per private worker tick,
   `SAASYTO_CAMPAIGN_MAX_PER_MINUTE=10` (rolling 60 seconds, per
-  organization), `SAASYTO_RATE_LIMIT_PAUSE_MINUTES=15`.
+  organization), `SAASYTO_CAMPAIGN_MIN_INTERVAL_SECONDS=90` between
+  individual claim attempts across campaigns, and
+  `SAASYTO_RATE_LIMIT_PAUSE_MINUTES=15`. The interval is intentionally
+  restrictive for linked personal senders; lowering it requires the
+  provider's written rate authorization and a controlled rehearsal.
 - A database row lock on the organization plus a rolling claim count
   prevents **concurrent campaign workers in the same organization**
   from claiming beyond its configured quota. Do not start extra
   sender instances as a workaround for provider quotas.
 - A provider **HTTP 429** records a terminal *rejected* attempt and
-  pauses the *remaining unsubmitted* campaign queue for 15 minutes;
-  the rejected member is **not** implicitly retried.
+  pauses all approved campaigns for that Foundation sender for 15 minutes;
+  the rejected member is **not** implicitly retried. If that was the
+  last queued recipient, its run is completed rather than left hanging.
 - Aggregated counts are calculated in SQL across the full queue;
   recipient lists are paged (100 rows/page). Counts do not pretend
   Saasyto HTTP acceptance equals WhatsApp *delivered* or *read*.
@@ -56,18 +68,20 @@ one-off OTP/receipts. The quota applies to the campaign worker only.
 
 ## Throughput planning (not a performance guarantee)
 
-At the **default** campaign budget of 10 submissions/minute:
+The **default** 90-second minimum gap means the personal-sender
+starting configuration will not approach the 10/minute quota. For 10,000
+attempts it needs at least **250 hours (~10.4 days)** even with a frequent
+scheduler; a 60-second polling cadence may stretch this to nearly 14 days.
 
-- 1,000 recipients: at least 100 minutes;
-- 10,000 recipients: at least 1,000 minutes (~16 h 40 min).
-
-At **30 submissions/minute** (only if confirmed and approved by
-Saasyto) 10,000 requires at least ~5 h 34 min. A 60-second
-worker tick with the default batch size only attempts 10/min regardless
-of the configured minute cap; after approval, a 15-second poll interval
-and a bounded batch size can safely approach 30/min. Batch size is
-capped at 15 requests/tick to stay below the 90-second scheduler timeout
-under the connector's 5-second/request timeout. Network response time,
+For a provider-confirmed official/API sender, the Foundation can explicitly
+reduce `SAASYTO_CAMPAIGN_MIN_INTERVAL_SECONDS` and adjust the batch/minute
+caps. At an **approved** 10/min sustained rate, 10k requires at least
+16 h 40 min; at 30/min, at least 5 h 34 min. These are throughput calculations,
+not delivery SLAs. 10k/day requires more than 6.94 requests/minute sustained
+and written provider authorization. A 15-second worker tick and a bounded batch
+may approach 30/min only when the interval and minute budget permit it.
+Batch size is capped at 15 requests/tick to stay below the 90-second scheduler
+timeout under the connector's 5-second/request timeout. Network response time,
 consent suppression, provider downtime and pauses can add delay.
 
 Do not change dispatch env settings to achieve a marketing target
