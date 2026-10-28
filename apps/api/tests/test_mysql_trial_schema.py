@@ -7,21 +7,28 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
+from app.accounting import ist_today, month_start
 from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
+    AdminUser,
+    AuditEvent,
     Base,
     ManualCollection,
+    ManualCollectionReversal,
+    MessageOutbox,
     Organization,
+    PayoutPayment,
     Promoter,
     PromoterAssignment,
     Prospect,
+    SponsorshipRate,
     VerifiedCredit,
 )
 from app.mysql_trial_schema import assert_disposable_target, create_trial_schema, trial_metadata
@@ -245,3 +252,142 @@ def test_mysql_fastapi_login_prospect_and_promoter_smoke(mysql_trial_engine, mon
         })
         assert promoter.status_code == 201, promoter.text
         assert client.get("/v1/promoters/" + promoter.json()["id"]).status_code == 200
+
+
+def test_mysql_financial_http_idempotency_reversal_and_payout(mysql_trial_engine, monkeypatch):
+    """Exercise the real ledger API and DB constraints using fake data only.
+
+    No external WhatsApp request is ever enabled: sponsor opt-in is false and
+    every collection notification must be suppressed in the outbox.
+    """
+    now_day = ist_today()
+    billing_month = month_start(now_day)
+    with Session(mysql_trial_engine) as db:
+        admin = db.scalars(
+            select(AdminUser).where(AdminUser.email == "trial-admin@example.com")
+        ).one()
+        sponsor = Prospect(
+            organization_id=admin.organization_id,
+            full_name="Synthetic audited finance sponsor",
+            mobile_number="+919876509923",
+            area_city="Trial Only",
+            monthly_contribution_paise=25000,
+            crm_stage="active",
+            lifecycle_status="active",
+            start_month=billing_month,
+            whatsapp_opt_in=False,
+        )
+        db.add(sponsor)
+        db.flush()
+        sponsor_id = sponsor.id
+        db.add(SponsorshipRate(
+            organization_id=admin.organization_id,
+            prospect_id=sponsor.id,
+            effective_month=billing_month,
+            amount_paise=25000,
+        ))
+        db.commit()
+
+    monkeypatch.setattr("app.auth.get_engine", lambda: mysql_trial_engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="mysql-trial-auth-secret-only-not-production-12345",
+            app_env="test",
+        ),
+    )
+    with TestClient(app) as client:
+        login = client.post("/v1/auth/login", json={
+            "email": "trial-admin@example.com",
+            "password": "synthetic-mysql-admin-long-password",
+        })
+        assert login.status_code == 200, login.text
+        csrf = {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+        receipt_payload = {
+            "request_id": str(uuid.uuid4()),
+            "prospect_id": str(sponsor_id),
+            "period_month": billing_month.isoformat(),
+            "received_on": now_day.isoformat(),
+            "amount_paise": 25000,
+            "payment_method": "upi",
+            "receipt_reference": "MYSQL-TRIAL-REF-90001",
+            "funds_confirmed": True,
+        }
+        first = client.post("/v1/collections", headers=csrf, json=receipt_payload)
+        assert first.status_code == 201, first.text
+        collection_id = first.json()["id"]
+        assert first.json()["amount_paise"] == 25000
+        assert first.json()["message_status"] == "suppressed"
+
+        replay = client.post("/v1/collections", headers=csrf, json=receipt_payload)
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["id"] == collection_id
+
+        duplicate_ref = client.post("/v1/collections", headers=csrf, json={
+            **receipt_payload,
+            "request_id": str(uuid.uuid4()),
+        })
+        assert duplicate_ref.status_code == 409, duplicate_ref.text
+
+        wrong_amount = client.post("/v1/collections", headers=csrf, json={
+            **receipt_payload,
+            "request_id": str(uuid.uuid4()),
+            "receipt_reference": "MYSQL-TRIAL-REF-90002",
+            "amount_paise": 37500,
+        })
+        assert wrong_amount.status_code == 422, wrong_amount.text
+
+        reverse_payload = {
+            "request_id": str(uuid.uuid4()),
+            "reason_code": "wrong_amount",
+            "confirmation": "REVERSE",
+        }
+        rev_url = "/v1/collections/" + collection_id + "/reverse"
+        reversed_once = client.post(rev_url, headers=csrf, json=reverse_payload)
+        assert reversed_once.status_code == 201, reversed_once.text
+        assert reversed_once.json()["reversed"] is True
+        reversed_retry = client.post(rev_url, headers=csrf, json=reverse_payload)
+        assert reversed_retry.status_code == 200, reversed_retry.text
+        assert reversed_retry.json()["id"] == reversed_once.json()["id"]
+        assert client.post(rev_url, headers=csrf, json={
+            **reverse_payload, "request_id": str(uuid.uuid4()),
+        }).status_code == 409
+
+        payout_payload = {
+            "request_id": str(uuid.uuid4()),
+            "first_name": "Synthetic",
+            "last_name": "Payee",
+            "purpose": "Trial audit payment",
+            "amount_paise": 25000,
+            "paid_on": now_day.isoformat(),
+            "payment_method": "bank_transfer",
+            "payment_reference": "MYSQL-TRIAL-PAYOUT-001",
+            "funds_disbursed": True,
+        }
+        outgoing = client.post("/v1/payouts/quick", headers=csrf, json=payout_payload)
+        assert outgoing.status_code == 201, outgoing.text
+        outgoing_retry = client.post("/v1/payouts/quick", headers=csrf, json=payout_payload)
+        assert outgoing_retry.status_code == 200, outgoing_retry.text
+        assert outgoing_retry.json()["id"] == outgoing.json()["id"]
+        assert client.post("/v1/payouts/quick", headers=csrf, json={
+            **payout_payload, "request_id": str(uuid.uuid4()),
+        }).status_code == 409
+
+    with Session(mysql_trial_engine) as db:
+        assert db.scalar(select(func.count()).select_from(ManualCollection).where(
+            ManualCollection.prospect_id == sponsor_id,
+        )) == 1
+        assert db.scalar(select(func.count()).select_from(ManualCollectionReversal).where(
+            ManualCollectionReversal.collection_id == uuid.UUID(collection_id),
+        )) == 1
+        assert db.scalar(select(func.count()).select_from(PayoutPayment).where(
+            PayoutPayment.request_id == uuid.UUID(payout_payload["request_id"]),
+        )) == 1
+        outbox = db.scalars(select(MessageOutbox).where(
+            MessageOutbox.collection_id == uuid.UUID(collection_id),
+        )).one()
+        assert outbox.status == "suppressed"
+        assert db.scalar(select(func.count()).select_from(AuditEvent).where(
+            AuditEvent.action == "collection.manual_recorded",
+            AuditEvent.entity_id == collection_id,
+        )) == 1
