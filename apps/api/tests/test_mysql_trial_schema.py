@@ -662,7 +662,11 @@ def test_mysql_future_ist_campaign_date_write_is_canonical_utc(mysql_trial_engin
 
 
 def test_mysql_staging_preflight_requires_existing_schema_and_policy(mysql_trial_engine):
-    engine = _mysql_staging_engine(str(mysql_trial_engine.url))
+    # Engine.__str__ deliberately redacts passwords; the internal staging
+    # connection receives the original credential-bearing URL, never logs it.
+    engine = _mysql_staging_engine(
+        mysql_trial_engine.url.render_as_string(hide_password=False)
+    )
     try:
         with engine.connect() as conn:
             assert conn.scalar(text("SELECT @@session.time_zone")) == "+00:00"
