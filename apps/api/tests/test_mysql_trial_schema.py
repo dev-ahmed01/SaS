@@ -64,6 +64,12 @@ def test_mysql_metadata_compiles_without_changing_postgresql_models():
     assert "mysql_current_prospect_id" in index_ddl
     assert "ENGINE=InnoDB" in table_ddl
     assert "utf8mb4" in table_ddl
+    assert "DATETIME(6)" in str(
+        CreateTable(candidate.tables["sponsor_otp_challenges"])
+        .compile(dialect=mysql.dialect())
+    )
+    # The main PostgreSQL model remains independent of the trial override.
+    assert Base.metadata.tables["sponsor_otp_challenges"].c.created_at.type.timezone
     assert len(candidate.tables) == len(Base.metadata.tables)
 
 
@@ -573,3 +579,36 @@ def test_mysql_queue_skip_locked_never_claims_same_recipient(mysql_trial_engine)
         )).all()
         assert len(found) == 2
         assert all(item.status == "claimed" for item in found)
+
+
+
+def test_mysql_otp_timestamp_roundtrip_retains_microseconds(mysql_trial_engine):
+    """A history copy must not silently truncate PG timestamp fractions."""
+    instant = datetime(2026, 10, 28, 12, 34, 56, 123456, tzinfo=UTC)
+    with Session(mysql_trial_engine) as db:
+        admin = db.scalars(
+            select(AdminUser).where(AdminUser.email == "trial-admin@example.com")
+        ).one()
+        person = db.scalars(select(Prospect).where(
+            Prospect.organization_id == admin.organization_id,
+            Prospect.mobile_number == "+919876509924",
+        )).one()
+        record = SponsorOtpChallenge(
+            organization_id=admin.organization_id,
+            prospect_id=person.id,
+            phone_digest="0" * 64,
+            code_digest="1" * 64,
+            status="unknown",
+            attempts=0,
+            created_at=instant,
+            expires_at=instant + timedelta(minutes=2),
+        )
+        db.add(record)
+        db.flush()
+        key = record.id
+        db.commit()
+    with Session(mysql_trial_engine) as db:
+        restored = db.get(SponsorOtpChallenge, key)
+        assert as_utc(restored.created_at) == instant
+        assert as_utc(restored.expires_at) == instant + timedelta(minutes=2)
+        assert restored.created_at.microsecond == 123456
