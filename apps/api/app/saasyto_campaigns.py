@@ -453,6 +453,52 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     return phone, message
 
 
+
+def _reconcile_stale_claims(db: Session, *, limit: int = 200) -> int:
+    """Close abandoned dispatch claims without resending uncertain messages.
+
+    Claims are committed before network I/O. A process crash leaves them in
+    'claimed' forever unless a separate pass records the uncertain outcome.
+    Saasyto's client request times out after five seconds; 15 minutes allows
+    a large safety margin. Unknown attempts require manual investigation.
+    """
+    now = utc_now()
+    stale = db.scalars(select(SaasytoCampaignRecipient).where(
+        SaasytoCampaignRecipient.status == "claimed",
+        SaasytoCampaignRecipient.claimed_at < now - timedelta(minutes=15),
+    ).order_by(SaasytoCampaignRecipient.claimed_at).limit(limit).with_for_update(
+        skip_locked=True,
+    )).all()
+    if not stale:
+        return 0
+    affected = set()
+    for item in stale:
+        item.status = "unknown"
+        item.reason = "worker_interrupted"
+        item.finished_at = now
+        affected.add(item.run_id)
+        db.add(AuditEvent(
+            organization_id=item.organization_id, actor_admin_id=None,
+            action="saasyto.claim_reconciled_unknown",
+            entity_type="saasyto_recipient", entity_id=str(item.id),
+            after_data={"status": "unknown"},
+        ))
+    db.commit()
+    for run_id in affected:
+        run = db.get(SaasytoCampaignRun, run_id)
+        if run is None or run.status != "approved":
+            continue
+        remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
+            SaasytoCampaignRecipient.run_id == run_id,
+            SaasytoCampaignRecipient.status.in_(("queued", "claimed")),
+        ).limit(1))
+        if remaining is None:
+            run.status = "completed"
+    db.commit()
+    return len(stale)
+
+
+
 def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
                   max_attempts: int | None = None) -> dict[str, int]:
     """Claim once then submit; used by the private worker and one-phone manual pilot.
@@ -671,6 +717,9 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    reconciled = _reconcile_stale_claims(db)
     counts = _dispatch_due(db, cfg)
+    if reconciled:
+        counts["unknown"] = counts.get("unknown", 0) + reconciled
     response.headers["Cache-Control"] = "no-store"
     return counts
