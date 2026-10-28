@@ -741,3 +741,22 @@ def test_crashed_claim_expires_to_unknown_without_resending(dispatch_system, mon
     assert summary["status"] == "completed"
     assert summary["unknown"] == 1
     assert summary["claimed"] == 0
+
+
+def test_personal_sender_default_spacing_overrides_fast_poll(dispatch_system):
+    """The personal account's recommended 90s gap dominates the RPM cap."""
+    _, engine = dispatch_system
+    cfg = _cfg()
+    cfg.saasyto_instance_id = "safe-personal-sender"
+    cfg.saasyto_max_attempts_per_minute = 120
+    cfg.saasyto_min_interval_seconds = 90
+    now = utc_now()
+    with Session(engine) as db:
+        assert _reserve_sender_slot(db, cfg, now)
+        db.commit()
+    with Session(engine) as db:
+        assert not _reserve_sender_slot(db, cfg, now + timedelta(seconds=60))
+        db.rollback()
+    with Session(engine) as db:
+        assert _reserve_sender_slot(db, cfg, now + timedelta(seconds=90))
+        db.commit()
