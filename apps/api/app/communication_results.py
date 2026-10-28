@@ -9,9 +9,9 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import db_session, get_admin
@@ -29,7 +29,8 @@ from app.models import (
 
 router = APIRouter(prefix="/v1/communication", tags=["Campaign results"])
 MAX_RESULTS = 100
-MAX_RECIPIENTS = 2000
+MAX_RECIPIENTS = 500
+DEFAULT_PAGE_SIZE = 100
 
 
 class CampaignResultSummary(BaseModel):
@@ -72,6 +73,8 @@ class CampaignResultDetail(BaseModel):
     eligible_in_review: int = 0
     excluded_in_review: int = 0
     excluded_reasons: dict[str, int] = Field(default_factory=dict)
+    page_offset: int = 0
+    page_limit: int = DEFAULT_PAGE_SIZE
     recipients: list[RecipientResult] = Field(default_factory=list)
     eligible_recipients: list[RecipientResult] = Field(default_factory=list)
     excluded_recipients: list[RecipientResult] = Field(default_factory=list)
@@ -162,14 +165,16 @@ def campaign_summaries(
     last_attempts: dict[uuid.UUID, datetime] = {}
     run_ids = [row.id for row in runs.values()]
     if run_ids:
-        for run_id, state, finished_at in db.execute(select(
+        for run_id, state, total, finished_at in db.execute(select(
             SaasytoCampaignRecipient.run_id, SaasytoCampaignRecipient.status,
-            SaasytoCampaignRecipient.finished_at,
+            func.count(), func.max(SaasytoCampaignRecipient.finished_at),
         ).where(
             SaasytoCampaignRecipient.organization_id == org,
             SaasytoCampaignRecipient.run_id.in_(run_ids),
+        ).group_by(
+            SaasytoCampaignRecipient.run_id, SaasytoCampaignRecipient.status,
         )):
-            totals[run_id][state] += 1
+            totals[run_id][state] = total
             if finished_at is not None and (
                 run_id not in last_attempts or finished_at > last_attempts[run_id]
             ):
@@ -200,6 +205,8 @@ def campaign_detail(
     identifier: uuid.UUID, response: Response,
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
     db: Annotated[Session, Depends(db_session)],
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=MAX_RECIPIENTS)] = DEFAULT_PAGE_SIZE,
 ) -> CampaignResultDetail:
     org = context[0].organization_id
     campaign = db.scalars(select(CommunicationCampaign).where(
@@ -216,7 +223,7 @@ def campaign_detail(
     queue = db.scalars(select(SaasytoCampaignRecipient).where(
         SaasytoCampaignRecipient.organization_id == org,
         SaasytoCampaignRecipient.run_id == run.id,
-    ).order_by(SaasytoCampaignRecipient.id).limit(MAX_RECIPIENTS)).all() if run else []
+    ).order_by(SaasytoCampaignRecipient.id).offset(offset).limit(limit)).all() if run else []
     preflight = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == org,
         CommunicationPreparation.campaign_id == campaign.id,
@@ -228,19 +235,39 @@ def campaign_detail(
         CommunicationRecipientSnapshot.organization_id == org,
         CommunicationRecipientSnapshot.preparation_id == preflight.id,
         CommunicationRecipientSnapshot.status == "suppressed",
-    ).order_by(CommunicationRecipientSnapshot.id).limit(MAX_RECIPIENTS)).all() if preflight else []
+    ).order_by(CommunicationRecipientSnapshot.id).offset(offset).limit(limit)).all() if preflight else []
 
     eligible = db.scalars(select(CommunicationRecipientSnapshot).where(
         CommunicationRecipientSnapshot.organization_id == org,
         CommunicationRecipientSnapshot.preparation_id == preflight.id,
         CommunicationRecipientSnapshot.status == "eligible",
-    ).order_by(CommunicationRecipientSnapshot.id).limit(MAX_RECIPIENTS)).all() if preflight else []
+    ).order_by(CommunicationRecipientSnapshot.id).offset(offset).limit(limit)).all() if preflight else []
     keys = {(row.recipient_kind, row.recipient_id)
             for row in [*queue, *eligible, *excluded]}
     lookup = _people(db, org, keys)
-    counts = Counter(row.status for row in queue)
-    reasons = Counter(row.suppression_reason for row in excluded)
-    reasons.pop(None, None)
+    # Aggregate across the complete run; details are paginated, totals are not.
+    counts = Counter(dict(db.execute(select(
+        SaasytoCampaignRecipient.status, func.count(),
+    ).where(
+        SaasytoCampaignRecipient.organization_id == org,
+        SaasytoCampaignRecipient.run_id == run.id,
+    ).group_by(SaasytoCampaignRecipient.status)))) if run else Counter()
+    last_attempt = db.scalar(select(func.max(
+        SaasytoCampaignRecipient.finished_at,
+    )).where(
+        SaasytoCampaignRecipient.organization_id == org,
+        SaasytoCampaignRecipient.run_id == run.id,
+    )) if run else None
+    reasons = dict(db.execute(select(
+        CommunicationRecipientSnapshot.suppression_reason, func.count(),
+    ).where(
+        CommunicationRecipientSnapshot.organization_id == org,
+        CommunicationRecipientSnapshot.preparation_id == preflight.id,
+        CommunicationRecipientSnapshot.status == "suppressed",
+        CommunicationRecipientSnapshot.suppression_reason.is_not(None),
+    ).group_by(
+        CommunicationRecipientSnapshot.suppression_reason,
+    ))) if preflight else {}
     response.headers["Cache-Control"] = "no-store"
     return CampaignResultDetail(
         campaign_id=campaign.id, title=campaign.title,
@@ -250,13 +277,13 @@ def campaign_detail(
         summary=_summary(
             campaign.id, run, counts,
             preflight.suppressed_count if preflight else 0,
-            max((row.finished_at for row in queue if row.finished_at is not None),
-                default=None),
+            last_attempt,
         ),
         latest_review_at=preflight.evaluated_at if preflight else None,
         eligible_in_review=preflight.eligible_count if preflight else 0,
         excluded_in_review=preflight.suppressed_count if preflight else 0,
         excluded_reasons=dict(reasons),
+        page_offset=offset, page_limit=limit,
         recipients=[_recipient(row, lookup) for row in queue],
         eligible_recipients=[
             RecipientResult(
