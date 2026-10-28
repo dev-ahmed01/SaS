@@ -1,6 +1,7 @@
 """Deployment configuration, deliberately separate from organization business settings."""
 
 from datetime import datetime
+import re
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
@@ -14,6 +15,9 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "staging", "production"] = "development"
     database_url: str
+    # Allows a disposable localhost MySQL *staging* rehearsal only. No live
+    # InterServer database, no production authorization or sending.
+    mysql_staging_trial_enabled: bool = False
     auth_secret: str | None = None
     upi_match_secret: str | None = None
     # Never enable for staging/production; local ephemeral DB only.
@@ -100,8 +104,33 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Local demo credentials require the loopback-only sas_dev PostgreSQL database"
                 )
-        if self.app_env in ("staging", "production") and not self.database_url.startswith(
-            "postgresql+psycopg://"
+        mysql_trial = self.mysql_staging_trial_enabled
+        if mysql_trial:
+            parsed_trial = urlsplit(self.database_url)
+            if not (
+                self.app_env == "staging"
+                and parsed_trial.scheme == "mysql+pymysql"
+                and parsed_trial.hostname == "127.0.0.1"
+                and parsed_trial.port == 3306
+                and parsed_trial.username
+                and parsed_trial.password
+                and re.fullmatch(r"/sas_mysql_trial_[a-z0-9_]{3,48}", parsed_trial.path)
+                and not parsed_trial.query
+                and not parsed_trial.fragment
+                and not any((
+                    self.messaging_delivery_enabled,
+                    self.messaging_sender_approved,
+                    self.saasyto_delivery_enabled,
+                    self.saasyto_sender_approved,
+                    self.saasyto_worker_enabled,
+                    self.otp_delivery_enabled,
+                    self.otp_saasyto_enabled,
+                    self.otp_activation_notice_enabled,
+                ))
+            ):
+                raise ValueError("MySQL staging trial must be isolated and send-disabled")
+        if self.app_env in ("staging", "production") and not (
+            self.database_url.startswith("postgresql+psycopg://") or mysql_trial
         ):
             raise ValueError("Staging and production require PostgreSQL via psycopg")
         if self.app_env in ("staging", "production") and (
@@ -112,7 +141,7 @@ class Settings(BaseSettings):
             not self.upi_match_secret or len(self.upi_match_secret) < 32
         ):
             raise ValueError("Staging and production require UPI_MATCH_SECRET of 32+ characters")
-        if self.app_env in ("staging", "production"):
+        if self.app_env in ("staging", "production") and not mysql_trial:
             parsed_db = urlsplit(self.database_url)
             tls_options = parse_qs(parsed_db.query, keep_blank_values=True)
             modes = tls_options.get("sslmode", [])
