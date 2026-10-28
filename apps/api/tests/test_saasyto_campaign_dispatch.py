@@ -651,3 +651,15 @@ def test_10k_queue_status_aggregates_in_database(dispatch_system, monkeypatch):
     assert read.status_code == 200, read.text
     assert read.json()["queued"] == 10_000
     assert read.json()["accepted_unverified"] == 0
+    # Per-recipient inspection is paginated while the totals remain complete.
+    detail = client.get("/v1/communication/campaigns/"+cid+
+                        "/results?page=2&page_size=100")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["recipient_total"] == 10_000
+    assert detail.json()["summary"]["queued"] == 10_000
+    assert len(detail.json()["recipients"]) == 100
+    assert detail.json()["page"] == 2
+    listing = client.get("/v1/communication/campaigns/results")
+    assert listing.status_code == 200
+    summary = next(row for row in listing.json() if row["campaign_id"] == cid)
+    assert summary["queued"] == 10_000
