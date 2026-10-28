@@ -93,7 +93,6 @@ export function PromoterDetails({id}:{id:string}){
               <Fact label="WhatsApp">{record.whatsapp_number}</Fact>}
             <Fact label="Email">{record.email||"—"}</Fact>
             <Fact label="City">{record.area_city||"—"}</Fact>
-            <Fact label="Occupation">{record.occupation||"—"}</Fact>
           </dl>}
       </section>
       <div className="crm-redesign-columns crm-assignment-panels promoter-assignments-grid">
