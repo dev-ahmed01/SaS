@@ -6,8 +6,9 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app import mysql_trial_copy as copier
@@ -25,7 +26,11 @@ from app.models import (
     SponsorOtpChallenge,
     VerifiedCredit,
 )
-from app.mysql_trial_schema import create_trial_schema, make_trial_engine
+from app.mysql_trial_schema import (
+    create_trial_schema,
+    install_trial_financial_guards,
+    make_trial_engine,
+)
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +43,7 @@ def disposable_pair():
     target = make_trial_engine(target_url)
     try:
         Base.metadata.create_all(source, checkfirst=False)
-        create_trial_schema(target)
+        create_trial_schema(target, defer_payment_guards=True)
         yield source, target
     finally:
         source.dispose()
@@ -109,6 +114,35 @@ def _seed_pg(source):
         )
         db.add(payment)
         db.flush()
+        # A grandfathered historical payment predates the enforced ₹250
+        # increment. Its exact amount and verified credit must survive.
+        legacy_credit = VerifiedCredit(
+            organization_id=admin.organization_id,
+            prospect_id=person.id,
+            period_month=date(2025, 5, 1),
+            amount_paise=12500,
+            source_type="manual_attested",
+            source_key="legacy-half-tier-before-policy",
+            verified_at=fixed,
+        )
+        db.add(legacy_credit)
+        db.flush()
+        legacy_payment = ManualCollection(
+            organization_id=admin.organization_id,
+            prospect_id=person.id,
+            verified_credit_id=legacy_credit.id,
+            request_id=uuid.uuid4(),
+            request_payload_hash="2" * 64,
+            reference_digest="3" * 64,
+            reference_mask="****5678",
+            received_on=date(2025, 5, 20),
+            period_month=date(2025, 5, 1),
+            payment_method="upi",
+            amount_paise=12500,
+            recorded_by_admin_id=admin.id,
+        )
+        db.add(legacy_payment)
+        db.flush()
         db.add(MessageOutbox(
             organization_id=admin.organization_id,
             prospect_id=person.id,
@@ -165,7 +199,7 @@ def _seed_pg(source):
             after_data={"nested": {"keys": ["a", "b"], "value": 250}},
         ))
         db.commit()
-        return person.id, payment.id, otp.id, fixed.astimezone(UTC)
+        return person.id, payment.id, otp.id, legacy_payment.id, fixed.astimezone(UTC)
 
 
 def test_copy_rejects_non_trial_urls_before_connection(monkeypatch):
@@ -186,7 +220,7 @@ def test_copy_rejects_non_trial_urls_before_connection(monkeypatch):
 
 def test_complete_snapshot_copy_rolls_back_on_mismatch(disposable_pair, monkeypatch):
     source, target = disposable_pair
-    sponsor_id, collection_id, otp_id, timestamp = _seed_pg(source)
+    sponsor_id, collection_id, otp_id, legacy_collection_id, timestamp = _seed_pg(source)
     source_counts = {}
     with source.connect() as db:
         for table in Base.metadata.tables.values():
@@ -220,12 +254,31 @@ def test_complete_snapshot_copy_rolls_back_on_mismatch(disposable_pair, monkeypa
         "cutover_authorized": False,
     }
 
+    # After verifying every historical record, restore new-write guards.
+    # This runs after the transaction commits: MySQL DDL is not transactional.
+    install_trial_financial_guards(target)
+    with target.connect() as conn:
+        assert conn.scalar(text("""
+            SELECT COUNT(*) FROM information_schema.triggers
+            WHERE trigger_schema = DATABASE()
+              AND trigger_name IN ('sas_manual_collection_tier_insert',
+                                   'sas_manual_collection_tier_update')
+        """)) == 2
+    with Session(target) as db:
+        with pytest.raises(DBAPIError):
+            db.execute(
+                text("UPDATE manual_collections SET amount_paise = 37500 WHERE id = :id"),
+                {"id": legacy_collection_id.hex},
+            )
+            db.commit()
+        db.rollback()
     with Session(target) as db:
         restored = db.get(Prospect, sponsor_id)
         assert restored.mobile_number == "+919876501934"
         assert restored.next_followup_at == timestamp.replace(tzinfo=None)
         assert restored.next_followup_at.microsecond == 123456
         assert db.get(ManualCollection, collection_id).amount_paise == 25000
+        assert db.get(ManualCollection, legacy_collection_id).amount_paise == 12500
         assert db.get(SponsorOtpChallenge, otp_id).status == "unknown"
         assert db.scalars(select(SaasytoCampaignRecipient)).one().status == "unknown"
         assert db.scalars(select(MessageOutbox)).one().status == "suppressed"
