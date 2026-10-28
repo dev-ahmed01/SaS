@@ -89,6 +89,36 @@ def create_trial_schema(engine: Engine) -> None:
     """Create disposable schema after all preflight checks; no data transfer."""
     assert_disposable_target(engine)
     trial_metadata().create_all(engine, checkfirst=False)
+    # Live PostgreSQL permits older, below-tier entries but blocks NEW ones.
+    # MySQL table-level CHECK would reject those historical receipts on copy,
+    # so matching triggers are installed on a fresh trial database instead.
+    # Later import tooling must install these only AFTER historical import.
+    with engine.begin() as connection:
+        connection.exec_driver_sql("""
+            CREATE TRIGGER sas_manual_collection_tier_insert
+            BEFORE INSERT ON manual_collections FOR EACH ROW
+            BEGIN
+                IF NEW.amount_paise < 25000
+                   OR NEW.amount_paise > 1000000000
+                   OR MOD(NEW.amount_paise, 25000) <> 0 THEN
+                    SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'Collection must be in INR 250 increments';
+                END IF;
+            END
+        """)
+        connection.exec_driver_sql("""
+            CREATE TRIGGER sas_manual_collection_tier_update
+            BEFORE UPDATE ON manual_collections FOR EACH ROW
+            BEGIN
+                IF NEW.amount_paise <> OLD.amount_paise
+                   AND (NEW.amount_paise < 25000
+                        OR NEW.amount_paise > 1000000000
+                        OR MOD(NEW.amount_paise, 25000) <> 0) THEN
+                    SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'Collection must be in INR 250 increments';
+                END IF;
+            END
+        """)
 
 
 def main() -> None:
