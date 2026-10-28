@@ -1,6 +1,4 @@
 """Reconciliation contract tests; no database/network and no donor records."""
-from copy import deepcopy
-
 import pytest
 
 from app.config import Settings
