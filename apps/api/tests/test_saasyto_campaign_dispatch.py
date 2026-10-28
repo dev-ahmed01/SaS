@@ -666,3 +666,47 @@ def test_targeted_segment_rechecks_activation(dispatch_system):
         assert live_segment_member(
             db, row.organization_id, row, "prospects", "active", utc_now(),
         ) is False
+
+
+def test_actual_dispatch_respects_shared_sender_rate_gate(dispatch_system, monkeypatch):
+    """One due tick cannot race ahead of the stored provider send slot."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    for suffix in ("3191", "3192"):
+        person = _person(client, csrf, suffix)
+        _consent(client, csrf, person, "opted_in")
+    cfg = _cfg()
+    cfg.saasyto_instance_id = "real-gate-test-sender"
+    cfg.saasyto_max_attempts_per_minute = 30
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    monkeypatch.setattr(
+        "app.saasyto_campaigns._reserve_sender_slot", _reserve_sender_slot,
+    )
+    cid, _ = _approved(client, csrf, "Paced synthetic group")
+    calls = []
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.send_text",
+        lambda _cfg, *, phone, message:
+        calls.append(phone) or Submission("accepted_unverified"),
+    )
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert first.status_code == 200
+    assert first.json()["accepted_unverified"] == 1
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+    with Session(engine) as db:
+        statuses = db.scalars(select(SaasytoCampaignRecipient.status)).all()
+        assert statuses.count("queued") == 1
+        assert statuses.count("accepted_unverified") == 1
+    # Simulate passage of the provider slot without actually sleeping/sending.
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.utc_now",
+        lambda: utc_now() + timedelta(seconds=3),
+    )
+    second = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert second.status_code == 200
+    assert second.json()["accepted_unverified"] == 1
+    assert len(calls) == len(set(calls)) == 2
+    assert client.get(
+        "/v1/communication/campaigns/" + cid + "/saasyto",
+    ).json()["status"] == "completed"
