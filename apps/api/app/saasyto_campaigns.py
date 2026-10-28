@@ -550,14 +550,35 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
             minutes = getattr(cfg, "saasyto_rate_limit_pause_minutes", 15)
             if not 5 <= minutes <= 60:
                 raise ValueError("Invalid Saasyto rate-limit cooldown")
-            run.due_at = max(as_utc(run.due_at), utc_now() + timedelta(minutes=minutes))
+            resume_at = utc_now() + timedelta(minutes=minutes)
+            # The API uses one Saasyto sender per Foundation. An HTTP 429
+            # applies to that sender, not just the campaign that received it:
+            # postpone all pending runs in this organization so a different
+            # campaign cannot immediately hit the same exhausted quota.
+            paused = 0
+            for pending in db.scalars(select(SaasytoCampaignRun).where(
+                SaasytoCampaignRun.organization_id == run.organization_id,
+                SaasytoCampaignRun.status == "approved",
+            ).with_for_update()):
+                if as_utc(pending.due_at) < resume_at:
+                    pending.due_at = resume_at
+                    paused += 1
             db.add(AuditEvent(
                 organization_id=run.organization_id, actor_admin_id=None,
                 action="saasyto.campaign_paused_rate_limit",
                 entity_type="saasyto_run", entity_id=str(run.id),
-                after_data={"pause_minutes": minutes},
+                after_data={"pause_minutes": minutes, "paused_runs": paused},
             ))
             db.commit()
+            # A 429 on the last recipient is terminal as well: do not leave
+            # an approved run appearing permanently in progress.
+            outstanding = db.scalar(select(SaasytoCampaignRecipient.id).where(
+                SaasytoCampaignRecipient.run_id == run.id,
+                SaasytoCampaignRecipient.status.in_(("queued", "claimed")),
+            ).limit(1))
+            if outstanding is None and run.status == "approved":
+                run.status = "completed"
+                db.commit()
             break
         # Close completed runs, including suppressed/rejected/unknown attempts.
         remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
