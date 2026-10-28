@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Explicit 429 pauses future queued recipients; the rejected attempt
     # remains terminal to avoid unsafe replay without provider idempotency.
     saasyto_rate_limit_pause_minutes: int = Field(default=15, ge=5, le=60)
+    # Opt-in production dispatcher only. A VPS deploy or secret presence never
+    # starts WhatsApp sending automatically.
+    saasyto_worker_enabled: bool = False
 
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
@@ -117,6 +120,14 @@ class Settings(BaseSettings):
                     "Staging and production DATABASE_URL must enable PostgreSQL TLS "
                     "with sslmode=require, verify-ca or verify-full"
                 )
+        if self.saasyto_worker_enabled and not (
+            self.app_env == "production"
+            and self.saasyto_delivery_enabled
+            and self.saasyto_sender_approved
+        ):
+            raise ValueError(
+                "Private Saasyto worker requires explicit production sender approval"
+            )
         if self.saasyto_local_dynamic_enabled:
             if not (self.app_env == "development" and self.local_demo_login_enabled):
                 raise ValueError("Dynamic Saasyto local sending requires loopback demo mode")
