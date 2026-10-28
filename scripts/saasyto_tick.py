@@ -71,11 +71,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--interval-seconds", type=int, default=60,
-        help="Recurring poll cadence, between 60 and 3600 seconds (default 60)",
+        help="Recurring poll cadence, between 15 and 3600 seconds (default 60)",
     )
     args = parser.parse_args(argv)
-    if not 60 <= args.interval_seconds <= 3600:
-        parser.error("Poll interval must be between 60 and 3600 seconds")
+    if not 15 <= args.interval_seconds <= 3600:
+        parser.error("Poll interval must be between 15 and 3600 seconds")
     if not args.loop:
         return run_once()
 
