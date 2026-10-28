@@ -16,9 +16,9 @@ from app.main import app
 from app.models import (
     Base,
     CommunicationCampaign,
+    CommunicationConsentEvent,
     CommunicationPreparation,
     CommunicationRecipientSnapshot,
-    CommunicationConsentEvent,
     Promoter,
     Prospect,
     SaasytoCampaignRecipient,
