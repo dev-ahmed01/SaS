@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     saasyto_access_token: SecretStr | None = None
     saasyto_enable_after: datetime | None = None
     saasyto_runner_secret: SecretStr | None = None
+    # Conservative default; increase only with a provider-approved sending rate.
+    # Applies across all workers using the same Saasyto instance and database.
+    saasyto_max_attempts_per_minute: int = Field(default=12, ge=1, le=120)
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
     saasyto_local_test_enabled: bool = False
