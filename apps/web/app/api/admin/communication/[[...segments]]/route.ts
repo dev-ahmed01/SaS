@@ -129,10 +129,19 @@ async function handle(
     }
   }
   try{
+    // A consent review or explicit approval may transactionally inspect and
+    // persist up to 10k recipients. It must not be cut off by the 15s
+    // ordinary-read timeout and reported as an ambiguous failed submission.
+    const longReview=path.startsWith("/campaigns/")&&(
+      path.endsWith("/preparations")||
+      path.endsWith("/saasyto")||
+      path.endsWith("/saasyto/readiness")
+    );
     const response=await fetch(
       backend+"/v1/communication"+path+(query.size?"?"+query:""),{
         method:request.method,headers,body,
-        redirect:"manual",cache:"no-store",signal:AbortSignal.timeout(15000),
+        redirect:"manual",cache:"no-store",
+        signal:AbortSignal.timeout(longReview?120000:15000),
       },
     );
     return new NextResponse(response.status===204?null:await response.text(),{
