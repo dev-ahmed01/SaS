@@ -456,7 +456,7 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
     # documents and approves a higher quota for this exact connector.
     batch_limit = getattr(cfg, "saasyto_campaign_batch_size", MAX_PER_RUN)
     minute_limit = getattr(cfg, "saasyto_campaign_max_per_minute", MAX_PER_RUN)
-    if not (1 <= batch_limit <= 120 and 1 <= minute_limit <= 120):
+    if not (1 <= batch_limit <= 15 and 1 <= minute_limit <= 60):
         raise ValueError("Unsafe Saasyto campaign dispatch configuration")
     attempts = min(batch_limit, minute_limit, max_attempts or batch_limit)
     counts: dict[str, int] = {}
