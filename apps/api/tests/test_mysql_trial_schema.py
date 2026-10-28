@@ -15,6 +15,7 @@ from sqlalchemy.schema import CreateIndex, CreateTable
 
 from app.accounting import ist_today, month_start
 from app.bootstrap_admin import provision_admin
+from app.db import _mysql_staging_engine
 from app.main import app
 from app.models import (
     AdminUser,
@@ -657,3 +658,16 @@ def test_mysql_future_ist_campaign_date_write_is_canonical_utc(mysql_trial_engin
         assert restored.planned_for == ist_when.astimezone(UTC)
         assert restored.planned_for.utcoffset() == timedelta(0)
         assert restored.planned_for.microsecond == 987654
+
+
+
+def test_mysql_staging_preflight_requires_existing_schema_and_policy(mysql_trial_engine):
+    engine = _mysql_staging_engine(str(mysql_trial_engine.url))
+    try:
+        with engine.connect() as conn:
+            assert conn.scalar(text("SELECT @@session.time_zone")) == "+00:00"
+            assert conn.scalar(text("SELECT @@session.transaction_isolation")) == (
+                "READ-COMMITTED"
+            )
+    finally:
+        engine.dispose()
