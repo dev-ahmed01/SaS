@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,19 +31,21 @@ from app.models import (
     CommunicationCampaign,
     CommunicationPreparation,
     CommunicationRecipientSnapshot,
+    Organization,
     Promoter,
     Prospect,
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
 )
 from app.saasyto_client import local_pilot_permits, local_pilot_phones, send_text
+from app.saasyto_eligibility import eligible_for_approved_whatsapp
 from app.security import as_utc, utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE
 
 admin_router = APIRouter(prefix="/v1/communication", tags=["Saasyto campaigns"])
 internal_router = APIRouter(prefix="/internal/saasyto", tags=["Saasyto private runner"])
 MAX_PER_RUN = 10
-MAX_APPROVAL_RECIPIENTS = 500
+MAX_APPROVAL_RECIPIENTS = 10_000
 VALID_TEMPLATE = re.compile(
     r"{{\s*(name|month|sponsorship|sponsorship_amount|sponsorship_units)\s*}}"
 )
@@ -80,10 +82,14 @@ class CampaignRunRead(BaseModel):
 
 
 def _read(db: Session, run: SaasytoCampaignRun) -> CampaignRunRead:
-    counts = Counter(db.scalars(select(SaasytoCampaignRecipient.status).where(
+    # Aggregate in PostgreSQL: do not load 10k recipient states into Python
+    # every time a campaign results page refreshes.
+    counts = Counter(dict(db.execute(select(
+        SaasytoCampaignRecipient.status, func.count(SaasytoCampaignRecipient.id),
+    ).where(
         SaasytoCampaignRecipient.organization_id == run.organization_id,
         SaasytoCampaignRecipient.run_id == run.id,
-    )).all())
+    ).group_by(SaasytoCampaignRecipient.status)).all()))
     return CampaignRunRead(
         id=run.id, campaign_id=run.campaign_id, status=run.status,
         due_at=run.due_at, eligible_count=run.eligible_count,
@@ -175,6 +181,23 @@ def campaign_approval_readiness(
     dynamic = bool(getattr(cfg, "saasyto_local_dynamic_enabled", False))
     permitted = getattr(cfg, "saasyto_local_test_phone", None) if local else None
     test_phones = local_pilot_phones(cfg) if local else ()
+    # An approved campaign can never be approved twice. The live results
+    # screen polls this endpoint frequently; avoid re-scanning up to 10k
+    # contacts on every poll once a durable approval exists.
+    prior_run = _existing_run(db, admin.organization_id, identifier)
+    if prior_run is not None:
+        response.headers["Cache-Control"] = "no-store"
+        return CampaignApprovalReadiness(
+            ready=False, code="already_approved",
+            message="Campaign already approved or attempted. Review its results.",
+            eligible_count=prior_run.eligible_count, local_test_mode=local,
+            permitted_phone=permitted, permitted_phones=list(test_phones),
+            local_dynamic_mode=dynamic,
+            max_recipients=(
+                MAX_APPROVAL_RECIPIENTS if dynamic or not local
+                else len(test_phones)
+            ),
+        )
     preparation = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == admin.organization_id,
         CommunicationPreparation.campaign_id == row.id,
@@ -410,19 +433,8 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
         isinstance(person, Promoter) and not person.is_active
     ):
         return None
-    candidates = _audience_rows(
-        db,
-        type("Org", (), {"organization_id": run.organization_id})(),
-        row.audience, row.segment, now,
-    )
-    if not any(isinstance(p, model) and p.id == person.id for p in candidates):
-        return None
-    decisions = evaluate_recipients(
-        db, run.organization_id, candidates, "whatsapp", row.category, now=now,
-    )
-    if not any(
-        p.id == person.id and kind == item.recipient_kind and state == "eligible"
-        for p, kind, state, _ in decisions
+    if not eligible_for_approved_whatsapp(
+        db, run.organization_id, person, row, now,
     ):
         return None
     phone = contact_address(person, "whatsapp")
@@ -442,14 +454,21 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
 
 
 def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
-                  max_attempts: int = MAX_PER_RUN) -> dict[str, int]:
+                  max_attempts: int | None = None) -> dict[str, int]:
     """Claim once then submit; used by the private worker and one-phone manual pilot.
 
     A targeted manual request cannot consume other campaigns' queued recipients.
     Every claim is committed before network I/O, including uncertain outcomes.
     """
-    counts: Counter[str] = Counter()
-    for _ in range(max_attempts):
+    # Site-default 10/min is intentionally conservative until Saasyto
+    # documents and approves a higher quota for this exact connector.
+    batch_limit = getattr(cfg, "saasyto_campaign_batch_size", MAX_PER_RUN)
+    minute_limit = getattr(cfg, "saasyto_campaign_max_per_minute", MAX_PER_RUN)
+    if not (1 <= batch_limit <= 15 and 1 <= minute_limit <= 60):
+        raise ValueError("Unsafe Saasyto campaign dispatch configuration")
+    attempts = min(batch_limit, minute_limit, max_attempts or batch_limit)
+    counts: dict[str, int] = {}
+    for _ in range(attempts):
         now = utc_now()
         # Commit each claim *before* the HTTP request: crashes cannot resend it.
         query = select(SaasytoCampaignRecipient, SaasytoCampaignRun,
@@ -475,10 +494,23 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
         if not candidate:
             break
         item, run, campaign = candidate
+        # Serialize claims across worker processes for this organization.
+        # A moving 60s PostgreSQL count enforces the quota even when two
+        # worker ticks overlap. Claims are committed BEFORE any network I/O.
+        db.execute(select(Organization.id).where(
+            Organization.id == run.organization_id,
+        ).with_for_update()).scalar_one()
+        claim_count = db.scalar(select(func.count(SaasytoCampaignRecipient.id)).where(
+            SaasytoCampaignRecipient.organization_id == run.organization_id,
+            SaasytoCampaignRecipient.claimed_at >= now - timedelta(seconds=60),
+        )) or 0
+        if claim_count >= minute_limit:
+            db.rollback()
+            break
         item.status = "claimed"
         item.claimed_at = now
         db.commit()
-        counts["claimed"] += 1
+        counts["claimed"] = counts.get("claimed", 0) + 1
         # An already claimed item can never be picked up automatically again.
         # Re-fetch campaign status and recipient eligibility after committing.
         db.refresh(run)
@@ -510,7 +542,23 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
                 entity_id=str(item.id), after_data={"status": status},
             ))
             db.commit()
-        counts[status] += 1
+        counts[status] = counts.get(status, 0) + 1
+        if reason == "provider_rate_limited":
+            # Saasyto does not publish a rate contract for our exact send
+            # endpoint. Pause future approved queue members rather than
+            # hammering it. The rejected member is never automatically resent.
+            minutes = getattr(cfg, "saasyto_rate_limit_pause_minutes", 15)
+            if not 5 <= minutes <= 60:
+                raise ValueError("Invalid Saasyto rate-limit cooldown")
+            run.due_at = max(as_utc(run.due_at), utc_now() + timedelta(minutes=minutes))
+            db.add(AuditEvent(
+                organization_id=run.organization_id, actor_admin_id=None,
+                action="saasyto.campaign_paused_rate_limit",
+                entity_type="saasyto_run", entity_id=str(run.id),
+                after_data={"pause_minutes": minutes},
+            ))
+            db.commit()
+            break
         # Close completed runs, including suppressed/rejected/unknown attempts.
         remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
             SaasytoCampaignRecipient.run_id == run.id,

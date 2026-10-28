@@ -40,8 +40,8 @@ from app.security import utc_now
 
 router = APIRouter(prefix="/v1/reminders", tags=["Admin reminder eligibility"])
 ReminderKind = Literal["sponsor", "promoter"]
-MAX_SPONSORS = 2000
-MAX_RECIPIENTS = 2000
+MAX_SPONSORS = 10_000
+MAX_RECIPIENTS = 10_000
 
 
 class UnpaidSponsor(BaseModel):

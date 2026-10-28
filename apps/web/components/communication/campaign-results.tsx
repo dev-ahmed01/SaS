@@ -21,7 +21,8 @@ type Recipient={
 type CampaignDetails={
   campaign_id:string;title:string;audience:string;segment:string;category:string;
   channel:string;planned_for:string|null;created_at:string;
-  summary:Summary;latest_review_at:string|null;
+  summary:Summary;page:number;page_size:number;recipient_total:number;
+  latest_review_at:string|null;
   eligible_in_review:number;excluded_in_review:number;
   excluded_reasons:Record<string,number>;
   recipients:Recipient[];eligible_recipients:Recipient[];
@@ -59,6 +60,7 @@ const reasons:Record<string,string>={
   unknown:"Sending result unverified",
   provider_rejected:"Saasyto rejected the request",
   provider_http_error:"Saasyto returned an HTTP error",
+  provider_rate_limited:"Saasyto rate limit reached; remaining sends paused",
   unverified_provider_reply:"Saasyto response did not confirm acceptance",
   network_error:"Could not verify Saasyto response",
   provider_timeout:"Saasyto did not answer in time",
@@ -112,6 +114,7 @@ export function CampaignResultDetails({id,onBack}:{
   id:string;onBack?:()=>void;
 }){
   const [details,setDetails]=useState<CampaignDetails|null>(null);
+  const [page,setPage]=useState(1);
   const [review,setReview]=useState<Review|null>(null);
   const [run,setRun]=useState<DeliveryRun|null>(null);
   const [provider,setProvider]=useState<Provider|null>(null);
@@ -124,7 +127,9 @@ export function CampaignResultDetails({id,onBack}:{
   const refresh=useCallback(async()=>{
     // Results must remain visible even if optional provider/readiness APIs
     // cannot be reached. These read failures never authorize delivery.
-    const result=await apiGet<CampaignDetails>("/campaigns/"+id+"/results");
+    const result=await apiGet<CampaignDetails>(
+      "/campaigns/"+id+"/results?page="+page+"&page_size=100"
+    );
     setDetails(result);
     const [checks,dispatch,availability,approvalCheck]=await Promise.allSettled([
       apiGet<Review[]>("/campaigns/"+id+"/preparations"),
@@ -141,7 +146,7 @@ export function CampaignResultDetails({id,onBack}:{
       setNotice("Campaign results loaded, but some delivery settings are unavailable. "+
         "Live approval is disabled until those settings can be verified.");
     }
-  },[id]);
+  },[id,page]);
   useEffect(()=>{
     let active=true;
     setLoading(true);
@@ -318,12 +323,24 @@ export function CampaignResultDetails({id,onBack}:{
       <div className="comm-detail-tabs" role="group" aria-label="Campaign detail views">
         <button type="button" className={shownTab==="results"?"active":""}
           aria-pressed={shownTab==="results"} onClick={()=>setActiveTab("results")}>
-          Sending results <span>{details.recipients.length}</span>
+          Sending results <span>{details.recipient_total}</span>
         </button>
         <button type="button" className={shownTab==="review"?"active":""}
           aria-pressed={shownTab==="review"} onClick={()=>setActiveTab("review")}>
           Recipient review <span>{details.eligible_in_review+details.excluded_in_review}</span>
         </button>
+      </div>
+      <div className="comm-review-footer" aria-label="Campaign recipients pagination">
+        <span className="comm-muted">Page {details.page} · up to {details.page_size} contacts
+          per list · {details.recipient_total} total queued recipients</span>
+        <button type="button" className="btn btn-secondary"
+          disabled={loading||busy||page<=1}
+          onClick={()=>setPage(current=>Math.max(1,current-1))}>Previous</button>
+        <button type="button" className="btn btn-secondary"
+          disabled={loading||busy||page*details.page_size>=Math.max(
+            details.recipient_total,details.eligible_in_review,details.excluded_in_review,
+          )}
+          onClick={()=>setPage(current=>current+1)}>Next</button>
       </div>
       {shownTab==="results"?<div className="comm-detail-section">
         <RecipientTable title="Sending results by contact" rows={details.recipients}/>
