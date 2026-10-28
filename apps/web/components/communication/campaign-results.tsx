@@ -131,12 +131,21 @@ export function CampaignResultDetails({id,onBack}:{
       "/campaigns/"+id+"/results?offset="+offset+"&limit="+pageSize
     );
     setDetails(result);
-    const [checks,dispatch,availability,approvalCheck]=await Promise.allSettled([
+    const [checks,dispatch,availability]=await Promise.allSettled([
       apiGet<Review[]>("/campaigns/"+id+"/preparations"),
       apiGet<DeliveryRun|null>("/campaigns/"+id+"/saasyto"),
       apiGet<Provider>("/provider/saasyto"),
-      apiGet<Readiness>("/campaigns/"+id+"/saasyto/readiness"),
     ]);
+    // After approval, checking eligibility for the entire audience every
+    // 15 seconds would repeatedly load thousands of records for no benefit.
+    let approvalCheck:PromiseSettledResult<Readiness|null>;
+    if(dispatch.status==="fulfilled"&&dispatch.value){
+      approvalCheck={status:"fulfilled",value:null};
+    }else{
+      [approvalCheck]=await Promise.allSettled([
+        apiGet<Readiness>("/campaigns/"+id+"/saasyto/readiness"),
+      ]);
+    }
     setReview(checks.status==="fulfilled"?(checks.value[0]??null):null);
     setRun(dispatch.status==="fulfilled"?dispatch.value:null);
     setProvider(availability.status==="fulfilled"?availability.value:null);
