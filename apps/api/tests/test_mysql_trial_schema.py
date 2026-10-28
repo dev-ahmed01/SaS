@@ -2,7 +2,7 @@
 
 import os
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +20,7 @@ from app.models import (
     AdminUser,
     AuditEvent,
     Base,
+    CommunicationCampaign,
     ManualCollection,
     ManualCollectionReversal,
     MessageOutbox,
@@ -28,10 +29,16 @@ from app.models import (
     Promoter,
     PromoterAssignment,
     Prospect,
+    ProspectStageTransition,
+    SaasytoCampaignRecipient,
+    SaasytoCampaignRun,
+    SponsorOtpChallenge,
     SponsorshipRate,
     VerifiedCredit,
 )
 from app.mysql_trial_schema import assert_disposable_target, create_trial_schema, trial_metadata
+from app.security import as_utc, utc_now
+from app.sponsor_otp import _code_digest, _digest
 
 
 def test_mysql_metadata_compiles_without_changing_postgresql_models():
@@ -391,3 +398,178 @@ def test_mysql_financial_http_idempotency_reversal_and_payout(mysql_trial_engine
             AuditEvent.action == "collection.manual_recorded",
             AuditEvent.entity_id == collection_id,
         )) == 1
+
+
+
+def test_mysql_otp_activation_consumes_once_with_utc_state(mysql_trial_engine, monkeypatch):
+    """Activation persists OTP, prospect, transition and UTC time atomically.
+
+    The OTP challenge is synthetic. No OTP request, provider call or notification
+    endpoint is invoked.
+    """
+    secret = "mysql-trial-otp-secret-never-for-real-sends"
+    code = "0042"
+    at = utc_now()
+    with Session(mysql_trial_engine) as db:
+        admin = db.scalars(
+            select(AdminUser).where(AdminUser.email == "trial-admin@example.com")
+        ).one()
+        person = Prospect(
+            organization_id=admin.organization_id,
+            full_name="Synthetic OTP migration trial",
+            mobile_number="+919876509924",
+            area_city="Test City",
+            monthly_contribution_paise=25000,
+            crm_stage="inactive",
+            whatsapp_opt_in=False,
+        )
+        db.add(person)
+        db.flush()
+        otp = SponsorOtpChallenge(
+            organization_id=admin.organization_id,
+            prospect_id=person.id,
+            phone_digest=_digest(secret, person.mobile_number),
+            code_digest="0" * 64,  # Set below once the UUID is generated.
+            status="accepted", attempts=0,
+            created_at=at, expires_at=at + timedelta(minutes=2),
+        )
+        db.add(otp)
+        db.flush()
+        otp.code_digest = _code_digest(secret, otp.id, person.mobile_number, code)
+        prospect_id, challenge_id, version = person.id, otp.id, person.version
+        db.commit()
+
+    monkeypatch.setattr("app.auth.get_engine", lambda: mysql_trial_engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="mysql-trial-auth-secret-only-not-production-12345",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.sponsor_otp.get_settings",
+        lambda: SimpleNamespace(
+            otp_delivery_enabled=True,
+            otp_secret=secret,
+            otp_activation_notice_enabled=False,
+        ),
+    )
+
+    with TestClient(app) as client:
+        login = client.post("/v1/auth/login", json={
+            "email": "trial-admin@example.com",
+            "password": "synthetic-mysql-admin-long-password",
+        })
+        assert login.status_code == 200, login.text
+        csrf = {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+        activate_url = f"/v1/prospects/{prospect_id}/otp/activate"
+        payload = {
+            "challenge_id": str(challenge_id),
+            "code": code,
+            "version": version,
+        }
+        first = client.post(activate_url, headers=csrf, json=payload)
+        assert first.status_code == 200, first.text
+        assert first.json()["status"] == "active"
+        assert first.json()["activation_notice"] == "disabled"
+        replay = client.post(activate_url, headers=csrf, json=payload)
+        assert replay.status_code in (400, 409), replay.text
+
+    with Session(mysql_trial_engine) as db:
+        challenge = db.get(SponsorOtpChallenge, challenge_id)
+        person = db.get(Prospect, prospect_id)
+        assert challenge.status == "verified"
+        assert challenge.attempts == 1
+        assert challenge.consumed_at is not None
+        assert person.crm_stage == "active"
+        assert person.version == version + 1
+        assert person.whatsapp_verified_at is not None
+        assert as_utc(challenge.expires_at) > as_utc(challenge.created_at)
+        assert abs(
+            (as_utc(person.whatsapp_verified_at) - as_utc(challenge.consumed_at))
+            .total_seconds()
+        ) < 1
+        assert db.scalar(select(func.count()).select_from(ProspectStageTransition).where(
+            ProspectStageTransition.prospect_id == prospect_id,
+            ProspectStageTransition.to_stage == "active",
+        )) == 1
+
+
+def test_mysql_queue_skip_locked_never_claims_same_recipient(mysql_trial_engine):
+    """Two independent InnoDB transactions claim disjoint recipients.
+
+    Exercise the same SKIP LOCKED predicate as the worker. No transport is
+    initialized and no attempts are submitted to Saasyto.
+    """
+    now = utc_now()
+    with Session(mysql_trial_engine) as db:
+        admin = db.scalars(
+            select(AdminUser).where(AdminUser.email == "trial-admin@example.com")
+        ).one()
+        campaign = CommunicationCampaign(
+            organization_id=admin.organization_id,
+            request_id=uuid.uuid4(),
+            title="Synthetic MySQL queue claim audit",
+            channel="whatsapp",
+            audience="prospects",
+            segment="all",
+            category="announcement",
+            body="synthetic-only-not-to-be-sent",
+            status="scheduled",
+            created_by_admin_id=admin.id,
+        )
+        db.add(campaign)
+        db.flush()
+        run = SaasytoCampaignRun(
+            organization_id=admin.organization_id,
+            campaign_id=campaign.id,
+            status="approved",
+            due_at=now - timedelta(minutes=1),
+            approved_at=now - timedelta(minutes=2),
+            approved_by_admin_id=admin.id,
+            eligible_count=2, suppressed_count=0,
+        )
+        db.add(run)
+        db.flush()
+        run_id = run.id
+        rows = [
+            SaasytoCampaignRecipient(
+                organization_id=admin.organization_id,
+                run_id=run.id,
+                recipient_kind="prospect",
+                recipient_id=uuid.uuid4(),
+                approved_phone_digest="a" * 64,
+                status="queued",
+            )
+            for _ in range(2)
+        ]
+        db.add_all(rows)
+        db.commit()
+
+    def available_query():
+        return select(SaasytoCampaignRecipient).where(
+            SaasytoCampaignRecipient.run_id == run_id,
+            SaasytoCampaignRecipient.status == "queued",
+        ).order_by(SaasytoCampaignRecipient.id).limit(1).with_for_update(
+            skip_locked=True,
+        )
+
+    # Keep A's row locked while B finds a different eligible row.
+    with Session(mysql_trial_engine) as a, Session(mysql_trial_engine) as b:
+        first = a.scalars(available_query()).one()
+        second = b.scalars(available_query()).one()
+        assert first.id != second.id
+        first.status = "claimed"
+        first.claimed_at = now
+        second.status = "claimed"
+        second.claimed_at = now
+        a.commit()
+        b.commit()
+    with Session(mysql_trial_engine) as db:
+        assert db.scalars(available_query()).one_or_none() is None
+        found = db.scalars(select(SaasytoCampaignRecipient).where(
+            SaasytoCampaignRecipient.run_id == run_id,
+        )).all()
+        assert len(found) == 2
+        assert all(item.status == "claimed" for item in found)
