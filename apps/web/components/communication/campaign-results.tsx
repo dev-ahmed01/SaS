@@ -22,6 +22,7 @@ type CampaignDetails={
   campaign_id:string;title:string;audience:string;segment:string;category:string;
   channel:string;planned_for:string|null;created_at:string;
   summary:Summary;latest_review_at:string|null;
+  page_offset:number;page_limit:number;
   eligible_in_review:number;excluded_in_review:number;
   excluded_reasons:Record<string,number>;
   recipients:Recipient[];eligible_recipients:Recipient[];
@@ -117,6 +118,8 @@ export function CampaignResultDetails({id,onBack}:{
   const [provider,setProvider]=useState<Provider|null>(null);
   const [readiness,setReadiness]=useState<Readiness|null>(null);
   const [loading,setLoading]=useState(true);
+  const [offset,setOffset]=useState(0);
+  const pageSize=100;
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -124,7 +127,9 @@ export function CampaignResultDetails({id,onBack}:{
   const refresh=useCallback(async()=>{
     // Results must remain visible even if optional provider/readiness APIs
     // cannot be reached. These read failures never authorize delivery.
-    const result=await apiGet<CampaignDetails>("/campaigns/"+id+"/results");
+    const result=await apiGet<CampaignDetails>(
+      "/campaigns/"+id+"/results?offset="+offset+"&limit="+pageSize
+    );
     setDetails(result);
     const [checks,dispatch,availability,approvalCheck]=await Promise.allSettled([
       apiGet<Review[]>("/campaigns/"+id+"/preparations"),
@@ -141,7 +146,7 @@ export function CampaignResultDetails({id,onBack}:{
       setNotice("Campaign results loaded, but some delivery settings are unavailable. "+
         "Live approval is disabled until those settings can be verified.");
     }
-  },[id]);
+  },[id,offset]);
   useEffect(()=>{
     let active=true;
     setLoading(true);
@@ -253,6 +258,9 @@ export function CampaignResultDetails({id,onBack}:{
   const s=details?.summary;
   const completed=s?.run_status==="completed";
   const shownTab=activeTab??(completed?"results":"review");
+  const pageTotal=shownTab==="results"?(s?.planned??0):Math.max(
+    details?.eligible_in_review??0, details?.excluded_in_review??0
+  );
   return <section className="comm-panel comm-detail-page" aria-label="Campaign results detail">
     <div className="comm-panel-header comm-detail-header">
       <div>
@@ -318,7 +326,7 @@ export function CampaignResultDetails({id,onBack}:{
       <div className="comm-detail-tabs" role="group" aria-label="Campaign detail views">
         <button type="button" className={shownTab==="results"?"active":""}
           aria-pressed={shownTab==="results"} onClick={()=>setActiveTab("results")}>
-          Sending results <span>{details.recipients.length}</span>
+          Sending results <span>{s.planned}</span>
         </button>
         <button type="button" className={shownTab==="review"?"active":""}
           aria-pressed={shownTab==="review"} onClick={()=>setActiveTab("review")}>
@@ -375,6 +383,18 @@ export function CampaignResultDetails({id,onBack}:{
         {!run&&<RecipientTable title="Eligible contacts" rows={details.eligible_recipients}/>}
         {!!details.excluded_recipients.length&&
           <RecipientTable title="Excluded contacts" rows={details.excluded_recipients}/>}
+      </div>}
+      {pageTotal>pageSize&&<div className="comm-review-actions"
+        role="navigation" aria-label="Campaign recipient pages">
+        <span className="comm-muted">
+          Showing {Math.min(offset+1,pageTotal)}–{Math.min(offset+pageSize,pageTotal)}
+          {" "}of {pageTotal}
+        </span>
+        <button type="button" className="btn btn-secondary" disabled={offset===0}
+          onClick={()=>setOffset(Math.max(0,offset-pageSize))}>Previous</button>
+        <button type="button" className="btn btn-secondary"
+          disabled={offset+pageSize>=pageTotal}
+          onClick={()=>setOffset(offset+pageSize)}>Next</button>
       </div>}
     </>}
   </section>;
