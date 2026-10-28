@@ -97,7 +97,7 @@ def live_whatsapp_permission(
             model.organization_id == org,
             or_(
                 func.replace(model.whatsapp_number, " ", "") == phone,
-                func.replace(model.mobile_number, " ", "") == phone,
+                model.mobile_number == phone,
             ),
         ))
         matching.extend((kind, row) for row in contacts
