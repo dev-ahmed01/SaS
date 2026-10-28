@@ -369,18 +369,21 @@ test("Admin registers and searches a new prospect without fake payment status",a
   );
   expect(acknowledgement.status()).toBe(200);
   expect((await acknowledgement.json()).status).toBe("inactive");
+  await expect(page.getByText("Occupation",{exact:true})).toHaveCount(0);
   await page.getByRole("button",{name:"Edit details"}).click();
-  await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
+  await expect(page.getByRole("textbox",{name:/Occupation/})).toHaveCount(0);
+  await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByRole("heading",{name:"Personal details",exact:true})).toBeVisible();
-  await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
+  await expect(page.getByText("Mysuru",{exact:true})).toBeVisible();
   await page.goto("/prospects");
   await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
   const row=page.getByRole("row",{name:new RegExp(label)});
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
-  await expect(page.getByText("Teacher",{exact:true})).toBeVisible();
+  await expect(page.getByText("Mysuru",{exact:true})).toBeVisible();
+  await expect(page.getByText("Occupation",{exact:true})).toHaveCount(0);
 });
 
 test("Mark Active auto-requests a two-minute four-digit OTP and shows complete phone",async ({page})=>{
@@ -642,10 +645,11 @@ test("Admin creates and searches promoters with the requested CRM fields",async 
   await page.getByRole("textbox",{name:/First Name/}).fill(label);
   await page.getByRole("textbox",{name:/Mobile/}).fill(number);
   await page.getByRole("textbox",{name:/City/}).fill("Mysuru");
-  await page.getByRole("textbox",{name:/Occupation/}).fill("Teacher");
+  await expect(page.getByRole("textbox",{name:/Occupation/})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Promoter",exact:true}).click();
   await expect(page).toHaveURL(/\/promoters\/[0-9a-f-]{36}$/);
-  await expect(page.getByText("Teacher")).toBeVisible();
+  await expect(page.getByText("Mysuru",{exact:true})).toBeVisible();
+  await expect(page.getByText("Occupation",{exact:true})).toHaveCount(0);
   await page.goto("/promoters");
   const find=page.getByRole("textbox",{name:"Search promoters"});
   await find.fill(label);
@@ -680,9 +684,10 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await expect(page.getByRole("textbox",{name:"Notes about this promoter"}))
     .toHaveValue("Promoter confirmed the next visit.");
   await page.getByRole("button",{name:"Edit details"}).click();
-  await page.getByRole("textbox",{name:/Occupation/}).fill("Architect");
+  await expect(page.getByRole("textbox",{name:/Occupation/})).toHaveCount(0);
+  await page.getByRole("textbox",{name:/City/}).fill("Hubballi");
   await page.getByRole("button",{name:"Save Changes"}).click();
-  await expect(page.getByText("Architect")).toBeVisible();
+  await expect(page.getByText("Hubballi",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Mark Inactive"}).click();
   const confirm=page.getByRole("dialog",{name:"Confirm promoter status"});
   await expect(confirm).toBeVisible();
