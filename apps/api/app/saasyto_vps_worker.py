@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_engine
-from app.saasyto_campaigns import _dispatch_due
+from app.saasyto_campaigns import _dispatch_due, _reconcile_stale_claims
 
 
 def dispatch_once() -> int:
@@ -27,7 +27,12 @@ def dispatch_once() -> int:
         return 2
     try:
         with Session(get_engine()) as db:
+            # A crash can interrupt a committed claim after the provider
+            # accepted the message. Reconcile it as UNKNOWN; never retry.
+            reconciled = _reconcile_stale_claims(db)
             outcome = _dispatch_due(db, cfg)
+            if reconciled:
+                outcome["unknown"] = outcome.get("unknown", 0) + reconciled
         # Only a sanitized count summary. Never print recipient addresses,
         # personalization, provider payloads, account tokens or OTP content.
         allowed = {"claimed", "accepted_unverified", "rejected", "unknown", "suppressed"}
