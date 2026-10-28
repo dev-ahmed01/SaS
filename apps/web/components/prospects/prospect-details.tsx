@@ -138,7 +138,6 @@ export function ProspectDetails({id}:{id:string}){
               <Tile label="Mobile (WhatsApp)">{record.mobile_number}</Tile>
               <Tile label="Email">{record.email||"—"}</Tile>
               <Tile label="City">{record.area_city||"—"}</Tile>
-              <Tile label="Occupation">{record.occupation||"—"}</Tile>
               <Tile label="Assigned promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
               <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)} / month</Tile>
               <div className="crm-overview-total">

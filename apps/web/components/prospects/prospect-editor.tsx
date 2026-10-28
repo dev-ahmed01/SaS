@@ -5,7 +5,7 @@ import type { Prospect } from "./prospects-types";
 
 type Values = {
   first_name:string;last_name:string;country_code:string;phone:string;
-  email:string;city:string;occupation:string;tokens:string;start_month:string;
+  email:string;city:string;tokens:string;start_month:string;
   promoter_id:string;whatsapp_opt_in:boolean;
 };
 type PromoterOption = {id:string;full_name:string;is_active:boolean};
@@ -45,7 +45,7 @@ function initialValues(initial?:Prospect):Values {
   const last=initial?.last_name??initial?.full_name.split(" ").slice(1).join(" ")??"";
   return {
     first_name:name,last_name:last,country_code:code,phone,email:initial?.email??"",
-    city:initial?.area_city??"",occupation:initial?.occupation??"",
+    city:initial?.area_city??"",
     tokens:String((initial?.monthly_contribution_paise??25000)/25000),
     start_month:initial?.start_month?.slice(0,7)??monthNow(),
     promoter_id:initial?.assigned_promoter_id??"",
@@ -114,7 +114,6 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         full_name:fullName,first_name:first,last_name:last||null,
         mobile_number:mobile,whatsapp_number:mobile,
         email:values.email.trim()||null,area_city:values.city.trim(),
-        occupation:values.occupation.trim()||null,
         whatsapp_opt_in:values.whatsapp_opt_in,
         monthly_contribution_paise:tokens*25000,
       };
@@ -191,13 +190,10 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             <input type="email" autoComplete="email" maxLength={320} value={values.email}
               onChange={e=>set("email",e.target.value)} placeholder="name@example.com"/></label>
         </div>
-        <div className="prospect-field-row two">
+        <div className="prospect-field-row one">
           <label className="field"><span className="field-label">City</span>
             <input maxLength={120} autoComplete="address-level2" value={values.city}
               onChange={e=>set("city",e.target.value)} placeholder="City"/></label>
-          <label className="field"><span className="field-label">Occupation</span>
-            <input maxLength={120} value={values.occupation}
-              onChange={e=>set("occupation",e.target.value)} placeholder="Occupation"/></label>
         </div>
         <div className="prospect-field-row two">
           <label className="field"><span className="field-label">Sponsorship Tokens *</span>
