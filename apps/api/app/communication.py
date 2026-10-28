@@ -60,7 +60,7 @@ Trigger = Literal[
     "scheduled_date", "manual",
 ]
 IST = ZoneInfo("Asia/Kolkata")
-MAX_AUDIENCE_ROWS = 2000
+MAX_AUDIENCE_ROWS = 12000
 
 
 def _audit(db: Session, admin: AdminUser, action: str, kind: str, target: uuid.UUID,
