@@ -53,10 +53,6 @@ def _trial_pair_guard(source: Engine, target: Engine) -> None:
             or not pattern.fullmatch(url.database or "")
         ):
             raise RuntimeError("Copy permits disposable loopback databases only")
-    if source.get_isolation_level().upper().replace("-", " ") != "REPEATABLE READ":
-        raise RuntimeError("Source must use one repeatable-read snapshot")
-    if target.get_isolation_level().upper().replace("-", " ") != "READ COMMITTED":
-        raise RuntimeError("Target must use read-committed isolation")
 
 
 def _canonical(value: Any) -> Any:
@@ -129,12 +125,14 @@ def transfer_synthetic_snapshot(
     expected = set(Base.metadata.tables)
     with source.connect() as src:
         # Exactly one immutable snapshot, with no source writes allowed.
-        src.execute(text("SET TRANSACTION READ ONLY"))
+        src.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
         source_db = src.scalar(text("SELECT current_database()"))
         if source_db != source.url.database:
             raise RuntimeError("PostgreSQL source mismatch")
         if src.scalar(text("SHOW transaction_read_only")) != "on":
             raise RuntimeError("PostgreSQL source is not read-only")
+        if src.scalar(text("SHOW transaction_isolation")) != "repeatable read":
+            raise RuntimeError("PostgreSQL source snapshot is not stable")
         if set(inspect(src).get_table_names()) != expected:
             raise RuntimeError("PostgreSQL trial schema drift")
         with target.begin() as dst:
@@ -142,6 +140,8 @@ def transfer_synthetic_snapshot(
                 raise RuntimeError("MySQL destination mismatch")
             if dst.scalar(text("SELECT @@session.time_zone")) != "+00:00":
                 raise RuntimeError("MySQL session timezone must be UTC")
+            if dst.scalar(text("SELECT @@session.transaction_isolation")) != "READ-COMMITTED":
+                raise RuntimeError("MySQL copy requires READ COMMITTED")
             if set(inspect(dst).get_table_names()) != expected:
                 raise RuntimeError("MySQL trial schema drift")
             if any(dst.scalar(select(func.count()).select_from(table)) for table in tables):
