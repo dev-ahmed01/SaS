@@ -11,7 +11,17 @@ No application runtime or production migration uses this module.
 import os
 import re
 
-from sqlalchemy import Column, Computed, DateTime, Index, MetaData, String, create_engine, inspect, text
+from sqlalchemy import (
+    Column,
+    Computed,
+    DateTime,
+    Index,
+    MetaData,
+    String,
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.dialects.mysql import DATETIME as MySQLDateTime
 from sqlalchemy.engine import Engine, make_url
 
