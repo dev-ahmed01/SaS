@@ -453,6 +453,52 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     return phone, message
 
 
+
+def _reconcile_stale_claims(db: Session, *, limit: int = 200) -> int:
+    """Close abandoned dispatch claims without resending uncertain messages.
+
+    Claims are committed before network I/O. A process crash leaves them in
+    'claimed' forever unless a separate pass records the uncertain outcome.
+    Saasyto's client request times out after five seconds; 15 minutes allows
+    a large safety margin. Unknown attempts require manual investigation.
+    """
+    now = utc_now()
+    stale = db.scalars(select(SaasytoCampaignRecipient).where(
+        SaasytoCampaignRecipient.status == "claimed",
+        SaasytoCampaignRecipient.claimed_at < now - timedelta(minutes=15),
+    ).order_by(SaasytoCampaignRecipient.claimed_at).limit(limit).with_for_update(
+        skip_locked=True,
+    )).all()
+    if not stale:
+        return 0
+    affected = set()
+    for item in stale:
+        item.status = "unknown"
+        item.reason = "worker_interrupted"
+        item.finished_at = now
+        affected.add(item.run_id)
+        db.add(AuditEvent(
+            organization_id=item.organization_id, actor_admin_id=None,
+            action="saasyto.claim_reconciled_unknown",
+            entity_type="saasyto_recipient", entity_id=str(item.id),
+            after_data={"status": "unknown"},
+        ))
+    db.commit()
+    for run_id in affected:
+        run = db.get(SaasytoCampaignRun, run_id)
+        if run is None or run.status != "approved":
+            continue
+        remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
+            SaasytoCampaignRecipient.run_id == run_id,
+            SaasytoCampaignRecipient.status.in_(("queued", "claimed")),
+        ).limit(1))
+        if remaining is None:
+            run.status = "completed"
+    db.commit()
+    return len(stale)
+
+
+
 def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
                   max_attempts: int | None = None) -> dict[str, int]:
     """Claim once then submit; used by the private worker and one-phone manual pilot.
@@ -464,7 +510,9 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
     # documents and approves a higher quota for this exact connector.
     batch_limit = getattr(cfg, "saasyto_campaign_batch_size", MAX_PER_RUN)
     minute_limit = getattr(cfg, "saasyto_campaign_max_per_minute", MAX_PER_RUN)
-    if not (1 <= batch_limit <= 15 and 1 <= minute_limit <= 60):
+    min_gap = getattr(cfg, "saasyto_campaign_min_interval_seconds", 0)
+    if (not 1 <= batch_limit <= 15 or not 1 <= minute_limit <= 60
+            or not 0 <= min_gap <= 300):
         raise ValueError("Unsafe Saasyto campaign dispatch configuration")
     attempts = min(batch_limit, minute_limit, max_attempts or batch_limit)
     counts: dict[str, int] = {}
@@ -507,6 +555,20 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
         if claim_count >= minute_limit:
             db.rollback()
             break
+        if min_gap:
+            # A minute quota alone allows a burst of 10 immediate requests.
+            # On personal-account connectors that can overwhelm the linked
+            # sender. Enforce one sender-wide inter-attempt gap under the same
+            # organization lock, across campaigns and competing workers.
+            most_recent = db.scalar(select(func.max(
+                SaasytoCampaignRecipient.claimed_at,
+            )).where(
+                SaasytoCampaignRecipient.organization_id == run.organization_id,
+            ))
+            if (most_recent is not None and
+                    as_utc(most_recent) + timedelta(seconds=min_gap) > now):
+                db.rollback()
+                break
         item.status = "claimed"
         item.claimed_at = now
         db.commit()
@@ -550,14 +612,35 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
             minutes = getattr(cfg, "saasyto_rate_limit_pause_minutes", 15)
             if not 5 <= minutes <= 60:
                 raise ValueError("Invalid Saasyto rate-limit cooldown")
-            run.due_at = max(as_utc(run.due_at), utc_now() + timedelta(minutes=minutes))
+            resume_at = utc_now() + timedelta(minutes=minutes)
+            # The API uses one Saasyto sender per Foundation. An HTTP 429
+            # applies to that sender, not just the campaign that received it:
+            # postpone all pending runs in this organization so a different
+            # campaign cannot immediately hit the same exhausted quota.
+            paused = 0
+            for pending in db.scalars(select(SaasytoCampaignRun).where(
+                SaasytoCampaignRun.organization_id == run.organization_id,
+                SaasytoCampaignRun.status == "approved",
+            ).with_for_update()):
+                if as_utc(pending.due_at) < resume_at:
+                    pending.due_at = resume_at
+                    paused += 1
             db.add(AuditEvent(
                 organization_id=run.organization_id, actor_admin_id=None,
                 action="saasyto.campaign_paused_rate_limit",
                 entity_type="saasyto_run", entity_id=str(run.id),
-                after_data={"pause_minutes": minutes},
+                after_data={"pause_minutes": minutes, "paused_runs": paused},
             ))
             db.commit()
+            # A 429 on the last recipient is terminal as well: do not leave
+            # an approved run appearing permanently in progress.
+            outstanding = db.scalar(select(SaasytoCampaignRecipient.id).where(
+                SaasytoCampaignRecipient.run_id == run.id,
+                SaasytoCampaignRecipient.status.in_(("queued", "claimed")),
+            ).limit(1))
+            if outstanding is None and run.status == "approved":
+                run.status = "completed"
+                db.commit()
             break
         # Close completed runs, including suppressed/rejected/unknown attempts.
         remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
@@ -634,6 +717,9 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    reconciled = _reconcile_stale_claims(db)
     counts = _dispatch_due(db, cfg)
+    if reconciled:
+        counts["unknown"] = counts.get("unknown", 0) + reconciled
     response.headers["Cache-Control"] = "no-store"
     return counts

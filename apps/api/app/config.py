@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # requires provider confirmation and a controlled production pilot.
     saasyto_campaign_batch_size: int = Field(default=10, ge=1, le=15)
     saasyto_campaign_max_per_minute: int = Field(default=10, ge=1, le=60)
+    # Conservative default for a QR-linked/personal WhatsApp sender. Saasyto
+    # publicly recommends a 90-120s interval for its personal-account UI.
+    # The direct-send API has no confirmed numeric quota. An independently
+    # approved official/API sender may explicitly configure a smaller gap.
+    saasyto_campaign_min_interval_seconds: int = Field(default=90, ge=0, le=300)
     # Explicit 429 pauses future queued recipients; the rejected attempt
     # remains terminal to avoid unsafe replay without provider idempotency.
     saasyto_rate_limit_pause_minutes: int = Field(default=15, ge=5, le=60)
