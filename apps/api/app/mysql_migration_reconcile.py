@@ -73,7 +73,9 @@ def validate_manifest(manifest: Any, role: str) -> dict:
     if manifest["financial_totals_paise"]["manual_collections_net"] != (
         manifest["financial_totals_paise"]["manual_attested_credits_net"]
     ):
-        raise ValueError("Manual collection and manual-attested credit accounting does not reconcile")
+        raise ValueError(
+            "Manual collection and manual-attested credit accounting does not reconcile"
+        )
     return manifest
 
 
