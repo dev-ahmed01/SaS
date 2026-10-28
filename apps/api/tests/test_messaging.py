@@ -28,6 +28,26 @@ from app.models import (
 )
 from app.security import utc_now
 
+@pytest.fixture(autouse=True)
+def _stable_reminder_test_day(monkeypatch):
+    """On the 29th-31st, use a supported synthetic IST day for due-day tests.
+
+    Reminder day settings are 1..28 by contract. Keep the original month,
+    while all messaging/reminder schedule gates share this same fake day.
+    Never change production timekeeping to accommodate test dates.
+    """
+    real_ist_today = ist_today
+    if real_ist_today().day <= 28:
+        return
+
+    def scheduled_day(now=None):
+        return real_ist_today(now).replace(day=28)
+
+    monkeypatch.setattr("app.messaging.ist_today", scheduled_day)
+    monkeypatch.setattr("app.reminders.ist_today", scheduled_day)
+    monkeypatch.setattr(__import__(__name__), "ist_today", scheduled_day)
+
+
 RUNNER="synthetic-runner-key-more-than-32-characters"
 CALLBACK="synthetic-callback-key-more-than-32-characters"
 HMAC_SECRET="synthetic-webhook-hmac-key-more-than-32-characters"
