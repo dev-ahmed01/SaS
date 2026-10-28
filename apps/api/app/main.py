@@ -72,7 +72,9 @@ def readiness() -> JSONResponse:
         with get_engine().connect() as connection:
             connection.execute(text("SELECT 1"))
             cfg = get_settings()
-            if cfg.app_env != "test" and not cfg.mysql_staging_trial_enabled:
+            if cfg.app_env != "test" and not getattr(
+                cfg, "mysql_staging_trial_enabled", False
+            ):
                 # PostgreSQL deployments require the full Alembic head.
                 # The separately guarded MySQL trial checks its exact mapped
                 # schema, uniqueness index, FK enforcement and financial
