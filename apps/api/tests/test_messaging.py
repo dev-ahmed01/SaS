@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.security import utc_now
 
+
 @pytest.fixture(autouse=True)
 def _stable_reminder_test_day(monkeypatch):
     """On the 29th-31st, use a supported synthetic IST day for due-day tests.
