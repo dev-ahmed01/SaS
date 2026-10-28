@@ -71,7 +71,13 @@ def readiness() -> JSONResponse:
     try:
         with get_engine().connect() as connection:
             connection.execute(text("SELECT 1"))
-            if get_settings().app_env != "test":
+            cfg = get_settings()
+            if cfg.app_env != "test" and not cfg.mysql_staging_trial_enabled:
+                # PostgreSQL deployments require the full Alembic head.
+                # The separately guarded MySQL trial checks its exact mapped
+                # schema, uniqueness index, FK enforcement and financial
+                # triggers in db._mysql_staging_engine before reaching here.
+                # It must NEVER claim a PostgreSQL Alembic revision.
                 # Development also needs up-to-date Alembic schema. A healthy
                 # TCP/SQL connection alone is not application readiness.
                 actual = set(
