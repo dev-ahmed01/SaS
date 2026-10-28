@@ -120,9 +120,15 @@ separate approved deployment and secret configuration.
   `claimed` after a crash. The worker automatically marks claims older than
   15 minutes as `unknown` for manual review, **without resending** them.
 - Campaign results use paged recipient lists and full-database status totals.
-- The rate gate is per Saasyto instance within **one database**. Separate CRM
-  databases or other applications using the same instance do not share this
-  limit unless additional external coordination is implemented.
+- The campaign rate gate is per Saasyto instance within **one database**.
+  Existing synchronous activation OTP and acknowledgement sends do **not**
+  currently use this campaign-worker throttle. They may compete for the same
+  sending account; before high-volume rollout, reserve provider-supported
+  priority capacity for time-sensitive OTPs or use an independently approved
+  transactional sender. The two-minute OTP expiry must never be silently
+  extended or delayed by a bulk campaign.
+- Separate CRM databases or other applications using the same instance do not
+  share this limit unless additional external coordination is implemented.
 
 ## Test gates
 
