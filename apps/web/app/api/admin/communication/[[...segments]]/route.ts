@@ -83,6 +83,9 @@ async function handle(
     ?new Set(["audience","segment","channel","category"])
     :path==="/consent-events"&&request.method==="GET"
       ?new Set(["recipient_kind","recipient_id"])
+    :path.startsWith("/campaigns/")&&path.endsWith("/results")&&
+      request.method==="GET"
+      ?new Set(["page","page_size"])
     :path.startsWith("/templates/")&&request.method==="DELETE"
       ?new Set(["version"]):new Set<string>();
   for(const [key,value] of request.nextUrl.searchParams){
