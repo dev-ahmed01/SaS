@@ -2,7 +2,7 @@
 
 import os
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -622,3 +622,38 @@ def test_mysql_otp_timestamp_roundtrip_retains_microseconds(mysql_trial_engine):
         assert as_utc(restored.created_at) == instant
         assert as_utc(restored.expires_at) == instant + timedelta(minutes=2)
         assert restored.created_at.microsecond == 123456
+
+
+
+def test_mysql_future_ist_campaign_date_write_is_canonical_utc(mysql_trial_engine):
+    """An API-created campaign's IST datetime must not shift on MySQL reload."""
+    ist_when = datetime(
+        2026, 11, 5, 9, 10, 45, 987654,
+        tzinfo=timezone(timedelta(hours=5, minutes=30)),
+    )
+    with Session(mysql_trial_engine) as db:
+        admin = db.scalars(
+            select(AdminUser).where(AdminUser.email == "trial-admin@example.com")
+        ).one()
+        row = CommunicationCampaign(
+            organization_id=admin.organization_id,
+            request_id=uuid.uuid4(),
+            title="Synthetic IST calendar trial",
+            channel="whatsapp",
+            audience="prospects",
+            segment="unpaid",
+            category="reminder",
+            body="No sends in this test",
+            status="scheduled",
+            planned_for=ist_when,
+            created_by_admin_id=admin.id,
+        )
+        db.add(row)
+        db.flush()
+        key = row.id
+        db.commit()
+    with Session(mysql_trial_engine) as db:
+        restored = db.get(CommunicationCampaign, key)
+        assert restored.planned_for == ist_when.astimezone(UTC)
+        assert restored.planned_for.utcoffset() == timedelta(0)
+        assert restored.planned_for.microsecond == 987654
