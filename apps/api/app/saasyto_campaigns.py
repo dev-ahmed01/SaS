@@ -480,6 +480,49 @@ def _reserve_sender_slot(db: Session, cfg, now: datetime) -> bool:
     return True
 
 
+def _reconcile_stale_claims(db: Session, now: datetime) -> int:
+    """Settle aged in-flight claims as unknown, never as safe to retry.
+
+    A crash after a committed claim might have reached the provider. Do not
+    reclaim it automatically. The sender uses a five-second HTTP timeout,
+    so fifteen minutes is a conservative stale-claim window.
+    """
+    cutoff = now - timedelta(minutes=15)
+    rows = db.scalars(select(SaasytoCampaignRecipient).where(
+        SaasytoCampaignRecipient.status == "claimed",
+        SaasytoCampaignRecipient.claimed_at.is_not(None),
+        SaasytoCampaignRecipient.claimed_at <= cutoff,
+    ).order_by(SaasytoCampaignRecipient.claimed_at).limit(100).with_for_update(
+        skip_locked=True,
+    )).all()
+    if not rows:
+        db.rollback()
+        return 0
+    run_ids = set()
+    for item in rows:
+        item.status = "unknown"
+        item.reason = "worker_interrupted"
+        item.finished_at = now
+        run_ids.add(item.run_id)
+        db.add(AuditEvent(
+            organization_id=item.organization_id, actor_admin_id=None,
+            action="saasyto.stale_claim_review", entity_type="saasyto_recipient",
+            entity_id=str(item.id), after_data={"status": "unknown"},
+        ))
+    db.flush()
+    for run_id in run_ids:
+        remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
+            SaasytoCampaignRecipient.run_id == run_id,
+            SaasytoCampaignRecipient.status.in_(("queued", "claimed")),
+        ).limit(1))
+        if remaining is None:
+            run = db.get(SaasytoCampaignRun, run_id)
+            if run is not None and run.status == "approved":
+                run.status = "completed"
+    db.commit()
+    return len(rows)
+
+
 def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
                   max_attempts: int = MAX_PER_RUN) -> dict[str, int]:
     """Claim once then submit; used by the private worker and one-phone manual pilot.
@@ -637,6 +680,9 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    reconciled = _reconcile_stale_claims(db, utc_now())
     counts = _dispatch_due(db, cfg)
+    if reconciled:
+        counts["unknown"] = counts.get("unknown", 0) + reconciled
     response.headers["Cache-Control"] = "no-store"
     return counts
