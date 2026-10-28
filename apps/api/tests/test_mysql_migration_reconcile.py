@@ -85,6 +85,25 @@ def test_financial_balance_is_mandatory():
         validate_manifest(source, "source")
 
 
+
+def test_independent_bank_verified_credit_does_not_break_manual_balance():
+    """Bank reconciliations may legitimately exceed manual-attested receipts."""
+    source = manifest()
+    target = manifest("target")
+    for record in (source, target):
+        record["financial_totals_paise"]["verified_credits_gross"] = 50000
+        record["financial_totals_paise"]["verified_credits_net"] = 50000
+        # No manual receipts or manually attested credits were recorded.
+        assert record["financial_totals_paise"]["manual_attested_credits_net"] == 0
+    assert compare_manifests(source, target)["comparison"] == "passed"
+
+
+def test_manual_attestation_mismatch_fails_even_if_verified_totals_match():
+    source = manifest()
+    source["financial_totals_paise"]["manual_attested_credits_net"] = 25000
+    with pytest.raises(ValueError, match="manual-attested"):
+        validate_manifest(source, "source")
+
 def test_wrong_engine_and_swapped_role_rejected():
     destination = manifest("target")
     destination["engine"] = "postgresql"
