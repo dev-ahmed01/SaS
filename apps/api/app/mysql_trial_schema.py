@@ -11,7 +11,8 @@ No application runtime or production migration uses this module.
 import os
 import re
 
-from sqlalchemy import Column, Computed, Index, MetaData, String, create_engine, inspect, text
+from sqlalchemy import Column, Computed, DateTime, Index, MetaData, String, create_engine, inspect, text
+from sqlalchemy.dialects.mysql import DATETIME as MySQLDateTime
 from sqlalchemy.engine import Engine, make_url
 
 from app.models import Base
@@ -56,6 +57,12 @@ def trial_metadata() -> MetaData:
         table.dialect_options["mysql"]["engine"] = "InnoDB"
         table.dialect_options["mysql"]["charset"] = "utf8mb4"
         table.dialect_options["mysql"]["collate"] = "utf8mb4_0900_as_cs"
+        # Generic SQLAlchemy DateTime compiles to MySQL DATETIME(0), which
+        # silently truncates historical PostgreSQL microseconds. Preserve
+        # six fractional digits in the detached candidate schema only.
+        for column in table.columns:
+            if isinstance(column.type, DateTime):
+                column.type = MySQLDateTime(fsp=6)
     return result
 
 
