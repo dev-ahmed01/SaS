@@ -675,3 +675,25 @@ def test_mysql_staging_preflight_requires_existing_schema_and_policy(mysql_trial
             )
     finally:
         engine.dispose()
+
+
+
+def test_mysql_staging_readiness_uses_schema_guard_not_fake_alembic(
+    mysql_trial_engine, monkeypatch,
+):
+    """MySQL trial health is gated by actual schema checks, not PG version."""
+    engine = _mysql_staging_engine(
+        mysql_trial_engine.url.render_as_string(hide_password=False)
+    )
+    try:
+        monkeypatch.setattr("app.main.get_engine", lambda: engine)
+        monkeypatch.setattr(
+            "app.main.get_settings",
+            lambda: SimpleNamespace(
+                app_env="staging", mysql_staging_trial_enabled=True,
+            ),
+        )
+        with TestClient(app) as client:
+            assert client.get("/health/ready").json() == {"status": "ready"}
+    finally:
+        engine.dispose()
