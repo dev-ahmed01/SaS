@@ -181,6 +181,23 @@ def campaign_approval_readiness(
     dynamic = bool(getattr(cfg, "saasyto_local_dynamic_enabled", False))
     permitted = getattr(cfg, "saasyto_local_test_phone", None) if local else None
     test_phones = local_pilot_phones(cfg) if local else ()
+    # An approved campaign can never be approved twice. The live results
+    # screen polls this endpoint frequently; avoid re-scanning up to 10k
+    # contacts on every poll once a durable approval exists.
+    prior_run = _existing_run(db, admin.organization_id, identifier)
+    if prior_run is not None:
+        response.headers["Cache-Control"] = "no-store"
+        return CampaignApprovalReadiness(
+            ready=False, code="already_approved",
+            message="Campaign already approved or attempted. Review its results.",
+            eligible_count=prior_run.eligible_count, local_test_mode=local,
+            permitted_phone=permitted, permitted_phones=list(test_phones),
+            local_dynamic_mode=dynamic,
+            max_recipients=(
+                MAX_APPROVAL_RECIPIENTS if dynamic or not local
+                else len(test_phones)
+            ),
+        )
     preparation = db.scalars(select(CommunicationPreparation).where(
         CommunicationPreparation.organization_id == admin.organization_id,
         CommunicationPreparation.campaign_id == row.id,
