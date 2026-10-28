@@ -710,3 +710,32 @@ def test_actual_dispatch_respects_shared_sender_rate_gate(dispatch_system, monke
     assert client.get(
         "/v1/communication/campaigns/" + cid + "/saasyto",
     ).json()["status"] == "completed"
+
+
+def test_crashed_claim_expires_to_unknown_without_resending(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "3201")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, _ = _approved(client, csrf, "Interrupted worker")
+    with Session(engine) as db:
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        item.status = "claimed"
+        item.claimed_at = utc_now() - timedelta(minutes=16)
+        db.commit()
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.send_text",
+        lambda *_a, **_kw: (_ for _ in ()).throw(
+            AssertionError("stale claimed attempt must not be resent")
+        ),
+    )
+    response = client.post("/internal/saasyto/dispatch", headers={
+        "X-Saasyto-Runner-Token": RUNNER,
+    })
+    assert response.status_code == 200
+    assert response.json()["unknown"] == 1
+    summary = client.get("/v1/communication/campaigns/" + cid + "/saasyto").json()
+    assert summary["status"] == "completed"
+    assert summary["unknown"] == 1
+    assert summary["claimed"] == 0
