@@ -82,6 +82,10 @@ def send_text(cfg: Settings, *, phone: str, message: str) -> Submission:
         return Submission("unknown", "provider_timeout")
     except httpx.TransportError:
         return Submission("unknown", "network_error")
+    if response.status_code == 429:
+        # Provider rejected this request due to throttling. Never blindly
+        # replay it. The campaign dispatcher defers *remaining* recipients.
+        return Submission("rejected", "provider_rate_limited")
     if not 200 <= response.status_code < 300:
         return Submission("rejected", "provider_http_error")
     try:
