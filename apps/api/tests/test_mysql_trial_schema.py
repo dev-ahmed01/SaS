@@ -204,7 +204,7 @@ def test_mysql_fastapi_login_prospect_and_promoter_smoke(mysql_trial_engine, mon
     with Session(mysql_trial_engine) as db:
         provision_admin(
             db,
-            email="trial-admin@example.invalid",
+            email="trial-admin@example.com",
             password="synthetic-mysql-admin-long-password",
             organization_name="Isolated MySQL API trial",
         )
@@ -222,7 +222,7 @@ def test_mysql_fastapi_login_prospect_and_promoter_smoke(mysql_trial_engine, mon
     )
     with TestClient(app) as client:
         login = client.post("/v1/auth/login", json={
-            "email": "trial-admin@example.invalid",
+            "email": "trial-admin@example.com",
             "password": "synthetic-mysql-admin-long-password",
         })
         assert login.status_code == 200, login.text
