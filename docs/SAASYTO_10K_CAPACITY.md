@@ -62,7 +62,12 @@ At the **default** campaign budget of 10 submissions/minute:
 - 10,000 recipients: at least 1,000 minutes (~16 h 40 min).
 
 At **30 submissions/minute** (only if confirmed and approved by
-Saasyto) 10,000 requires at least ~5 h 34 min. Network response time,
+Saasyto) 10,000 requires at least ~5 h 34 min. A 60-second
+worker tick with the default batch size only attempts 10/min regardless
+of the configured minute cap; after approval, a 15-second poll interval
+and a bounded batch size can safely approach 30/min. Batch size is
+capped at 15 requests/tick to stay below the 90-second scheduler timeout
+under the connector's 5-second/request timeout. Network response time,
 consent suppression, provider downtime and pauses can add delay.
 
 Do not change dispatch env settings to achieve a marketing target
