@@ -667,7 +667,7 @@ def test_dynamic_local_crm_otp_then_reminder_to_current_opted_in_active_records(
     assert readiness["ready"] is True
     assert readiness["local_dynamic_mode"] is True
     assert readiness["permitted_phones"] == []
-    assert readiness["max_recipients"] == 500
+    assert readiness["max_recipients"] == 10_000
     approved = client.post(base + "/saasyto", headers=csrf, json={
         "preparation_id": prepared.json()["id"],
         "expected_eligible": 2, "confirm_send": True,
