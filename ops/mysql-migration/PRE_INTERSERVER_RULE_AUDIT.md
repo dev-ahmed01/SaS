@@ -59,7 +59,7 @@ There are TWO distinct sponsor states: CRM activation stage (active/inactive) an
 | 5th/20th automation | Existing automated monthly reminder execution calls legacy Pabbly webhook via messaging.py, NOT Saasyto campaigns. | **BLOCKER**: choose one approved scheduler/transport and test; avoid double sends if both enabled |
 | Scale | At 90 seconds/attempt, 10,000 messages need at least 250 hours (~10.4 days), excluding outages. | Not a same-day 10k broadcast guarantee |
 
-Saasyto public product marketing: https://saasyto.com/whatsapp-personal/ advertises unlimited plans, API integration and scheduling, but states no platform can guarantee protection from WhatsApp bans. This does not certify our direct-send response schema, webhook authentication, daily throughput or delivery statuses. Do not use another provider's API docs as if they were Saasyto.
+Saasyto public product marketing: https://saasyto.com/whatsapp-personal/ advertises unlimited plans, API integration and scheduling, but states no platform can guarantee protection from WhatsApp bans. A separate official product guide at https://saasyto.com/product/saasyto-personal-whatsapp-subscription/ recommends 90–120 seconds between messages for its **dashboard campaign** workflow, and an official blog at https://saasyto.com/send-bulk-broadcast-whatsapp-messages-in-2024/ advertises webhooks for incoming/outgoing/disconnection events. Neither is a published contract for this CRM's particular direct-send response fields, webhook signing, daily API throughput or delivery statuses. Do not use another provider's API docs as if they were Saasyto.
 
 ## 4. InterServer migration blockers
 
