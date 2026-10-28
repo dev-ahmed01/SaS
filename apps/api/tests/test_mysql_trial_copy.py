@@ -3,9 +3,11 @@
 import os
 import uuid
 from datetime import UTC, date, datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, func, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app import mysql_trial_copy as copier
@@ -170,18 +172,16 @@ def test_copy_rejects_non_trial_urls_before_connection(monkeypatch):
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("SAS_MYSQL_TRIAL_ONLY", "1")
     monkeypatch.setenv("SAS_MYSQL_COPY_TRIAL_ONLY", "1")
-    source = create_engine(
+    # URL-only stubs avoid importing optional PyMySQL in the regular backend
+    # job and demonstrate that production-shaped URLs are rejected pre-connect.
+    source = SimpleNamespace(url=make_url(
         "postgresql+psycopg://bad:bad@127.0.0.1:5432/production_data"
-    )
-    target = create_engine(
+    ))
+    target = SimpleNamespace(url=make_url(
         "mysql+pymysql://bad:bad@127.0.0.1:3306/production_data"
-    )
-    try:
-        with pytest.raises(RuntimeError, match="loopback databases"):
-            copier.transfer_synthetic_snapshot(source, target, hmac_key=b"x" * 32)
-    finally:
-        source.dispose()
-        target.dispose()
+    ))
+    with pytest.raises(RuntimeError, match="loopback databases"):
+        copier.transfer_synthetic_snapshot(source, target, hmac_key=b"x" * 32)
 
 
 def test_complete_snapshot_copy_rolls_back_on_mismatch(disposable_pair, monkeypatch):
