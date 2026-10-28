@@ -2,15 +2,19 @@
 
 import os
 import uuid
+from types import SimpleNamespace
 from datetime import UTC, date, datetime
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
+from app.bootstrap_admin import provision_admin
+from app.main import app
 from app.models import (
     Base,
     ManualCollection,
@@ -190,3 +194,54 @@ def test_mysql_new_receipts_follow_250_rule(mysql_trial_engine):
             db.commit()
         db.rollback()
         assert db.get(ManualCollection, receipt_id).amount_paise == 25000
+
+
+def test_mysql_fastapi_login_prospect_and_promoter_smoke(mysql_trial_engine, monkeypatch):
+    """Real HTTP routes must be able to use the trial MySQL schema.
+
+    Uses synthetic contacts, no communications transports, and no live host.
+    """
+    with Session(mysql_trial_engine) as db:
+        provision_admin(
+            db,
+            email="trial-admin@example.invalid",
+            password="synthetic-mysql-admin-long-password",
+            organization_name="Isolated MySQL API trial",
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: mysql_trial_engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="mysql-trial-auth-secret-only-not-production-12345",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(upi_match_secret="mysql-trial-upi-hmac-only-not-prod-12345"),
+    )
+    with TestClient(app) as client:
+        login = client.post("/v1/auth/login", json={
+            "email": "trial-admin@example.invalid",
+            "password": "synthetic-mysql-admin-long-password",
+        })
+        assert login.status_code == 200, login.text
+        csrf = {"X-CSRF-Token": client.get("/v1/auth/session").json()["csrf_token"]}
+        sponsor = client.post("/v1/prospects", headers=csrf, json={
+            "full_name": "Synthetic MySQL CRM sponsor",
+            "mobile_number": "+919876509901",
+            "area_city": "Test-only City",
+            "monthly_contribution_paise": 25000,
+            "whatsapp_opt_in": False,
+        })
+        assert sponsor.status_code == 201, sponsor.text
+        sponsor_id = sponsor.json()["id"]
+        assert client.get("/v1/prospects/" + sponsor_id).status_code == 200
+        promoter = client.post("/v1/promoters", headers=csrf, json={
+            "full_name": "Synthetic MySQL CRM promoter",
+            "mobile_number": "+919876509902",
+            "area_city": "Test-only City",
+            "whatsapp_opt_in": False,
+        })
+        assert promoter.status_code == 201, promoter.text
+        assert client.get("/v1/promoters/" + promoter.json()["id"]).status_code == 200
