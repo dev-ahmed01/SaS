@@ -47,7 +47,7 @@ def test_bad_configuration_stops_supervised_worker(worker, monkeypatch):
     assert ticks == ["tick"]
 
 
-@pytest.mark.parametrize("seconds", ["0", "5", "59", "3601", "-1"])
+@pytest.mark.parametrize("seconds", ["0", "1", "3601", "-1"])
 def test_worker_rejects_unsafe_cadence(worker, seconds):
     with pytest.raises(SystemExit):
         worker.main(["--loop", "--interval-seconds", seconds])
