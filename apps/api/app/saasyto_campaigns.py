@@ -464,7 +464,9 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
     # documents and approves a higher quota for this exact connector.
     batch_limit = getattr(cfg, "saasyto_campaign_batch_size", MAX_PER_RUN)
     minute_limit = getattr(cfg, "saasyto_campaign_max_per_minute", MAX_PER_RUN)
-    if not (1 <= batch_limit <= 15 and 1 <= minute_limit <= 60):
+    min_gap = getattr(cfg, "saasyto_campaign_min_interval_seconds", 0)
+    if (not 1 <= batch_limit <= 15 or not 1 <= minute_limit <= 60
+            or not 0 <= min_gap <= 300):
         raise ValueError("Unsafe Saasyto campaign dispatch configuration")
     attempts = min(batch_limit, minute_limit, max_attempts or batch_limit)
     counts: dict[str, int] = {}
@@ -507,6 +509,20 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
         if claim_count >= minute_limit:
             db.rollback()
             break
+        if min_gap:
+            # A minute quota alone allows a burst of 10 immediate requests.
+            # On personal-account connectors that can overwhelm the linked
+            # sender. Enforce one sender-wide inter-attempt gap under the same
+            # organization lock, across campaigns and competing workers.
+            most_recent = db.scalar(select(func.max(
+                SaasytoCampaignRecipient.claimed_at,
+            )).where(
+                SaasytoCampaignRecipient.organization_id == run.organization_id,
+            ))
+            if (most_recent is not None and
+                    as_utc(most_recent) + timedelta(seconds=min_gap) > now):
+                db.rollback()
+                break
         item.status = "claimed"
         item.claimed_at = now
         db.commit()
