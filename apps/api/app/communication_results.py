@@ -235,13 +235,15 @@ def campaign_detail(
         CommunicationRecipientSnapshot.organization_id == org,
         CommunicationRecipientSnapshot.preparation_id == preflight.id,
         CommunicationRecipientSnapshot.status == "suppressed",
-    ).order_by(CommunicationRecipientSnapshot.id).offset(offset).limit(limit)).all() if preflight else []
+    ).order_by(CommunicationRecipientSnapshot.id).offset(offset).limit(limit)
+    ).all() if preflight else []
 
     eligible = db.scalars(select(CommunicationRecipientSnapshot).where(
         CommunicationRecipientSnapshot.organization_id == org,
         CommunicationRecipientSnapshot.preparation_id == preflight.id,
         CommunicationRecipientSnapshot.status == "eligible",
-    ).order_by(CommunicationRecipientSnapshot.id).offset(offset).limit(limit)).all() if preflight else []
+    ).order_by(CommunicationRecipientSnapshot.id).offset(offset).limit(limit)
+    ).all() if preflight else []
     keys = {(row.recipient_kind, row.recipient_id)
             for row in [*queue, *eligible, *excluded]}
     lookup = _people(db, org, keys)
