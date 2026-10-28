@@ -21,8 +21,10 @@ from app.models import (
     Prospect,
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
+    SaasytoDispatchThrottle,
 )
 from app.saasyto_client import Submission
+from app.saasyto_campaigns import _reserve_sender_slot
 from app.security import utc_now
 
 RUNNER = "synthetic-saasyto-runner-secret-exactly-long-enough"
@@ -41,6 +43,10 @@ def dispatch_system(monkeypatch):
             password="synthetic-long-admin-password",
             organization_name="Emlen Foundation",
         )
+    # Existing integration tests exercise the full send loop without sleeping;
+    # the durable rate gate is separately exercised below.
+    monkeypatch.setattr("app.saasyto_campaigns._reserve_sender_slot",
+                        lambda *_a, **_kw: True)
     monkeypatch.setattr("app.auth.get_engine", lambda: engine)
     monkeypatch.setattr(
         "app.auth.get_settings", lambda: SimpleNamespace(
@@ -556,3 +562,37 @@ def test_campaign_sponsorship_variables_resolve_from_each_prospect_and_ist():
     with pytest.raises(ValueError, match="prospect record"):
         _render(body, Promoter(full_name="Promoter C"), period)
 
+
+
+def test_sender_slot_is_durable_and_shared_between_worker_sessions(dispatch_system):
+    """A second worker cannot reserve the same sender until its slot is due."""
+    _, engine = dispatch_system
+    now = utc_now()
+    cfg = _cfg()
+    cfg.saasyto_instance_id = "test-sender-for-rate-gate"
+    cfg.saasyto_max_attempts_per_minute = 30
+    with Session(engine) as db:
+        assert _reserve_sender_slot(db, cfg, now) is True
+        db.commit()
+    with Session(engine) as db:
+        assert _reserve_sender_slot(db, cfg, now + timedelta(seconds=1)) is False
+        db.rollback()
+    with Session(engine) as db:
+        assert _reserve_sender_slot(db, cfg, now + timedelta(seconds=2)) is True
+        db.commit()
+        assert db.scalar(select(func.count()).select_from(SaasytoDispatchThrottle)) == 1
+    # Independent Saasyto instances do not block one another.
+    cfg.saasyto_instance_id = "another-sender"
+    with Session(engine) as db:
+        assert _reserve_sender_slot(db, cfg, now) is True
+        db.commit()
+
+
+def test_campaign_capacity_is_10k_and_reminder_has_headroom():
+    from app.communication import MAX_AUDIENCE_ROWS
+    from app.reminders import MAX_RECIPIENTS, MAX_SPONSORS
+    from app.saasyto_campaigns import MAX_APPROVAL_RECIPIENTS
+    assert MAX_APPROVAL_RECIPIENTS == 10000
+    assert MAX_AUDIENCE_ROWS >= MAX_APPROVAL_RECIPIENTS
+    assert MAX_RECIPIENTS >= MAX_APPROVAL_RECIPIENTS
+    assert MAX_SPONSORS >= MAX_APPROVAL_RECIPIENTS
