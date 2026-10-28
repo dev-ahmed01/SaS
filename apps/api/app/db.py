@@ -27,6 +27,18 @@ def _mysql_staging_engine(url: str) -> Engine:
                 raise RuntimeError("MySQL staging requires READ COMMITTED")
             if set(inspect(conn).get_table_names()) != set(Base.metadata.tables):
                 raise RuntimeError("MySQL staging schema does not match mapped tables")
+            # Merely seeing all tables does not establish the vital
+            # one-current-promoter-per-sponsor invariant.
+            assignment_indexes = {
+                item["name"]: item
+                for item in inspect(conn).get_indexes("promoter_assignments")
+            }
+            current = assignment_indexes.get("uq_mysql_assignment_current_prospect")
+            if not (current and current.get("unique") and
+                    current.get("column_names") == [
+                        "organization_id", "mysql_current_prospect_id"
+                    ]):
+                raise RuntimeError("MySQL current-promoter uniqueness is missing")
             guards = conn.scalar(text("""
                 SELECT COUNT(*) FROM information_schema.triggers
                 WHERE trigger_schema = DATABASE()
