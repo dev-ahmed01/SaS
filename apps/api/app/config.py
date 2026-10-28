@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     saasyto_access_token: SecretStr | None = None
     saasyto_enable_after: datetime | None = None
     saasyto_runner_secret: SecretStr | None = None
+    # Bounded campaign dispatch. 10 requests/minute is a conservative
+    # engineering default, NOT a verified Saasyto API capacity. Raising this
+    # requires provider confirmation and a controlled production pilot.
+    saasyto_campaign_batch_size: int = Field(default=10, ge=1, le=120)
+    saasyto_campaign_max_per_minute: int = Field(default=10, ge=1, le=120)
+
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
     saasyto_local_test_enabled: bool = False
