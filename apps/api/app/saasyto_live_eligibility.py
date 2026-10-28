@@ -11,11 +11,18 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.accounting import (
-    effective_credits, evaluate_status, ist_today, month_start, period_balance,
+    effective_credits,
+    evaluate_status,
+    ist_today,
+    month_start,
+    period_balance,
 )
 from app.communication_consent import contact_address
 from app.models import (
-    CommunicationConsentEvent, Promoter, PromoterAssignment, Prospect,
+    CommunicationConsentEvent,
+    Promoter,
+    PromoterAssignment,
+    Prospect,
     SponsorshipRate,
 )
 
