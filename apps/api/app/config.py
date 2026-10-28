@@ -170,8 +170,6 @@ class Settings(BaseSettings):
             if self.saasyto_local_test_phone or self.saasyto_local_test_phone_2:
                 raise ValueError("Dynamic local mode cannot configure recipient phone numbers")
         if self.saasyto_local_test_enabled:
-            import re
-
             if not (self.app_env == "development" and self.local_demo_login_enabled):
                 raise ValueError("Saasyto local test requires protected loopback demo mode")
             # The local-demo validator above already enforces exactly
@@ -186,8 +184,6 @@ class Settings(BaseSettings):
         elif self.saasyto_local_test_phone_2:
             raise ValueError("Second local Saasyto phone requires guarded local test mode")
         if self.saasyto_delivery_enabled:
-            import re
-
             local_pilot = self.app_env == "development" and (
                 self.saasyto_local_test_enabled or self.saasyto_local_dynamic_enabled
             )
@@ -251,8 +247,6 @@ class Settings(BaseSettings):
                 "Activation notice requires approved Saasyto sending and enabled OTP"
             )
         if self.otp_delivery_enabled:
-            import re
-
             if self.app_env not in ("production", "test"):
                 raise ValueError("WhatsApp OTP delivery is restricted to approved production")
             if not self.otp_secret or len(self.otp_secret) < 32:
