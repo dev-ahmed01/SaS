@@ -556,3 +556,98 @@ def test_campaign_sponsorship_variables_resolve_from_each_prospect_and_ist():
     with pytest.raises(ValueError, match="prospect record"):
         _render(body, Promoter(full_name="Promoter C"), period)
 
+
+
+def test_worker_rolling_minute_quota_and_campaign_progress(dispatch_system, monkeypatch):
+    """Two overlapping scheduler ticks cannot exceed the agreed minute budget."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    for suffix in ("9101", "9102", "9103"):
+        _consent(client, csrf, _person(client, csrf, suffix), "opted_in")
+    cfg = _cfg()
+    cfg.saasyto_campaign_batch_size = 3
+    cfg.saasyto_campaign_max_per_minute = 2
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    cid, approved = _approved(client, csrf, "Minute quota test")
+    assert approved["queued"] == 3
+    sent = []
+    monkeypatch.setattr("app.saasyto_campaigns.send_text",
+                        lambda _cfg, *, phone, message:
+                        (sent.append(phone), Submission("accepted_unverified"))[1])
+    tick = "/internal/saasyto/dispatch"
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post(tick, headers=headers)
+    assert first.status_code == 200 and first.json()["accepted_unverified"] == 2
+    # A second worker polling immediately cannot claim the third queued item.
+    assert client.post(tick, headers=headers).json() == {}
+    summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
+    assert summary["queued"] == 1 and summary["accepted_unverified"] == 2
+    assert len(sent) == 2
+    with Session(engine) as db:
+        for row in db.scalars(select(SaasytoCampaignRecipient).where(
+            SaasytoCampaignRecipient.claimed_at.is_not(None),
+        )):
+            row.claimed_at -= timedelta(seconds=65)
+        db.commit()
+    final = client.post(tick, headers=headers)
+    assert final.status_code == 200 and final.json()["accepted_unverified"] == 1
+    assert len(set(sent)) == len(sent) == 3
+    assert client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()[
+        "status"
+    ] == "completed"
+
+
+def test_provider_429_pauses_remaining_queue_without_retry(dispatch_system, monkeypatch):
+    client, engine = dispatch_system
+    csrf = login(client)
+    for suffix in ("9111", "9112"):
+        _consent(client, csrf, _person(client, csrf, suffix), "opted_in")
+    cfg = _cfg()
+    cfg.saasyto_rate_limit_pause_minutes = 15
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    cid, _ = _approved(client, csrf, "Provider throttle")
+    calls = []
+    def throttled(_cfg, *, phone, message):
+        calls.append(phone)
+        return Submission("rejected", "provider_rate_limited")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", throttled)
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert first.status_code == 200 and first.json()["rejected"] == 1
+    assert len(calls) == 1
+    summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
+    assert summary["queued"] == summary["rejected"] == 1
+    assert summary["status"] == "approved"
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+    assert len(calls) == 1
+    with Session(engine) as db:
+        run = db.scalars(select(SaasytoCampaignRun)).one()
+        assert run.due_at >= utc_now() + timedelta(minutes=14)
+        assert db.scalar(select(func.count(SaasytoCampaignRecipient.id)).where(
+            SaasytoCampaignRecipient.status == "rejected",
+        )) == 1
+
+
+def test_10k_queue_status_aggregates_in_database(dispatch_system, monkeypatch):
+    """Synthetic large queue smoke test; no HTTP provider calls or real recipients."""
+    from sqlalchemy import insert
+
+    client, engine = dispatch_system
+    csrf = login(client)
+    _consent(client, csrf, _person(client, csrf, "9121"), "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, _ = _approved(client, csrf, "Synthetic 10k queue")
+    with Session(engine) as db:
+        run = db.scalars(select(SaasytoCampaignRun)).one()
+        payloads = [{
+            "id": uuid.uuid4(), "organization_id": run.organization_id,
+            "run_id": run.id, "recipient_kind": "prospect",
+            "recipient_id": uuid.uuid4(), "approved_phone_digest": "a"*64,
+            "status": "queued",
+        } for _ in range(9_999)]
+        db.execute(insert(SaasytoCampaignRecipient), payloads)
+        db.commit()
+    read = client.get("/v1/communication/campaigns/"+cid+"/saasyto")
+    assert read.status_code == 200, read.text
+    assert read.json()["queued"] == 10_000
+    assert read.json()["accepted_unverified"] == 0
