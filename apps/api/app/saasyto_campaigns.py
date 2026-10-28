@@ -476,7 +476,10 @@ def _reserve_sender_slot(db: Session, cfg, now: datetime) -> bool:
         raise RuntimeError("Saasyto sender throttle missing")
     if as_utc(row.next_allowed_at) > now:
         return False
-    row.next_allowed_at = now + timedelta(seconds=60 / rpm)
+    interval = getattr(cfg, "saasyto_min_interval_seconds", 90)
+    if type(interval) is not int or not 1 <= interval <= 3600:
+        raise ValueError("Saasyto sender interval must be between 1 and 3600 seconds")
+    row.next_allowed_at = now + timedelta(seconds=max(60 / rpm, interval))
     return True
 
 
