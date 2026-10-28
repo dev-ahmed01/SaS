@@ -40,6 +40,7 @@ from app.models import (
     SaasytoDispatchThrottle,
 )
 from app.saasyto_client import local_pilot_permits, local_pilot_phones, send_text
+from app.saasyto_live_eligibility import live_segment_member, live_whatsapp_permission
 from app.security import as_utc, utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE
 
@@ -413,19 +414,12 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
         isinstance(person, Promoter) and not person.is_active
     ):
         return None
-    candidates = _audience_rows(
-        db,
-        type("Org", (), {"organization_id": run.organization_id})(),
-        row.audience, row.segment, now,
-    )
-    if not any(isinstance(p, model) and p.id == person.id for p in candidates):
+    if not live_segment_member(
+        db, run.organization_id, person, row.audience, row.segment, now,
+    ):
         return None
-    decisions = evaluate_recipients(
-        db, run.organization_id, candidates, "whatsapp", row.category, now=now,
-    )
-    if not any(
-        p.id == person.id and kind == item.recipient_kind and state == "eligible"
-        for p, kind, state, _ in decisions
+    if not live_whatsapp_permission(
+        db, run.organization_id, person, row.category, now,
     ):
         return None
     phone = contact_address(person, "whatsapp")
