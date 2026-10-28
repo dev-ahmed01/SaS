@@ -25,7 +25,7 @@ from app.models import (
     SaasytoCampaignRun,
 )
 from app.saasyto_client import Submission
-from app.security import utc_now
+from app.security import as_utc, utc_now
 
 RUNNER = "synthetic-saasyto-runner-secret-exactly-long-enough"
 
@@ -624,7 +624,7 @@ def test_provider_429_pauses_remaining_queue_without_retry(dispatch_system, monk
     assert len(calls) == 1
     with Session(engine) as db:
         run = db.scalars(select(SaasytoCampaignRun)).one()
-        assert run.due_at >= utc_now() + timedelta(minutes=14)
+        assert as_utc(run.due_at) >= utc_now() + timedelta(minutes=14)
         assert db.scalar(select(func.count(SaasytoCampaignRecipient.id)).where(
             SaasytoCampaignRecipient.status == "rejected",
         )) == 1
