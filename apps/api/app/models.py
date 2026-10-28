@@ -1235,3 +1235,17 @@ class MessageDeliveryEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# Match the sender-safe normalized WhatsApp lookup indexes in migration 0024.
+# Existing organization/mobile indexes remain the canonical primary lookups.
+Index(
+    "ix_prospects_org_whatsapp_normalized",
+    Prospect.organization_id,
+    func.replace(Prospect.whatsapp_number, " ", ""),
+)
+Index(
+    "ix_promoters_org_whatsapp_normalized",
+    Promoter.organization_id,
+    func.replace(Promoter.whatsapp_number, " ", ""),
+)
