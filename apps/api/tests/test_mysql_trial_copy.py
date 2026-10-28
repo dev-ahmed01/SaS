@@ -275,7 +275,7 @@ def test_complete_snapshot_copy_rolls_back_on_mismatch(disposable_pair, monkeypa
     with Session(target) as db:
         restored = db.get(Prospect, sponsor_id)
         assert restored.mobile_number == "+919876501934"
-        assert restored.next_followup_at == timestamp.replace(tzinfo=None)
+        assert restored.next_followup_at == timestamp
         assert restored.next_followup_at.microsecond == 123456
         assert db.get(ManualCollection, collection_id).amount_paise == 25000
         assert db.get(ManualCollection, legacy_collection_id).amount_paise == 12500
