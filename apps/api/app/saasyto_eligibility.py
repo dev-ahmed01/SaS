@@ -87,7 +87,7 @@ def _sponsor_financial(
     today = ist_today(now)
     try:
         status = evaluate_status(person, rates, credits, today, now)
-        due, paid, outstanding, settled = period_balance(
+        due, _paid, outstanding, _settled = period_balance(
             person, rates, credits, month_start(today), now,
         )
     except ValueError:
