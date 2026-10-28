@@ -43,7 +43,7 @@ from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE
 admin_router = APIRouter(prefix="/v1/communication", tags=["Saasyto campaigns"])
 internal_router = APIRouter(prefix="/internal/saasyto", tags=["Saasyto private runner"])
 MAX_PER_RUN = 10
-MAX_APPROVAL_RECIPIENTS = 500
+MAX_APPROVAL_RECIPIENTS = 10000
 VALID_TEMPLATE = re.compile(
     r"{{\s*(name|month|sponsorship|sponsorship_amount|sponsorship_units)\s*}}"
 )
