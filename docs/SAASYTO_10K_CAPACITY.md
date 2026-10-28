@@ -59,6 +59,11 @@ consent or anti-spam policies.
   Saasyto HTTP acceptance equals WhatsApp *delivered* or *read*.
 - No automatic retries of claimed, unknown, rejected or timed-out
   contacts. Manual resolution needs explicit provider evidence.
+- A claim left in progress by a worker crash for **more than 15 minutes**
+  becomes `unknown` during the next authenticated dispatch tick. It is never
+  submitted again automatically; a completed queue is marked completed.
+- A composite claim-time index keeps the rolling minute/gap checks efficient
+  as queued recipient history grows.
 
 **Not included:** verified provider throughput; a documented signed
 delivery/read webhook; production-recipient load testing; automatic
