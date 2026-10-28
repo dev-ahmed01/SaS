@@ -65,6 +65,25 @@ consent or anti-spam policies.
 - A composite claim-time index keeps the rolling minute/gap checks efficient
   as queued recipient history grows.
 
+### Private VPS dispatcher scaffolding
+
+The API image contains an optional, production-only CLI:
+
+```bash
+python -m app.saasyto_vps_worker --once
+python -m app.saasyto_vps_worker --interval-seconds 60
+```
+
+It runs `_dispatch_due` directly against the private PostgreSQL queue
+rather than exposing `/internal/saasyto/dispatch` to the public Caddy
+reverse proxy. It **refuses to run** unless all four gates are true:
+`APP_ENV=production`, `SAASYTO_DELIVERY_ENABLED=true`,
+`SAASYTO_SENDER_APPROVED=true`, and `SAASYTO_WORKER_ENABLED=true`.
+These values are **not** set in the VPS staging deployment; no worker
+service is automatically provisioned or started. Configure a supervised
+production worker, account-level alerting and rollback only after the
+provider pilot passes.
+
 **Not included:** verified provider throughput; a documented signed
 delivery/read webhook; production-recipient load testing; automatic
 monthly-rule-to-campaign send; priority scheduling between OTP and
