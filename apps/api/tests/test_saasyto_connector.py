@@ -140,3 +140,12 @@ def test_admin_readiness_is_safe_and_does_not_claim_connection(api, monkeypatch)
     })
     # Auth check still belongs to the existing administrator session middleware.
     assert unauthorized.status_code in (200, 401)
+
+
+def test_429_is_terminal_and_distinct_from_uncertain_transport(monkeypatch):
+    fake = FakeClient(status=429, receipt={"error": "rate exceeded"})
+    monkeypatch.setattr("app.saasyto_client.httpx.Client", lambda **_kw: fake)
+    result = send_text(_cfg(), phone="+919800001234", message="Synthetic")
+    assert result.state == "rejected"
+    assert result.reason == "provider_rate_limited"
+    assert len(fake.calls) == 1
