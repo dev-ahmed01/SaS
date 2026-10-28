@@ -13,7 +13,7 @@ from typing import Any
 
 from app.models import Base
 
-FORMAT = "sas-migration-manifest-v1"
+FORMAT = "sas-migration-manifest-v2"
 FIELDS = frozenset({
     "format", "role", "engine", "snapshot_id", "schema_revision",
     "table_counts", "table_hmac_sha256", "financial_totals_paise", "invariants",
@@ -22,7 +22,7 @@ TABLES = frozenset(Base.metadata.tables)
 FINANCIAL = frozenset({
     "manual_collections_gross", "verified_credits_gross",
     "manual_collections_net", "verified_credits_net",
-    "payout_payments_gross",
+    "manual_attested_credits_net", "payout_payments_gross",
 })
 INVARIANTS = frozenset({
     "referential_integrity", "one_active_promoter_per_prospect",
@@ -71,9 +71,9 @@ def validate_manifest(manifest: Any, role: str) -> dict:
     if not all(v is True for v in manifest["invariants"].values()):
         raise ValueError("Required integrity check did not pass")
     if manifest["financial_totals_paise"]["manual_collections_net"] != (
-        manifest["financial_totals_paise"]["verified_credits_net"]
+        manifest["financial_totals_paise"]["manual_attested_credits_net"]
     ):
-        raise ValueError("Manual collection accounting does not reconcile")
+        raise ValueError("Manual collection and manual-attested credit accounting does not reconcile")
     return manifest
 
 
