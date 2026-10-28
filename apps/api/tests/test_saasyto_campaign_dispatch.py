@@ -827,3 +827,59 @@ def test_personal_sender_minimum_spacing_blocks_burst_across_worker_ticks(
     summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
     assert summary["status"] == "completed"
     assert summary["accepted_unverified"] == 2
+
+
+def test_stale_claim_is_recorded_unknown_and_never_replayed(
+    dispatch_system, monkeypatch,
+):
+    """Simulate a crash after durable claim, before gateway response."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    _consent(client, csrf, _person(client, csrf, "9191"), "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "Interrupted worker outcome")
+    assert approved["queued"] == 1
+    with Session(engine) as db:
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        item.status = "claimed"
+        item.claimed_at = utc_now() - timedelta(minutes=20)
+        db.commit()
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", lambda *_a, **_kw:
+                        (_ for _ in ()).throw(AssertionError(
+                            "An interrupted attempt must never be resent"
+                        )))
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["unknown"] == 1
+    with Session(engine) as db:
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        assert item.status == "unknown"
+        assert item.reason == "worker_interrupted"
+    summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
+    assert summary["status"] == "completed"
+    assert summary["unknown"] == 1 and summary["claimed"] == 0
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+
+
+def test_recent_claim_remains_in_flight_until_recovery_window(
+    dispatch_system, monkeypatch,
+):
+    client, engine = dispatch_system
+    csrf = login(client)
+    _consent(client, csrf, _person(client, csrf, "9192"), "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "Active in-flight claim")
+    assert approved["queued"] == 1
+    with Session(engine) as db:
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        item.status = "claimed"
+        item.claimed_at = utc_now() - timedelta(minutes=2)
+        db.commit()
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", lambda *_a, **_kw:
+                        (_ for _ in ()).throw(AssertionError("No replay")))
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+    summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
+    assert summary["status"] == "approved"
+    assert summary["claimed"] == 1 and summary["unknown"] == 0
