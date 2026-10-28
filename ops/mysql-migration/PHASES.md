@@ -67,6 +67,16 @@ Still blocked:
 
 Exit gate: repeatable evidence of exact transfer and an independent restore. Equal row counts alone are NOT enough.
 
+### Phase 3 prototype: synthetic-only transactional copy
+
+- `app/mysql_trial_copy.py` is an intentionally restricted code prototype for **disposable local test databases only**. Both database URLs must be loopback `127.0.0.1`, with exact `sas_pg_trial_*` and `sas_mysql_trial_*` database naming, and all three test gates (`APP_ENV=test`, `SAS_MYSQL_TRIAL_ONLY=1`, `SAS_MYSQL_COPY_TRIAL_ONLY=1`).
+- PostgreSQL is read inside one explicit read-only, repeatable-read transaction, so a single consistent historical snapshot is copied; MySQL target must have the exact new trial schema with **zero rows in every mapped table**.
+- Copy follows ORM foreign-key table order and retains original IDs, event/OTP/message states, JSON and financial fields. Aware timestamps are normalized to UTC-naive for MySQL `DATETIME(6)`, with canonical UTC HMAC comparisons.
+- Source and target contents are compared **table by table and row by row** through keyed HMAC-SHA256 before the target transaction commits. Any mismatch rolls back all inserted target data; the copier never prints contacts, amounts, hashes, DB URLs or password fields.
+- `tests/test_mysql_trial_copy.py` uses independently provisioned ephemeral PostgreSQL 16 and MySQL 8.4 services in CI. It checks complete table copy, preservation of IDs, OTP/message statuses, nested JSON and microseconds, and intentional corruption/rollback and refusal to run over an occupied destination.
+- **This is not a production-ready importer:** historical below-tier financial entries may be rejected by trial triggers; schema migration management, live concurrent writes, independently restored source backups, financial reconciliations, source-of-truth mapping and interruption recovery still need separate work. Do not run this on Foundation data or the InterServer account.
+- The migration manifest in `mysql_migration_reconcile.py` remains a separate validation contract. The new synthetic copier uses internal HMAC comparisons and intentionally does **not** assert all manifest accounting/integrity flags or authorize cutover.
+
 ## Phase 4: isolated InterServer staging
 
 1. Confirm Node 22 and compatible Next.js application manager.
