@@ -67,9 +67,9 @@ def trial_metadata() -> MetaData:
         table.dialect_options["mysql"]["engine"] = "InnoDB"
         table.dialect_options["mysql"]["charset"] = "utf8mb4"
         table.dialect_options["mysql"]["collate"] = "utf8mb4_0900_as_cs"
-        # Generic SQLAlchemy DateTime compiles to MySQL DATETIME(0), which
-        # silently truncates historical PostgreSQL microseconds. Preserve
-        # six fractional digits in the detached candidate schema only.
+        # UTCInstant models compile to DATETIME(6) and convert future
+        # offset-bearing writes to UTC. This legacy path catches a new generic
+        # DateTime accidentally introduced outside the shared UTC type.
         for column in table.columns:
             if isinstance(column.type, DateTime):
                 column.type = MySQLDateTime(fsp=6)
@@ -129,14 +129,18 @@ def assert_disposable_target(engine: Engine) -> None:
             raise RuntimeError("Trial database must be empty; refusing overwrite")
 
 
-def create_trial_schema(engine: Engine) -> None:
-    """Create disposable schema after all preflight checks; no data transfer."""
-    assert_disposable_target(engine)
-    trial_metadata().create_all(engine, checkfirst=False)
-    # Live PostgreSQL permits older, below-tier entries but blocks NEW ones.
-    # MySQL table-level CHECK would reject those historical receipts on copy,
-    # so matching triggers are installed on a fresh trial database instead.
-    # Later import tooling must install these only AFTER historical import.
+def _install_financial_guards(engine: Engine) -> None:
+    # MySQL DDL auto-commits. This must be executed AFTER a fully verified
+    # historical trial copy, never within the data-copy transaction itself.
+    with engine.connect() as connection:
+        existing = connection.scalar(text("""
+            SELECT COUNT(*) FROM information_schema.triggers
+            WHERE trigger_schema = DATABASE()
+              AND trigger_name IN ('sas_manual_collection_tier_insert',
+                                   'sas_manual_collection_tier_update')
+        """))
+        if existing:
+            raise RuntimeError("Trial financial guards already installed or partially applied")
     with engine.begin() as connection:
         connection.exec_driver_sql("""
             CREATE TRIGGER sas_manual_collection_tier_insert
@@ -163,6 +167,43 @@ def create_trial_schema(engine: Engine) -> None:
                 END IF;
             END
         """)
+
+
+def install_trial_financial_guards(engine: Engine) -> None:
+    """Post-copy policy restoration, only in an explicitly gated local trial."""
+    if (os.environ.get("APP_ENV") != "test"
+            or os.environ.get("SAS_MYSQL_TRIAL_ONLY") != "1"
+            or os.environ.get("SAS_MYSQL_COPY_TRIAL_ONLY") != "1"):
+        raise RuntimeError("Historical-trial financial guards require copy-only gate")
+    url = make_url(engine.url)
+    if (engine.dialect.name != "mysql"
+            or url.host != "127.0.0.1"
+            or not _TRIAL_NAME.fullmatch(url.database or "")):
+        raise RuntimeError("Refusing financial DDL outside localhost trial")
+    with engine.connect() as connection:
+        if connection.scalar(text("SELECT DATABASE()")) != url.database:
+            raise RuntimeError("MySQL target name changed")
+        expected_tables = set(Base.metadata.tables)
+        if set(inspect(connection).get_table_names()) != expected_tables:
+            raise RuntimeError("Incomplete target schema")
+        count = connection.scalar(text("SELECT COUNT(*) FROM manual_collections"))
+        if count is None:
+            raise RuntimeError("Trial target is not readable")
+    _install_financial_guards(engine)
+
+
+def create_trial_schema(engine: Engine, *, defer_payment_guards: bool = False) -> None:
+    """Create an empty disposable schema with or without import-only guards.
+
+    Skipping guards is strictly limited to the offline synthetic copy
+    rehearsal; NO production importer or live database path supports it.
+    """
+    assert_disposable_target(engine)
+    if defer_payment_guards and os.environ.get("SAS_MYSQL_COPY_TRIAL_ONLY") != "1":
+        raise RuntimeError("Only an isolated historical-copy trial may defer guards")
+    trial_metadata().create_all(engine, checkfirst=False)
+    if not defer_payment_guards:
+        _install_financial_guards(engine)
 
 
 def main() -> None:
