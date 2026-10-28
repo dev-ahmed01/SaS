@@ -789,3 +789,41 @@ def test_provider_429_on_only_recipient_finishes_run_without_retry(
     assert summary["rejected"] == 1 and summary["queued"] == 0
     assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
     assert len(attempted) == 1
+
+
+def test_personal_sender_minimum_spacing_blocks_burst_across_worker_ticks(
+    dispatch_system, monkeypatch,
+):
+    """Rolling per-minute totals alone must not permit an immediate burst."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    for suffix in ("9181", "9182"):
+        _consent(client, csrf, _person(client, csrf, suffix), "opted_in")
+    cfg = _cfg()
+    cfg.saasyto_campaign_batch_size = 10
+    cfg.saasyto_campaign_max_per_minute = 10
+    cfg.saasyto_campaign_min_interval_seconds = 120
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    cid, _approved_run = _approved(client, csrf, "Conservative sender spacing")
+    attempted = []
+    def accepted(_cfg, *, phone, message):
+        attempted.append(phone)
+        return Submission("accepted_unverified")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", accepted)
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert first.status_code == 200 and first.json()["accepted_unverified"] == 1
+    assert len(attempted) == 1
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+    with Session(engine) as db:
+        claimed = db.scalars(select(SaasytoCampaignRecipient).where(
+            SaasytoCampaignRecipient.claimed_at.is_not(None),
+        )).one()
+        claimed.claimed_at -= timedelta(seconds=125)
+        db.commit()
+    second = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert second.status_code == 200 and second.json()["accepted_unverified"] == 1
+    assert len(set(attempted)) == 2
+    summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
+    assert summary["status"] == "completed"
+    assert summary["accepted_unverified"] == 2
