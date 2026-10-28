@@ -42,6 +42,11 @@ Implemented:
 
 Verified initial DB-only trial: schema creation and promoter/financial guards passed on isolated MySQL 8.4 service. Final API smoke test requires full CI passing.
 
+Additional validation:
+- Real FastAPI MySQL trial routes now cover Admin login, Prospect and Promoter creation, one collection with request-id retry and duplicate-reference rejection, invalid amount rejection, collection reversal with request-id retry, one-time payout with retry and duplicate-reference rejection. All fixture contacts are synthetic and no sender is enabled.
+- Reconciliation manifest contract advanced to `sas-migration-manifest-v2` to distinguish independent bank credits from manually attested collections. This prevents false failures when verified bank credits legitimately have no manual collection.
+- Remaining unverified: high-concurrency database behavior, arbitrary imported histories, communication/OTP state parity and authoritative-source export/restore.
+
 Still blocked:
 - Production/staging config **rejects** MySQL by design.
 - Existing PostgreSQL Alembic chain is **not** being applied to MySQL.
@@ -96,7 +101,7 @@ Exit gate: data independently reconciled, business acceptance, monitored backups
 File: apps/api/app/mysql_migration_reconcile.py
 Tests: apps/api/tests/test_mysql_migration_reconcile.py
 
-No database connection, message sender or data export exists in this code. It only compares separately generated aggregate manifests. Both source and destination must share the SAME snapshot ID and exact sets of ORM tables for table_counts and table_hmac_sha256. Financial aggregates compare gross/net manual collections, gross/net verified credits and gross payout payments. Referential, tenant, current-assignment and ledger-balance integrity checks must all pass.
+No database connection, message sender or data export exists in this code. It only compares separately generated aggregate manifests. Both source and destination must share the SAME snapshot ID and exact sets of ORM tables for table_counts and table_hmac_sha256. Financial aggregates compare gross/net manual collections, separate net manual-attested credits, gross/net all verified credits (including bank reconciliations), and gross payout payments. A bank-reconciled credit is **not** required to have a corresponding manual collection. Only manual-attested net credit and manual-collection net are required to balance. Referential, tenant, current-assignment and ledger-balance integrity checks must all pass.
 
 A future exporter must create keyed HMAC-SHA256 over canonical ordered records, using a secret key outside GitHub and logs. Raw hashes of individual donor fields are not acceptable. Do not invent or manually set integrity flags to true.
 
