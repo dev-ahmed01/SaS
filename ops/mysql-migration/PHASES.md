@@ -1,6 +1,6 @@
 # Sponsor a Salah — phased PostgreSQL to InterServer MySQL 8.4 migration
 
-Status: Phase 1 — preliminary code audit and offline reconciliation contract. NOT READY for real-data transfer or hosting cutover.
+Status: Phase 1 safeguards and partial Phase 2 MySQL 8.4 integration tests. NOT READY for real-data transfer or hosting cutover.
 
 ## What we have established
 
@@ -40,18 +40,21 @@ Implemented:
 - `requirements-mysql-trial.txt` installs a pinned test-only PyMySQL driver.
 - CI now provisions an isolated MySQL 8.4 service, creates the full trial schema, checks constraints with synthetic transactions, and exercises a basic FastAPI Admin/Prospect/Promoter journey.
 
-Verified initial DB-only trial: schema creation and promoter/financial guards passed on isolated MySQL 8.4 service. Final API smoke test requires full CI passing.
+Verified with GitHub's disposable MySQL 8.4 service: schema creation, promoter/financial guards and the real Admin/Prospect/Promoter API smoke test passed. The latest added tests must pass the CI run for this commit.
 
 Additional validation:
 - Real FastAPI MySQL trial routes now cover Admin login, Prospect and Promoter creation, one collection with request-id retry and duplicate-reference rejection, invalid amount rejection, collection reversal with request-id retry, one-time payout with retry and duplicate-reference rejection. All fixture contacts are synthetic and no sender is enabled.
 - Reconciliation manifest contract advanced to `sas-migration-manifest-v2` to distinguish independent bank credits from manually attested collections. This prevents false failures when verified bank credits legitimately have no manual collection.
-- Remaining unverified: high-concurrency database behavior, arbitrary imported histories, communication/OTP state parity and authoritative-source export/restore.
+- Additional MySQL integration covers synthetic OTP activation consumed once (no live OTP sends), stored OTP lifecycle timestamps, and two simultaneous InnoDB sessions selecting disjoint queued recipients under `SKIP LOCKED`. This is not yet a full multi-worker Saasyto dispatcher test.
+- MySQL candidate `DATETIME(6)` now preserves PostgreSQL-style microseconds. SQLAlchemy's generic `DATETIME` would otherwise silently truncate fractional seconds, so later import code must explicitly normalize every historical timezone-aware timestamp to UTC before insert.
+- `make_trial_engine` configures per-connection UTC and `READ COMMITTED` isolation (matching PostgreSQL's usual statement visibility rather than MySQL's default repeatable read); these settings are enforced by the guarded trial preflight and tested in MySQL CI.
+- Remaining unverified: high-throughput multi-process payment/message concurrency, arbitrary imported histories, full communication/OTP state parity and authoritative-source export/restore.
 
 Still blocked:
 - Production/staging config **rejects** MySQL by design.
 - Existing PostgreSQL Alembic chain is **not** being applied to MySQL.
 - No source-to-target export/import, historical reconstruction or record-level digest generator exists.
-- UTC timestamp semantics, MySQL InnoDB lock fairness/skip-locked with concurrent workers, and all payment/OTP/message lifecycle flows still require MySQL integration tests.
+- Full UTC timestamp import normalization, InnoDB fairness under real multi-worker dispatch, and all other message/OTP/payment lifecycle edge cases still require MySQL tests.
 - No actual DirectAdmin deployment, source database backup, donor record import, or sender activation occurred.
 
 ## Phase 3: repeatable data-copy rehearsal
