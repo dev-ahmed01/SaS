@@ -463,6 +463,19 @@ def test_production_batch_uses_multiple_registered_contacts_and_honors_late_opto
     assert sorted(phone for phone, _message in hits) == [
         "+919899002201", "+919899002203",
     ]
+    # Results must be accurate across the FULL campaign, not just one page.
+    first_page = client.get(
+        "/v1/communication/campaigns/" + cid + "/results?limit=1&offset=0",
+    ).json()
+    second_page = client.get(
+        "/v1/communication/campaigns/" + cid + "/results?limit=1&offset=1",
+    ).json()
+    assert first_page["page_limit"] == second_page["page_limit"] == 1
+    assert len(first_page["recipients"]) == len(second_page["recipients"]) == 1
+    for page in (first_page, second_page):
+        assert page["summary"]["planned"] == 3
+        assert page["summary"]["submitted_unverified"] == 2
+        assert page["summary"]["suppressed_after_approval"] == 1
     assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
     summary = client.get("/v1/communication/campaigns/" + cid + "/saasyto")
     assert summary.status_code == 200
