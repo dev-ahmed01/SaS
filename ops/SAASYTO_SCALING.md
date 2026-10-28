@@ -40,15 +40,25 @@ Do not assume HTTP 2xx equals delivery or retry ambiguous errors.
 
 ## Throughput
 
-`SAASYTO_MAX_ATTEMPTS_PER_MINUTE` defaults to **12/min**, with a
-validated technical range of 1–120/min. The higher bound is only a software
-validation ceiling, **not** a provider-approved sending speed.
+Saasyto's personal-WhatsApp campaign guide recommends **90–120 seconds
+between messages** to reduce the risk of account restrictions:
+https://saasyto.com/product/saasyto-personal-whatsapp-subscription/
 
-At 12 requests/minute, 10,000 requests require **at least ~13 hours 54 minutes**
-assuming each recipient remains eligible, no outages, and no throttling beyond
-the configured limit. At 30/minute it is **at least ~5 hours 34 minutes**,
-but 30/minute must not be selected without approval from Saasyto.
-Those are lower bounds for submission *attempts*, not delivery.
+Therefore `SAASYTO_MIN_INTERVAL_SECONDS` defaults to **90** seconds.
+`SAASYTO_MAX_ATTEMPTS_PER_MINUTE` provides an independent upper bound,
+default 12/min, but the **slower** of the two limits always wins. Technical
+validation ranges are 1–3600 seconds and 1–120/min respectively; neither
+represents a provider-approved sending rate.
+
+With a 90-second interval, 10,000 requests take **at least 250 hours
+(approximately 10.4 days)** from one sender. This is only a bound for
+submission attempts, not guaranteed deliveries. A 10,000-messages-per-day
+target **cannot be promised for this personal account** without written
+provider approval of another sending route or multiple independently permitted
+senders and a corresponding sender-aware queue implementation.
+
+Reduce the interval only after Saasyto confirms your specific connected
+account's safe API throughput and messaging permissions.
 
 Use the **single supervised VPS worker** after explicit rollout approval:
 
@@ -70,7 +80,8 @@ Required environment for the worker:
 Required API environment:
 - `SAASYTO_DELIVERY_ENABLED=false` until approved;
 - `SAASYTO_SENDER_APPROVED=false` until verified;
-- `SAASYTO_MAX_ATTEMPTS_PER_MINUTE=12` conservative default;
+- `SAASYTO_MIN_INTERVAL_SECONDS=90` conservative personal-account default;
+- `SAASYTO_MAX_ATTEMPTS_PER_MINUTE=12` independent ceiling;
 - `SAASYTO_INSTANCE_ID`, `SAASYTO_ACCESS_TOKEN`, `SAASYTO_RUNNER_SECRET`
   configured privately;
 - `SAASYTO_ENABLE_AFTER` timezone-aware activation cutoff.
@@ -106,8 +117,9 @@ separate approved deployment and secret configuration.
   delivered/read statuses require a verified, authenticated Saasyto webhook or
   official provider status endpoint, which is not yet integrated.
 - A queue claim committed immediately before an external request may remain
-  `claimed` if a process crashes. Investigate that state rather than
-  automatically replaying it.
+  `claimed` after a crash. The worker automatically marks claims older than
+  15 minutes as `unknown` for manual review, **without resending** them.
+- Campaign results use paged recipient lists and full-database status totals.
 - The rate gate is per Saasyto instance within **one database**. Separate CRM
   databases or other applications using the same instance do not share this
   limit unless additional external coordination is implemented.
