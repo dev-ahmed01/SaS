@@ -12,7 +12,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
-    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -24,6 +23,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.utc_instant import UTCInstant
+
 
 class Base(DeclarativeBase):
     pass
@@ -34,7 +35,7 @@ class Organization(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCInstant(), server_default=func.now())
     settings: Mapped["OrganizationSettings"] = relationship(
         back_populates="organization", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -50,7 +51,7 @@ class AdminUser(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCInstant(), server_default=func.now())
 
 
 class OrganizationSettings(Base):
@@ -73,7 +74,7 @@ class OrganizationSettings(Base):
     inactivity_months: Mapped[int] = mapped_column(nullable=False)
     automation_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCInstant(), server_default=func.now(), onupdate=func.now()
     )
     organization: Mapped[Organization] = relationship(back_populates="settings")
 
@@ -94,7 +95,7 @@ class AuditEvent(Base):
     before_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     after_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        UTCInstant(), server_default=func.now()
     )
 
 
@@ -111,11 +112,11 @@ class AdminSession(Base):
         Uuid, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
+        UTCInstant(), nullable=False, index=True
     )
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCInstant())
 
 
 class AdminLoginAttempt(Base):
@@ -127,7 +128,7 @@ class AdminLoginAttempt(Base):
     email_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     network_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
+        UTCInstant(), nullable=False, index=True
     )
 
 
@@ -169,34 +170,34 @@ class Prospect(Base):
     crm_stage: Mapped[str] = mapped_column(
         String(12), nullable=False, default="inactive", server_default="inactive"
     )
-    crm_stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    crm_stage_changed_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     crm_inactive_reason: Mapped[str | None] = mapped_column(String(64))
     crm_inactive_note: Mapped[str | None] = mapped_column(String(500))
     pipeline_stage_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     mobile_number: Mapped[str] = mapped_column(String(16), nullable=False)
     whatsapp_number: Mapped[str | None] = mapped_column(String(16))
-    whatsapp_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    whatsapp_verified_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     area_city: Mapped[str] = mapped_column(String(120), nullable=False)
     monthly_contribution_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
     version: Mapped[int] = mapped_column(nullable=False, default=1)
     registration_request_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     registration_payload_hash: Mapped[str | None] = mapped_column(String(64))
     next_followup_on: Mapped[date | None] = mapped_column(Date)
-    next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_followup_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     last_contact_on: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(String(1500))
     whatsapp_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     lifecycle_status: Mapped[str] = mapped_column(String(12), nullable=False, default="new")
-    last_verified_payment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_verified_payment_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     status_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        UTCInstant(), server_default=func.now(), nullable=False,
         onupdate=func.now(),
     )
     start_month: Mapped[date | None] = mapped_column(Date)
@@ -233,9 +234,9 @@ class SponsorOtpChallenge(Base):
     code_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     attempts: Mapped[int] = mapped_column(nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCInstant())
 
 
 class ProspectFollowUp(Base):
@@ -260,9 +261,9 @@ class ProspectFollowUp(Base):
     notes: Mapped[str] = mapped_column(String(500), nullable=False)
     pipeline_stage_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     next_followup_on: Mapped[date | None] = mapped_column(Date)
-    next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_followup_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -288,10 +289,10 @@ class ProspectStageDefinition(Base):
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     version: Mapped[int] = mapped_column(nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -314,7 +315,7 @@ class ProspectStageTransition(Base):
     to_stage: Mapped[str] = mapped_column(String(12), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(64))
     note: Mapped[str | None] = mapped_column(String(500))
-    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
     actor_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
     )
@@ -345,8 +346,8 @@ class ProspectArchiveInterval(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
-    archived_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
+    restored_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     prospect: Mapped[Prospect] = relationship(back_populates="archive_intervals")
 
 
@@ -373,9 +374,9 @@ class ProspectUpiIdentifier(Base):
     # Always false until a bank/provider verification flow is implemented.
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     prospect: Mapped[Prospect] = relationship(back_populates="upi_ids")
 
 
@@ -408,10 +409,10 @@ class Promoter(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     version: Mapped[int] = mapped_column(nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -444,9 +445,9 @@ class PromoterAssignment(Base):
     promoter_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     prospect_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     assigned_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
@@ -481,7 +482,7 @@ class SponsorshipRate(Base):
     effective_month: Mapped[date] = mapped_column(Date, nullable=False)
     amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -521,9 +522,9 @@ class VerifiedCredit(Base):
     amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
     source_type: Mapped[str] = mapped_column(String(24), nullable=False)
     source_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -574,7 +575,7 @@ class ManualCollection(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -612,7 +613,7 @@ class MessageOutbox(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     suppress_reason: Mapped[str | None] = mapped_column(String(60))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -654,7 +655,7 @@ class ManualCollectionReversal(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -695,7 +696,7 @@ class PayoutPlan(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        UTCInstant(), server_default=func.now(), nullable=False,
     )
 
 
@@ -730,7 +731,7 @@ class PayoutPlanTerm(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        UTCInstant(), server_default=func.now(), nullable=False,
     )
 
 
@@ -779,7 +780,7 @@ class PayoutPayment(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        UTCInstant(), server_default=func.now(), nullable=False,
     )
 
 
@@ -804,12 +805,12 @@ class CommunicationTemplate(Base):
     body: Mapped[str] = mapped_column(String(1200), nullable=False)
     provider_template_id: Mapped[str | None] = mapped_column(String(160))
     version: Mapped[int] = mapped_column(nullable=False, default=1)
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -849,14 +850,14 @@ class CommunicationCampaign(Base):
     body: Mapped[str] = mapped_column(String(1200), nullable=False)
     provider_template_id: Mapped[str | None] = mapped_column(String(160))
     status: Mapped[str] = mapped_column(String(16), nullable=False)
-    planned_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    planned_for: Mapped[datetime | None] = mapped_column(UTCInstant())
     eligible_snapshot: Mapped[int] = mapped_column(nullable=False, default=0)
     candidate_snapshot: Mapped[int] = mapped_column(nullable=False, default=0)
     created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -880,8 +881,8 @@ class SaasytoCampaignRun(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     campaign_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
-    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    due_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
     approved_by_admin_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="RESTRICT"), nullable=False,
     )
@@ -920,8 +921,8 @@ class SaasytoCampaignRecipient(Base):
     approved_phone_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(32))
-    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(UTCInstant())
+    finished_at: Mapped[datetime | None] = mapped_column(UTCInstant())
 
 
 class CommunicationRule(Base):
@@ -948,7 +949,7 @@ class CommunicationRule(Base):
     )
     version: Mapped[int] = mapped_column(nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -983,7 +984,7 @@ class CommunicationConsentEvent(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCInstant(), nullable=False, server_default=func.now()
     )
 
 
@@ -1009,7 +1010,7 @@ class CommunicationPreparation(Base):
     created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
-    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(UTCInstant(), nullable=False)
 
 
 class CommunicationRecipientSnapshot(Base):
@@ -1074,7 +1075,7 @@ class ReminderBatch(Base):
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -1145,7 +1146,7 @@ class ReminderIntent(Base):
         String(16), nullable=False, default="prepared"
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
 
 
@@ -1190,12 +1191,12 @@ class MessageDispatch(Base):
     failure_code: Mapped[str | None] = mapped_column(String(32))
     provider_message_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
-    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_at: Mapped[datetime | None] = mapped_column(UTCInstant())
 
 
 class MessageDeliveryEvent(Base):
@@ -1220,5 +1221,5 @@ class MessageDeliveryEvent(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     provider_message_id: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCInstant(), server_default=func.now(), nullable=False
     )
