@@ -253,7 +253,7 @@ def campaign_detail(
     ).where(
         SaasytoCampaignRecipient.organization_id == org,
         SaasytoCampaignRecipient.run_id == run.id,
-    ).group_by(SaasytoCampaignRecipient.status)))) if run else Counter()
+    ).group_by(SaasytoCampaignRecipient.status).all()))) if run else Counter()
     last_attempt = db.scalar(select(func.max(
         SaasytoCampaignRecipient.finished_at,
     )).where(
@@ -269,7 +269,7 @@ def campaign_detail(
         CommunicationRecipientSnapshot.suppression_reason.is_not(None),
     ).group_by(
         CommunicationRecipientSnapshot.suppression_reason,
-    ))) if preflight else {}
+    ).all())) if preflight else {}
     response.headers["Cache-Control"] = "no-store"
     return CampaignResultDetail(
         campaign_id=campaign.id, title=campaign.title,
