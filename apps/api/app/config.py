@@ -42,8 +42,8 @@ class Settings(BaseSettings):
     # Bounded campaign dispatch. 10 requests/minute is a conservative
     # engineering default, NOT a verified Saasyto API capacity. Raising this
     # requires provider confirmation and a controlled production pilot.
-    saasyto_campaign_batch_size: int = Field(default=10, ge=1, le=120)
-    saasyto_campaign_max_per_minute: int = Field(default=10, ge=1, le=120)
+    saasyto_campaign_batch_size: int = Field(default=10, ge=1, le=15)
+    saasyto_campaign_max_per_minute: int = Field(default=10, ge=1, le=60)
     # Explicit 429 pauses future queued recipients; the rejected attempt
     # remains terminal to avoid unsafe replay without provider idempotency.
     saasyto_rate_limit_pause_minutes: int = Field(default=15, ge=5, le=60)
