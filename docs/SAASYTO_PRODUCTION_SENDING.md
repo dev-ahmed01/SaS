@@ -34,6 +34,12 @@ SAASYTO_RUNNER_SECRET=<independent-private-random-secret-at-least-32-characters>
 SAASYTO_ENABLE_AFTER=<activation-cutoff-2026-10-26T10:00:00+05:30>
 SAASYTO_SENDER_APPROVED=false
 SAASYTO_DELIVERY_ENABLED=false
+# Start at Saasyto's cautious personal-account messaging interval.
+# Do not lower without written approval for this exact sender/API.
+SAASYTO_CAMPAIGN_MIN_INTERVAL_SECONDS=90
+SAASYTO_CAMPAIGN_BATCH_SIZE=10
+SAASYTO_CAMPAIGN_MAX_PER_MINUTE=10
+SAASYTO_RATE_LIMIT_PAUSE_MINUTES=15
 ```
 
 **Important:** `SAASYTO_ENABLE_AFTER` must be a real ISO 8601 offset-aware
@@ -93,7 +99,11 @@ python scripts/saasyto_tick.py --loop --interval-seconds 60
 Configure your process supervisor/service manager to restart it on failure,
 run only **one scheduled worker instance** by default, and keep its secret
 environment inaccessible to the public. The script exits if the origin or
-runner secret is missing/malformed. An individual failed tick is logged in
+runner secret is missing/malformed. By default, the sender-wide 90-second gap
+prevents the worker from sending a rapid burst even though the queue can hold
+10,000 contacts. Saasyto's personal-account guide recommends 90–120 seconds;
+this is not a numeric API contract, so verify the exact account class and
+approved API rate before reducing the interval. An individual failed tick is logged in
 aggregate and the next tick checks the pending queue; claimed recipients
 are never automatically retried.
 
