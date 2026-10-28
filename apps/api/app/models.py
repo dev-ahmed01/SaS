@@ -860,6 +860,21 @@ class CommunicationCampaign(Base):
     )
 
 
+class SaasytoDispatchThrottle(Base):
+    """One shared send-rate reservation per Saasyto sender instance.
+
+    The row is locked within the same transaction that claims a recipient,
+    preventing overlapping workers from exceeding the configured rate.
+    """
+
+    __tablename__ = "saasyto_dispatch_throttles"
+
+    sender_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    next_allowed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
 class SaasytoCampaignRun(Base):
     """Explicit Admin approval; one run per immutable campaign, no backlog replay."""
 
