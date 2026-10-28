@@ -535,6 +535,22 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
             ))
             db.commit()
         counts[status] = counts.get(status, 0) + 1
+        if reason == "provider_rate_limited":
+            # Saasyto does not publish a rate contract for our exact send
+            # endpoint. Pause future approved queue members rather than
+            # hammering it. The rejected member is never automatically resent.
+            minutes = getattr(cfg, "saasyto_rate_limit_pause_minutes", 15)
+            if not 5 <= minutes <= 60:
+                raise ValueError("Invalid Saasyto rate-limit cooldown")
+            run.due_at = max(as_utc(run.due_at), utc_now() + timedelta(minutes=minutes))
+            db.add(AuditEvent(
+                organization_id=run.organization_id, actor_admin_id=None,
+                action="saasyto.campaign_paused_rate_limit",
+                entity_type="saasyto_run", entity_id=str(run.id),
+                after_data={"pause_minutes": minutes},
+            ))
+            db.commit()
+            break
         # Close completed runs, including suppressed/rejected/unknown attempts.
         remaining = db.scalar(select(SaasytoCampaignRecipient.id).where(
             SaasytoCampaignRecipient.run_id == run.id,
