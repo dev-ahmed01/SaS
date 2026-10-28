@@ -19,7 +19,6 @@ export type Prospect = {
   mobile_number: string;
   whatsapp_number: string | null;
   email: string | null;
-  occupation: string | null;
   area_city: string;
   monthly_contribution_paise: number;
   next_followup_on: string | null;
