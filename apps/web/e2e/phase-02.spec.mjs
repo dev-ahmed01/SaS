@@ -382,7 +382,8 @@ test("Admin registers and searches a new prospect without fake payment status",a
   await expect(row).toBeVisible();
   await expect(row.getByText("New Inquiry",{exact:true})).toBeVisible();
   await row.getByRole("link",{name:label}).click();
-  await expect(page.getByText("Mysuru",{exact:true})).toBeVisible();
+  await expect(page.locator(".crm-overview-grid").getByText("Mysuru",{exact:true}))
+    .toBeVisible();
   await expect(page.getByText("Occupation",{exact:true})).toHaveCount(0);
 });
 
