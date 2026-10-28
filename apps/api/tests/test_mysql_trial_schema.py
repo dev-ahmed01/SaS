@@ -2,8 +2,8 @@
 
 import os
 import uuid
-from types import SimpleNamespace
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
