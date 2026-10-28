@@ -1,0 +1,2 @@
+-r requirements-dev.txt
+PyMySQL==1.2.3
