@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import re
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
@@ -83,12 +84,12 @@ class CampaignRunRead(BaseModel):
 def _read(db: Session, run: SaasytoCampaignRun) -> CampaignRunRead:
     # Aggregate in PostgreSQL: do not load 10k recipient states into Python
     # every time a campaign results page refreshes.
-    counts = dict(db.execute(select(
+    counts = Counter(dict(db.execute(select(
         SaasytoCampaignRecipient.status, func.count(SaasytoCampaignRecipient.id),
     ).where(
         SaasytoCampaignRecipient.organization_id == run.organization_id,
         SaasytoCampaignRecipient.run_id == run.id,
-    ).group_by(SaasytoCampaignRecipient.status)).all())
+    ).group_by(SaasytoCampaignRecipient.status)).all()))
     return CampaignRunRead(
         id=run.id, campaign_id=run.campaign_id, status=run.status,
         due_at=run.due_at, eligible_count=run.eligible_count,
