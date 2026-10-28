@@ -909,6 +909,8 @@ class SaasytoCampaignRecipient(Base):
             name="ck_saasyto_recipient_status",
         ),
         Index("ix_saasyto_recipient_queue", "organization_id", "status", "run_id"),
+        # Supports sender-wide per-minute and minimum-gap lookups at 10k+ rows.
+        Index("ix_saasyto_recipient_claim_window", "organization_id", "claimed_at"),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
