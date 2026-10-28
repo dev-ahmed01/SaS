@@ -584,6 +584,7 @@ def test_sender_slot_is_durable_and_shared_between_worker_sessions(dispatch_syst
     cfg = _cfg()
     cfg.saasyto_instance_id = "test-sender-for-rate-gate"
     cfg.saasyto_max_attempts_per_minute = 30
+    cfg.saasyto_min_interval_seconds = 2
     with Session(engine) as db:
         assert _reserve_sender_slot(db, cfg, now) is True
         db.commit()
@@ -678,6 +679,7 @@ def test_actual_dispatch_respects_shared_sender_rate_gate(dispatch_system, monke
     cfg = _cfg()
     cfg.saasyto_instance_id = "real-gate-test-sender"
     cfg.saasyto_max_attempts_per_minute = 30
+    cfg.saasyto_min_interval_seconds = 2
     monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
     monkeypatch.setattr(
         "app.saasyto_campaigns._reserve_sender_slot", _reserve_sender_slot,
