@@ -66,6 +66,28 @@ def trial_metadata() -> MetaData:
     return result
 
 
+def make_trial_engine(url: str) -> Engine:
+    """Match PostgreSQL READ COMMITTED semantics and UTC for disposable tests.
+
+    MySQL's default REPEATABLE READ can serve stale snapshot reads after
+    competing commits, and the server-local timezone can shift NOW() values.
+    Production application configuration is intentionally not changed here.
+    """
+    parsed = make_url(url)
+    if parsed.drivername != "mysql+pymysql":
+        raise RuntimeError("Trial only supports mysql+pymysql driver")
+    if not _TRIAL_NAME.fullmatch(parsed.database or "") or parsed.host not in {
+        "127.0.0.1", "localhost",
+    }:
+        raise RuntimeError("Trial engine must target a disposable loopback database")
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+        isolation_level="READ COMMITTED",
+        connect_args={"init_command": "SET time_zone = '+00:00'"},
+    )
+
+
 def assert_disposable_target(engine: Engine) -> None:
     """Fail closed before any DDL; no production DB may be touched."""
     if os.environ.get("APP_ENV") != "test" or os.environ.get(
@@ -87,6 +109,11 @@ def assert_disposable_target(engine: Engine) -> None:
         version = str(connection.scalar(text("SELECT VERSION()"))).split("-")[0]
         if not version.startswith("8.4."):
             raise RuntimeError("Trial is pinned to MySQL 8.4, got incompatible version")
+        if connection.scalar(text("SELECT @@session.time_zone")) != "+00:00":
+            raise RuntimeError("MySQL trial sessions must run in UTC")
+        isolation = str(connection.scalar(text("SELECT @@session.transaction_isolation")))
+        if isolation.upper().replace("-", " ") != "READ COMMITTED":
+            raise RuntimeError("MySQL trial requires READ COMMITTED transactions")
         existing = inspect(connection).get_table_names()
         if existing:
             raise RuntimeError("Trial database must be empty; refusing overwrite")
@@ -132,11 +159,8 @@ def main() -> None:
     raw_url = os.environ.get("SAS_MYSQL_TRIAL_URL")
     if not raw_url:
         raise SystemExit("SAS_MYSQL_TRIAL_URL not configured")
-    parsed = make_url(raw_url)
-    if parsed.drivername != "mysql+pymysql":
-        raise SystemExit("Trial only supports mysql+pymysql driver")
     # No credentials or connection URI printed to stdout.
-    engine = create_engine(raw_url, pool_pre_ping=True)
+    engine = make_trial_engine(raw_url)
     try:
         create_trial_schema(engine)
     finally:
