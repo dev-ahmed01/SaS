@@ -17,6 +17,8 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -35,6 +37,7 @@ from app.models import (
     Prospect,
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
+    SaasytoDispatchThrottle,
 )
 from app.saasyto_client import local_pilot_permits, local_pilot_phones, send_text
 from app.security import as_utc, utc_now
@@ -441,6 +444,40 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
     return phone, message
 
 
+def _reserve_sender_slot(db: Session, cfg, now: datetime) -> bool:
+    """Reserve a global per-instance dispatch slot before any provider I/O.
+
+    The unique row and SELECT FOR UPDATE serialize independent workers in
+    PostgreSQL. Reserve in the same transaction as the recipient claim so a
+    crash cannot result in replaying a possibly accepted WhatsApp request.
+    This is a maximum request frequency, not a provider delivery guarantee.
+    """
+    sender_id = getattr(cfg, "saasyto_instance_id", None) or "test-sender"
+    key = hashlib.sha256(str(sender_id).encode("utf-8")).hexdigest()
+    rpm = getattr(cfg, "saasyto_max_attempts_per_minute", 12)
+    if type(rpm) is not int or not 1 <= rpm <= 120:
+        raise ValueError("Saasyto sender rate must be between 1 and 120 per minute")
+    values = {"sender_digest": key, "next_allowed_at": now}
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        stmt = pg_insert(SaasytoDispatchThrottle).values(**values)
+    elif dialect == "sqlite":
+        stmt = sqlite_insert(SaasytoDispatchThrottle).values(**values)
+    else:
+        raise RuntimeError("Saasyto throttle requires PostgreSQL or SQLite test DB")
+    # No implicit retries or unsafe re-insertion on concurrent worker startup.
+    db.execute(stmt.on_conflict_do_nothing(index_elements=["sender_digest"]))
+    row = db.scalar(select(SaasytoDispatchThrottle).where(
+        SaasytoDispatchThrottle.sender_digest == key,
+    ).with_for_update())
+    if row is None:
+        raise RuntimeError("Saasyto sender throttle missing")
+    if as_utc(row.next_allowed_at) > now:
+        return False
+    row.next_allowed_at = now + timedelta(seconds=60 / rpm)
+    return True
+
+
 def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
                   max_attempts: int = MAX_PER_RUN) -> dict[str, int]:
     """Claim once then submit; used by the private worker and one-phone manual pilot.
@@ -473,6 +510,12 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
             query = query.where(SaasytoCampaignRecipient.run_id == target_run_id)
         candidate = db.execute(query).first()
         if not candidate:
+            db.rollback()
+            break
+        # The sender-wide rate gate is persisted before the external request.
+        # If a slot is not due, release every row lock without claiming.
+        if not _reserve_sender_slot(db, cfg, now):
+            db.rollback()
             break
         item, run, campaign = candidate
         item.status = "claimed"
