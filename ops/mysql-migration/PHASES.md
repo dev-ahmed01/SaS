@@ -30,6 +30,25 @@ Exit gate: source identified; migration mapping complete; initial safeguards and
 
 Exit gate: no-network MySQL integration tests, migration-drift check, restore and concurrency tests pass. No real data.
 
+## Phase 2 progress — MySQL 8.4 trial branch (not production enabled)
+
+Implemented:
+- `app/mysql_trial_schema.py` creates a detached MySQL-specific candidate schema and refuses to touch any database except an empty `sas_mysql_trial_*` database on loopback with `APP_ENV=test` and `SAS_MYSQL_TRIAL_ONLY=1`. This is NOT connected to application production configuration or Alembic.
+- MySQL 8.4 InnoDB with explicit `utf8mb4_0900_as_cs` collation on candidate tables.
+- MySQL generated nullable column + unique index enforces **one current promoter assignment** while allowing historical ended assignments; the PostgreSQL partial-index definition remains unchanged.
+- MySQL INSERT/UPDATE triggers enforce the current ₹250 manual collection rule for NEW/changed records. They deliberately do not impose a whole-table CHECK that would invalidate historical below-tier receipts. Real-data import must install these guards only *after* controlled historical import, followed by integrity audit.
+- `requirements-mysql-trial.txt` installs a pinned test-only PyMySQL driver.
+- CI now provisions an isolated MySQL 8.4 service, creates the full trial schema, checks constraints with synthetic transactions, and exercises a basic FastAPI Admin/Prospect/Promoter journey.
+
+Verified initial DB-only trial: schema creation and promoter/financial guards passed on isolated MySQL 8.4 service. Final API smoke test requires full CI passing.
+
+Still blocked:
+- Production/staging config **rejects** MySQL by design.
+- Existing PostgreSQL Alembic chain is **not** being applied to MySQL.
+- No source-to-target export/import, historical reconstruction or record-level digest generator exists.
+- UTC timestamp semantics, MySQL InnoDB lock fairness/skip-locked with concurrent workers, and all payment/OTP/message lifecycle flows still require MySQL integration tests.
+- No actual DirectAdmin deployment, source database backup, donor record import, or sender activation occurred.
+
 ## Phase 3: repeatable data-copy rehearsal
 
 1. Work from an isolated restored PostgreSQL snapshot, not an unverified live export.
