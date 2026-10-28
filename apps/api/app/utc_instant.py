@@ -35,7 +35,10 @@ class UTCInstant(TypeDecorator):
             # Existing ORM clients use UTC-aware instants, while public
             # scheduled-campaign inputs may contain an explicit IST offset.
             # Naive historic timestamps are canonicalized as UTC.
-            instant = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+            instant = (
+                value.replace(tzinfo=UTC)
+                if value.tzinfo is None else value.astimezone(UTC)
+            )
             return instant.replace(tzinfo=None)
         return value
 
@@ -44,4 +47,7 @@ class UTCInstant(TypeDecorator):
             return value
         if not isinstance(value, datetime):
             raise TypeError("Unexpected datetime representation")
-        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        return (
+            value.replace(tzinfo=UTC)
+            if value.tzinfo is None else value.astimezone(UTC)
+        )
