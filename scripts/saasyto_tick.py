@@ -3,7 +3,7 @@
 Use as a private Render Cron Job or equivalent (one tick):
     python scripts/saasyto_tick.py
 Or run on an always-on VPS with a service supervisor:
-    python scripts/saasyto_tick.py --loop --interval-seconds 60
+    python scripts/saasyto_tick.py --loop --interval-seconds 2
 Only aggregate results are printed. Secrets are sent solely to the configured
 HTTPS API endpoint, never displayed. Scheduler must not run until signed off.
 """
@@ -70,12 +70,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Run a recurring worker; without --loop send a single tick (cron mode)",
     )
     parser.add_argument(
-        "--interval-seconds", type=int, default=60,
-        help="Recurring poll cadence, between 60 and 3600 seconds (default 60)",
+        "--interval-seconds", type=int, default=2,
+        help="Recurring poll cadence, between 2 and 3600 seconds (default 2)",
     )
     args = parser.parse_args(argv)
-    if not 60 <= args.interval_seconds <= 3600:
-        parser.error("Poll interval must be between 60 and 3600 seconds")
+    if not 2 <= args.interval_seconds <= 3600:
+        parser.error("Poll interval must be between 2 and 3600 seconds")
     if not args.loop:
         return run_once()
 
