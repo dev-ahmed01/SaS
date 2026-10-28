@@ -48,6 +48,7 @@ admin_router = APIRouter(prefix="/v1/communication", tags=["Saasyto campaigns"])
 internal_router = APIRouter(prefix="/internal/saasyto", tags=["Saasyto private runner"])
 MAX_PER_RUN = 10
 MAX_APPROVAL_RECIPIENTS = 10000
+MAX_DYNAMIC_LOCAL_RECIPIENTS = 500
 VALID_TEMPLATE = re.compile(
     r"{{\s*(name|month|sponsorship|sponsorship_amount|sponsorship_units)\s*}}"
 )
@@ -197,7 +198,8 @@ def campaign_approval_readiness(
             eligible_count=count, local_test_mode=local,
             permitted_phone=permitted, permitted_phones=list(test_phones),
             local_dynamic_mode=dynamic,
-            max_recipients=MAX_APPROVAL_RECIPIENTS if dynamic or not local else len(test_phones),
+            max_recipients=(MAX_DYNAMIC_LOCAL_RECIPIENTS if dynamic else
+                            MAX_APPROVAL_RECIPIENTS if not local else len(test_phones)),
         )
 
     response.headers["Cache-Control"] = "no-store"
@@ -237,6 +239,8 @@ def campaign_approval_readiness(
         return result("audience_changed",
                       "Eligible contacts changed since the last check. "
                       "Click Check recipients again.")
+    if dynamic and count > MAX_DYNAMIC_LOCAL_RECIPIENTS:
+        return result("local_limit", "Dynamic local testing is limited to 500 recipients.")
     if local:
         if count > len(test_phones):
             return result(
@@ -302,6 +306,10 @@ def approve_campaign(
                 db, admin.organization_id, prep.id,
             )):
         raise HTTPException(status_code=409, detail="Audience changed; review again")
+    if getattr(cfg, "saasyto_local_dynamic_enabled", False) and (
+        len(eligible) > MAX_DYNAMIC_LOCAL_RECIPIENTS
+    ):
+        raise HTTPException(status_code=409, detail="Dynamic local pilot exceeds 500 recipients")
     if getattr(cfg, "saasyto_local_test_enabled", False):
         if len(eligible) > len(local_pilot_phones(cfg)) or any(
             not local_pilot_permits(cfg, contact_address(person, "whatsapp"))
@@ -508,7 +516,13 @@ def _dispatch_due(db: Session, cfg, *, target_run_id: uuid.UUID | None = None,
             break
         # The sender-wide rate gate is persisted before the external request.
         # If a slot is not due, release every row lock without claiming.
-        if not _reserve_sender_slot(db, cfg, now):
+        # Local allowlisted/dynamic demo sends preserve their separate low-volume
+        # pilot behavior; only approved production workers use this global gate.
+        local_pilot = (
+            getattr(cfg, "saasyto_local_test_enabled", False)
+            or getattr(cfg, "saasyto_local_dynamic_enabled", False)
+        )
+        if not local_pilot and not _reserve_sender_slot(db, cfg, now):
             db.rollback()
             break
         item, run, campaign = candidate
@@ -587,7 +601,7 @@ def send_now_local_pilot(
     if run is None:
         raise HTTPException(status_code=409, detail="Approve the campaign before sending")
     limit = (
-        MAX_APPROVAL_RECIPIENTS if getattr(cfg, "saasyto_local_dynamic_enabled", False)
+        MAX_DYNAMIC_LOCAL_RECIPIENTS if getattr(cfg, "saasyto_local_dynamic_enabled", False)
         else len(local_pilot_phones(cfg))
     )
     if run.status != "approved" or not 1 <= run.eligible_count <= limit:
