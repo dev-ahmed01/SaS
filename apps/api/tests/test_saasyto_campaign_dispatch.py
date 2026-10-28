@@ -18,6 +18,8 @@ from app.models import (
     CommunicationCampaign,
     CommunicationPreparation,
     CommunicationRecipientSnapshot,
+    CommunicationConsentEvent,
+    Promoter,
     Prospect,
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
@@ -663,3 +665,65 @@ def test_10k_queue_status_aggregates_in_database(dispatch_system, monkeypatch):
     assert listing.status_code == 200
     summary = next(row for row in listing.json() if row["campaign_id"] == cid)
     assert summary["queued"] == 10_000
+
+
+def test_dispatch_rechecks_target_without_loading_full_audience(
+    dispatch_system, monkeypatch,
+):
+    client, _ = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "9151")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "No full-audience send scan")
+    assert approved["eligible_count"] == 1
+    monkeypatch.setattr("app.saasyto_campaigns._audience_rows", lambda *_a, **_kw:
+                        (_ for _ in ()).throw(AssertionError(
+                            "Dispatch must not scan the full campaign audience"
+                        )))
+    monkeypatch.setattr("app.saasyto_campaigns.send_text",
+                        lambda *_a, **_kw: Submission("accepted_unverified"))
+    attempt = client.post("/internal/saasyto/dispatch", headers={
+        "X-Saasyto-Runner-Token": RUNNER,
+    })
+    assert attempt.status_code == 200, attempt.text
+    assert attempt.json()["accepted_unverified"] == 1
+    assert client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()[
+        "status"
+    ] == "completed"
+
+
+def test_shared_whatsapp_address_latest_optout_blocks_pending_claim(
+    dispatch_system, monkeypatch,
+):
+    client, engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "9152")
+    _consent(client, csrf, person, "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    _cid, approved = _approved(client, csrf, "Shared phone revoked")
+    assert approved["queued"] == 1
+    with Session(engine) as db:
+        prospect = db.get(Prospect, uuid.UUID(person["id"]))
+        promoter = Promoter(
+            organization_id=prospect.organization_id,
+            full_name="Other CRM contact", mobile_number=prospect.mobile_number,
+            area_city="Bengaluru", whatsapp_opt_in=False,
+        )
+        db.add(promoter)
+        db.flush()
+        db.add(CommunicationConsentEvent(
+            organization_id=prospect.organization_id,
+            recipient_kind="promoter", recipient_id=promoter.id,
+            channel="whatsapp", decision="opted_out", source="synthetic test",
+        ))
+        db.commit()
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", lambda *_a, **_kw:
+                        (_ for _ in ()).throw(AssertionError(
+                            "Shared-address opt-out must stop sends"
+                        )))
+    attempt = client.post("/internal/saasyto/dispatch", headers={
+        "X-Saasyto-Runner-Token": RUNNER,
+    })
+    assert attempt.status_code == 200, attempt.text
+    assert attempt.json()["suppressed"] == 1
