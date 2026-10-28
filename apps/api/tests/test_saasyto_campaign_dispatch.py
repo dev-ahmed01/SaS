@@ -727,3 +727,65 @@ def test_shared_whatsapp_address_latest_optout_blocks_pending_claim(
     })
     assert attempt.status_code == 200, attempt.text
     assert attempt.json()["suppressed"] == 1
+
+
+def test_provider_429_pauses_other_approved_campaigns_for_same_sender(
+    dispatch_system, monkeypatch,
+):
+    """One Foundation sender must not immediately flood another campaign."""
+    client, engine = dispatch_system
+    csrf = login(client)
+    for suffix in ("9171", "9172"):
+        _consent(client, csrf, _person(client, csrf, suffix), "opted_in")
+    cfg = _cfg()
+    cfg.saasyto_rate_limit_pause_minutes = 15
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    first_id, _first = _approved(client, csrf, "First pending run")
+    second_id, _second = _approved(client, csrf, "Second pending run")
+    attempted = []
+    def throttled(_cfg, *, phone, message):
+        attempted.append(phone)
+        return Submission("rejected", "provider_rate_limited")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", throttled)
+    runner = "/internal/saasyto/dispatch"
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post(runner, headers=headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["rejected"] == 1
+    assert len(attempted) == 1
+    with Session(engine) as db:
+        runs = db.scalars(select(SaasytoCampaignRun)).all()
+        assert len(runs) == 2
+        for run in runs:
+            assert as_utc(run.due_at) >= utc_now() + timedelta(minutes=14)
+    # A second scheduler tick cannot send from the other campaign.
+    assert client.post(runner, headers=headers).json() == {}
+    assert len(attempted) == 1
+    assert client.get("/v1/communication/campaigns/"+first_id+"/saasyto"
+                      ).json()["rejected"] == 1
+    assert client.get("/v1/communication/campaigns/"+second_id+"/saasyto"
+                      ).json()["queued"] == 2
+
+
+def test_provider_429_on_only_recipient_finishes_run_without_retry(
+    dispatch_system, monkeypatch,
+):
+    client, _engine = dispatch_system
+    csrf = login(client)
+    _consent(client, csrf, _person(client, csrf, "9173"), "opted_in")
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: _cfg())
+    cid, approved = _approved(client, csrf, "Single throttled recipient")
+    assert approved["queued"] == 1
+    attempted = []
+    def throttled(_cfg, *, phone, message):
+        attempted.append(phone)
+        return Submission("rejected", "provider_rate_limited")
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", throttled)
+    headers = {"X-Saasyto-Runner-Token": RUNNER}
+    first = client.post("/internal/saasyto/dispatch", headers=headers)
+    assert first.status_code == 200 and first.json()["rejected"] == 1
+    summary = client.get("/v1/communication/campaigns/"+cid+"/saasyto").json()
+    assert summary["status"] == "completed"
+    assert summary["rejected"] == 1 and summary["queued"] == 0
+    assert client.post("/internal/saasyto/dispatch", headers=headers).json() == {}
+    assert len(attempted) == 1
