@@ -36,7 +36,12 @@ from app.models import (
     SponsorshipRate,
     VerifiedCredit,
 )
-from app.mysql_trial_schema import assert_disposable_target, create_trial_schema, trial_metadata
+from app.mysql_trial_schema import (
+    assert_disposable_target,
+    create_trial_schema,
+    make_trial_engine,
+    trial_metadata,
+)
 from app.security import as_utc, utc_now
 from app.sponsor_otp import _code_digest, _digest
 
@@ -92,7 +97,7 @@ def mysql_trial_engine():
     url = os.getenv("SAS_MYSQL_TRIAL_URL")
     if not url:
         pytest.skip("MySQL 8.4 CI service not configured")
-    engine = create_engine(url, pool_pre_ping=True)
+    engine = make_trial_engine(url)
     try:
         create_trial_schema(engine)
         yield engine
@@ -111,6 +116,11 @@ def test_mysql_disposable_schema_exists(mysql_trial_engine):
                                    'sas_manual_collection_tier_update')
         """))
     assert check == 2
+    with mysql_trial_engine.connect() as connection:
+        assert connection.scalar(text("SELECT @@session.time_zone")) == "+00:00"
+        assert connection.scalar(text("SELECT @@session.transaction_isolation")) == (
+            "READ-COMMITTED"
+        )
 
 
 def test_mysql_schema_enforces_current_assignment_and_historic_reassignment(mysql_trial_engine):
