@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Conservative default; increase only with a provider-approved sending rate.
     # Applies across all workers using the same Saasyto instance and database.
     saasyto_max_attempts_per_minute: int = Field(default=12, ge=1, le=120)
+    # Saasyto personal-campaign guidance advises >=90s between messages.
+    # Do not reduce without written per-instance confirmation from the provider.
+    saasyto_min_interval_seconds: int = Field(default=90, ge=1, le=3600)
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
     saasyto_local_test_enabled: bool = False
