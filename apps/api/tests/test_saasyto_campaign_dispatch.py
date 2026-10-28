@@ -596,3 +596,60 @@ def test_campaign_capacity_is_10k_and_reminder_has_headroom():
     assert MAX_AUDIENCE_ROWS >= MAX_APPROVAL_RECIPIENTS
     assert MAX_RECIPIENTS >= MAX_APPROVAL_RECIPIENTS
     assert MAX_SPONSORS >= MAX_APPROVAL_RECIPIENTS
+
+
+def test_targeted_consent_matches_full_preflight_and_blocks_shared_optout(
+    dispatch_system,
+):
+    from app.communication_consent import evaluate_recipients
+    from app.saasyto_live_eligibility import live_whatsapp_permission
+
+    client, engine = dispatch_system
+    csrf = login(client)
+    first = _person(client, csrf, "3151")
+    second = _person(client, csrf, "3152")
+    _consent(client, csrf, first, "opted_in")
+    _consent(client, csrf, second, "opted_in")
+    with Session(engine) as db:
+        a = db.get(Prospect, uuid.UUID(first["id"]))
+        b = db.get(Prospect, uuid.UUID(second["id"]))
+        assert live_whatsapp_permission(
+            db, a.organization_id, a, "update", utc_now(),
+        ) is True
+        assert evaluate_recipients(
+            db, a.organization_id, [a], "whatsapp", "update",
+        )[0][2] == "eligible"
+        # Different registered numbers, but now share the same WhatsApp
+        # destination. A later opt-out on either record blocks both.
+        b.whatsapp_number = a.mobile_number
+        db.commit()
+    _consent(client, csrf, second, "opted_out")
+    with Session(engine) as db:
+        a = db.get(Prospect, uuid.UUID(first["id"]))
+        assert live_whatsapp_permission(
+            db, a.organization_id, a, "update", utc_now(),
+        ) is False
+        assert evaluate_recipients(
+            db, a.organization_id, [a], "whatsapp", "update",
+        )[0][2] == "suppressed"
+
+
+def test_targeted_segment_rechecks_activation(dispatch_system):
+    from app.saasyto_live_eligibility import live_segment_member
+
+    client, engine = dispatch_system
+    csrf = login(client)
+    person = _person(client, csrf, "3153")
+    with Session(engine) as db:
+        row = db.get(Prospect, uuid.UUID(person["id"]))
+        assert live_segment_member(
+            db, row.organization_id, row, "prospects", "active", utc_now(),
+        ) is True
+        assert live_segment_member(
+            db, row.organization_id, row, "promoters", "all", utc_now(),
+        ) is False
+        row.crm_stage = "inactive"
+        db.commit()
+        assert live_segment_member(
+            db, row.organization_id, row, "prospects", "active", utc_now(),
+        ) is False
