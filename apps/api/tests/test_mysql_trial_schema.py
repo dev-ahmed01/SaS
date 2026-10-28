@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 import pytest
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.dialects import mysql
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
@@ -179,7 +179,10 @@ def test_mysql_new_receipts_follow_250_rule(mysql_trial_engine):
         receipt_id = valid.id
 
     with Session(mysql_trial_engine) as db:
-        with pytest.raises(IntegrityError):
+        # SIGNAL SQLSTATE 45000 is surfaced by PyMySQL as OperationalError,
+        # while duplicate-key conflicts are IntegrityError. Both inherit
+        # DBAPIError, and either must abort the attempted write.
+        with pytest.raises(DBAPIError):
             db.execute(
                 text("UPDATE manual_collections SET amount_paise = :bad WHERE id = :id"),
                 {"bad": 37500, "id": receipt_id.hex},
