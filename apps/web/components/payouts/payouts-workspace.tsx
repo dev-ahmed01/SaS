@@ -95,17 +95,17 @@ export function PayoutAdd(){
           <label className="field"><span className="field-label">Amount (₹) *</span>
             <input required inputMode="decimal" aria-label="Payout amount (₹)"
               value={value} onChange={e=>{setValue(e.target.value);change();}}/></label>
-          <label className="field"><span className="field-label">Date paid *</span>
-            <input type="date" max={dateIST()} required value={paidOn}
-              aria-label="Payout date" onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
+          <label className="field"><span className="field-label">UTR / Reference Number *</span>
+            <input required minLength={6} maxLength={100} aria-label="UTR"
+              value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
         </div>
         <div className="payout-inline-row payout-last-row form-cell full">
           <label className="field"><span className="field-label">Purpose *</span>
             <input required minLength={3} maxLength={240} aria-label="Payout purpose"
               value={purpose} onChange={e=>{setPurpose(e.target.value);change();}}/></label>
-          <label className="field"><span className="field-label">UTR / Reference Number *</span>
-            <input required minLength={6} maxLength={100} aria-label="UTR"
-              value={utr} onChange={e=>{setUtr(e.target.value);change();}}/></label>
+          <label className="field"><span className="field-label">Date paid *</span>
+            <input type="date" max={dateIST()} required value={paidOn}
+              aria-label="Payout date" onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
         </div>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
