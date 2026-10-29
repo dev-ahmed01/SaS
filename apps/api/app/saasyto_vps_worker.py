@@ -36,13 +36,10 @@ def dispatch_once() -> int:
             # A crash can interrupt a committed claim after the provider
             # accepted the message. Reconcile it as UNKNOWN; never retry.
             reconciled = _reconcile_stale_claims(db)
-            # Expire prior-day monthly queue members before claiming any
-            # recipient; never deliver a stale 5th/20th reminder.
-            expire_overdue_reminders(db)
-            # Only the production worker can create scheduled monthly runs.
-            # This is explicitly OFF unless the organization and deployment
-            # have standing Saasyto automation approval.
+            # All standing monthly scheduling is disabled by default.
             if getattr(cfg, "saasyto_auto_reminders_enabled", False):
+                # Never send a previous-day 5th/20th reminder.
+                expire_overdue_reminders(db)
                 prepare_due_saasyto_reminders(db, cfg)
             outcome = _dispatch_due(db, cfg)
             if reconciled:
