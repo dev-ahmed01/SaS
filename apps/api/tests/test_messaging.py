@@ -2,19 +2,14 @@
 
 import uuid
 from datetime import UTC, date, timedelta
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-
-from app.bootstrap_admin import provision_admin
-from app.main import app
-from types import SimpleNamespace
-
 from pydantic import SecretStr
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 from test_reminders import (
     OCT_5,
     OCT_20,
@@ -25,7 +20,10 @@ from test_reminders import (
     sponsor,
 )
 
+from app.bootstrap_admin import provision_admin
+from app.main import app
 from app.models import (
+    Base,
     CommunicationCampaign,
     MessageDispatch,
     OrganizationSettings,
@@ -41,7 +39,6 @@ from app.saasyto_monthly_reminders import (
 )
 
 
-
 @pytest.fixture
 def system(monkeypatch):
     engine = create_engine(
@@ -49,8 +46,6 @@ def system(monkeypatch):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    from app.models import Base
-
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         provision_admin(
