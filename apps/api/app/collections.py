@@ -16,8 +16,6 @@ from sqlalchemy.orm import Session
 from app import auth as auth_module
 from app.accounting import effective_credits, evaluate_status, ist_today, month_start, shift_month
 from app.auth import db_session, get_admin, require_csrf
-from app.communication_consent import address_opted_out, evaluate_recipients
-from app.config import get_settings
 from app.models import (
     AdminSession,
     AdminUser,
