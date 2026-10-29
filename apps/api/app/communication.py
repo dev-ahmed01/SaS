@@ -1,7 +1,7 @@
 """Secure communication planning and live IST audience preview.
 
 This module never sends WhatsApp, emails, or schedules dispatch jobs. Existing
-payment/reminder Pabbly transport is separately approved, gated and audited.
+monthly reminder delivery uses the same gated Saasyto campaign queue.
 Saved plans cannot bypass that transport or manufacture delivery evidence.
 """
 import uuid
