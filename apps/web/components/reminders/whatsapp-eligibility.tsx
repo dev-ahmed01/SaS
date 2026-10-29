@@ -31,6 +31,7 @@ export function WhatsAppEligibility(){
   const [revision,setRevision]=useState(0);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
+  const [autoManaged,setAutoManaged]=useState(false);
   const [ack,setAck]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
@@ -65,8 +66,31 @@ export function WhatsAppEligibility(){
     return ()=>controller.abort();
   },[revision]);
 
+  useEffect(()=>{
+    const controller=new AbortController();
+    Promise.all([
+      fetch("/api/admin/settings",{cache:"no-store",signal:controller.signal}),
+      fetch("/api/admin/communication/provider/saasyto",{
+        cache:"no-store",signal:controller.signal,
+      }),
+    ]).then(async ([settings,provider])=>{
+      if(!settings.ok||!provider.ok)throw Error("Automation status unavailable");
+      const organization=await settings.json() as {automation_enabled:boolean};
+      const transport=await provider.json() as {
+        monthly_reminders_enabled:boolean;worker_enabled:boolean;
+      };
+      if(!controller.signal.aborted){
+        setAutoManaged(Boolean(
+          organization.automation_enabled&&transport.monthly_reminders_enabled&&
+          transport.worker_enabled,
+        ));
+      }
+    }).catch(()=>{if(!controller.signal.aborted)setAutoManaged(false);});
+    return ()=>controller.abort();
+  },[revision]);
+
   async function prepare(){
-    if(!preview?.is_due_today||saving||!ack)return;
+    if(!preview?.is_due_today||saving||!ack||autoManaged)return;
     setSaving(true);setError("");setMessage("");
     if(!request.current)request.current=crypto.randomUUID();
     try{
@@ -151,7 +175,10 @@ export function WhatsAppEligibility(){
           </tr>)}</tbody>
       </table></div>
       <div className="reminder-prepare">
-        <label className="checkbox-field">
+        {autoManaged?<p className="accounting-footnote" role="status">
+          Saasyto manages this month's reminder preparation automatically.
+          Manual batch preparation is disabled to prevent duplicate or missed sends.
+        </p>:<><label className="checkbox-field">
           <input type="checkbox" checked={ack}
             onChange={event=>setAck(event.target.checked)}/>
           <span>I understand this prepares a record only and sends no WhatsApp messages.</span>
@@ -162,7 +189,7 @@ export function WhatsAppEligibility(){
           {saving?"Preparing…":"Prepare batch (do not send)"}
         </button>
 
-         <p className="accounting-footnote">{isAlreadyPrepared?"Already prepared this month.":preview?.is_due_today?"Ready to prepare.":"Available on the scheduled reminder day."}</p>
+         <p className="accounting-footnote">{isAlreadyPrepared?"Already prepared this month.":preview?.is_due_today?"Ready to prepare.":"Available on the scheduled reminder day."}</p></>}
       </div>
     </section>
     <section className="reminder-review" aria-label="Reminder preparation history">
