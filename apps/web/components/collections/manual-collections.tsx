@@ -146,14 +146,11 @@ export function ManualCollections(){
             {!selected&&lookupState==="failed"&&<p className="form-error" role="alert">Prospect lookup unavailable. Please retry.</p>}
             {!selected&&lookupState==="searching"&&<p role="status" className="crm-muted">Searching prospects…</p>}
           </div>
-          <label className="field collection-month"><span className="field-label">Sponsorship month *</span>
-            <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
-              value={period} onChange={e=>{setPeriod(e.target.value);update();}}/>
-          </label>
-          <label className="field collection-date"><span className="field-label">Date Paid (IST) *</span>
-            <input aria-label="Received date" required type="date" max={istDate()}
-              value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/>
-          </label>
+          <label className="field collection-method"><span className="field-label">Payment method *</span>
+            <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
+              <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
+              <option value="cash">Cash</option>
+            </select></label>
           <div className="field collection-amount"><label className="field-label" htmlFor="collection-amount">Amount received (₹) *</label>
             <select id="collection-amount" aria-label="Amount received (₹)" required value={customAmount?"other":rupees}
               onChange={e=>{setCustomAmount(e.target.value==="other");setRupees(e.target.value==="other"?"":e.target.value);update();}}>
@@ -165,15 +162,18 @@ export function ManualCollections(){
               min="250" step="250" max="10000000" value={rupees} placeholder="Enter a multiple of ₹250"
               onChange={e=>{setRupees(e.target.value);update();}}/>}
           </div>
-          <label className="field collection-method"><span className="field-label">Payment method *</span>
-            <select aria-label="Payment method" value={method} onChange={e=>{setMethod(e.target.value);update();}}>
-              <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
-              <option value="cash">Cash</option>
-            </select></label>
-          <label className="field collection-reference"><span className="field-label">Transaction ID / receipt reference</span>
+          <label className="field collection-reference"><span className="field-label">Transaction ID</span>
             <input aria-label="Transaction reference" minLength={6} maxLength={100}
-              value={reference} placeholder="Enter reference if available"
-              onChange={e=>{setReference(e.target.value);update();}}/></label>
+              value={reference} placeholder="Enter transaction ID if available"
+              onChange={e=>{setReference(e.target.value);update();}}/></label>          <label className="field collection-month"><span className="field-label">Sponsorship month *</span>
+            <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
+              value={period} onChange={e=>{setPeriod(e.target.value);update();}}/>
+          </label>
+          <label className="field collection-date"><span className="field-label">Date Paid (IST) *</span>
+            <input aria-label="Received date" required type="date" max={istDate()}
+              value={receivedOn} onChange={e=>{setReceivedOn(e.target.value);update();}}/>
+          </label>
+
 
         </div>
         {error&&<p className="form-error" role="alert">{error}</p>}
