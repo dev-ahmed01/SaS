@@ -449,7 +449,19 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
         return None
     if SPONSOR_TOKENS.search(row.body) and not isinstance(person, Prospect):
         return None
-    message = _render(row.body, person, now)
+    # Standing-approved 5th/20th reminders use the same durable Saasyto
+    # recipient queue. Resolve the amount/assignment against the LIVE ledger;
+    # never rely on the batch snapshot or a generic campaign template.
+    if row.provider_template_id in (
+        "sas_auto_sponsor_v1", "sas_auto_promoter_v1",
+    ):
+        from app.saasyto_monthly_reminders import live_monthly_message
+
+        message = live_monthly_message(db, row, person, now, cfg)
+        if not message:
+            return None
+    else:
+        message = _render(row.body, person, now)
     return phone, message
 
 
