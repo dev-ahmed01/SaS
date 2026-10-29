@@ -255,7 +255,7 @@ def _build_preview(
         total_outstanding_paise=sum(item.outstanding_paise for item in recipients),
         recipients=recipients,
         notice=(
-            "Eligibility preview only. Saasyto is the sole active campaign "
+            "Eligibility preview only. Saasyto is the sole active WhatsApp campaign "
             "transport; delivery requires explicit sender approval, a due "
             "campaign and live consent/balance checks."
         ),
