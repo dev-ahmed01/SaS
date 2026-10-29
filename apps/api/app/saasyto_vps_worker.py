@@ -15,7 +15,10 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_engine
 from app.saasyto_campaigns import _dispatch_due, _reconcile_stale_claims
-from app.saasyto_monthly_reminders import prepare_due_saasyto_reminders
+from app.saasyto_monthly_reminders import (
+    expire_overdue_reminders,
+    prepare_due_saasyto_reminders,
+)
 
 
 def dispatch_once() -> int:
@@ -33,6 +36,9 @@ def dispatch_once() -> int:
             # A crash can interrupt a committed claim after the provider
             # accepted the message. Reconcile it as UNKNOWN; never retry.
             reconciled = _reconcile_stale_claims(db)
+            # Expire prior-day monthly queue members before claiming any
+            # recipient; never deliver a stale 5th/20th reminder.
+            expire_overdue_reminders(db)
             # Only the production worker can create scheduled monthly runs.
             # This is explicitly OFF unless the organization and deployment
             # have standing Saasyto automation approval.
