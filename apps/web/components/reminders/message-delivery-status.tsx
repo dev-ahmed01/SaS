@@ -7,6 +7,8 @@ type ProviderReadiness = {
   transport:string;
   delivery_enabled:boolean;
   sender_approved:boolean;
+  worker_enabled:boolean;
+  monthly_reminders_enabled:boolean;
   credentials_configured:boolean;
   webhook_verified:boolean;
   connection_tested:boolean;
@@ -51,6 +53,8 @@ export function MessageDeliveryStatus(){
       <div className="delivery-metrics">
         {[
           ["Sender approved",state.sender_approved?"Yes":"No"],
+          ["Monthly 5th/20th scheduler",state.monthly_reminders_enabled?"Enabled":"Off"],
+          ["Private sender worker",state.worker_enabled?"Enabled":"Off"],
           ["Credentials configured",state.credentials_configured?"Yes":"No"],
           ["Delivery webhook verified",state.webhook_verified?"Yes":"No"],
         ].map(([label,value])=><div className="delivery-metric" key={label}>
