@@ -23,20 +23,10 @@ class Settings(BaseSettings):
     # Never enable for staging/production; local ephemeral DB only.
     local_demo_login_enabled: bool = False
 
-    # Global kill switch, independent of organization settings.
-    messaging_delivery_enabled: bool = False
-    messaging_sender_approved: bool = False
-    messaging_enable_after: datetime | None = None
-    messaging_runner_secret: str | None = None
-    messaging_callback_secret: str | None = None
-    pabbly_webhook_url: str | None = None
-    pabbly_signature_secret: str | None = None
-    whatsapp_template_payment: str | None = None
-    whatsapp_template_sponsor: str | None = None
-    whatsapp_template_promoter: str | None = None
+    # Sender-agnostic foundation approval for including sponsor financial
+    # details in a promoter's consolidated reminder.
     promoter_disclosure_approved: bool = False
-    # Saasyto account/API connector. Separate from the existing Pabbly reminder
-    # transport and Meta Cloud OTP adapter. Default OFF, even with credentials.
+    # Single WhatsApp campaign connector. Always disabled by default.
     saasyto_delivery_enabled: bool = False
     saasyto_sender_approved: bool = False
     saasyto_instance_id: str | None = None
@@ -59,6 +49,9 @@ class Settings(BaseSettings):
     # Opt-in production dispatcher only. A VPS deploy or secret presence never
     # starts WhatsApp sending automatically.
     saasyto_worker_enabled: bool = False
+    # Separate standing approval for scheduled 5th/20th IST reminders.
+    # Existing organization automation flags alone never turn this on.
+    saasyto_auto_reminders_enabled: bool = False
 
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
@@ -118,8 +111,6 @@ class Settings(BaseSettings):
                 and not parsed_trial.query
                 and not parsed_trial.fragment
                 and not any((
-                    self.messaging_delivery_enabled,
-                    self.messaging_sender_approved,
                     self.saasyto_delivery_enabled,
                     self.saasyto_sender_approved,
                     self.saasyto_worker_enabled,
@@ -161,6 +152,15 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "Private Saasyto worker requires explicit production sender approval"
+            )
+        if self.saasyto_auto_reminders_enabled and not (
+            self.saasyto_worker_enabled
+            and self.app_env == "production"
+            and self.saasyto_delivery_enabled
+            and self.saasyto_sender_approved
+        ):
+            raise ValueError(
+                "Scheduled Saasyto reminders require approved production worker"
             )
         if self.saasyto_local_dynamic_enabled:
             if not (self.app_env == "development" and self.local_demo_login_enabled):
@@ -261,37 +261,6 @@ class Settings(BaseSettings):
                 raise ValueError("Invalid WhatsApp authentication template language")
             if not re.fullmatch(r"v[0-9]{1,2}\.0", self.otp_meta_graph_version):
                 raise ValueError("Unsupported Meta Graph API version")
-        if self.messaging_delivery_enabled:
-            if self.app_env not in ("test", "production"):
-                raise ValueError("Messaging dispatch is restricted to approved production")
-            if not self.messaging_sender_approved:
-                raise ValueError("Messaging sender business approval is required")
-            if (
-                self.messaging_enable_after is None
-                or self.messaging_enable_after.tzinfo is None
-            ):
-                raise ValueError("Messaging requires a timezone-aware enable-after cutoff")
-            for label, secret in (
-                ("runner", self.messaging_runner_secret),
-                ("callback", self.messaging_callback_secret),
-                ("Pabbly signature", self.pabbly_signature_secret),
-            ):
-                if secret is None or len(secret) < 32:
-                    raise ValueError(f"Messaging {label} secret must be 32+ characters")
-            url = urlsplit(self.pabbly_webhook_url or "")
-            if (
-                url.scheme != "https"
-                or url.hostname != "connect.pabbly.com"
-                or url.username or url.password or url.fragment
-                or not url.path.startswith("/workflow/")
-            ):
-                raise ValueError("Use a configured HTTPS Pabbly Connect workflow webhook")
-            if not all((
-                self.whatsapp_template_payment,
-                self.whatsapp_template_sponsor,
-                self.whatsapp_template_promoter,
-            )):
-                raise ValueError("All approved WhatsApp template identifiers are required")
         return self
 
 
