@@ -247,7 +247,10 @@ def prepare_due_saasyto_reminders(db: Session, cfg, now: datetime | None = None)
             db.rollback()
             continue
         for kind in ("sponsor", "promoter"):
-            day = settings.sponsor_reminder_day if kind == "sponsor" else settings.promoter_reminder_day
+            day = (
+                settings.sponsor_reminder_day if kind == "sponsor"
+                else settings.promoter_reminder_day
+            )
             if day != today.day:
                 continue
             if kind == "promoter" and not getattr(cfg, "promoter_disclosure_approved", False):
