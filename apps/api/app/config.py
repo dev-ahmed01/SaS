@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # Separate standing approval for scheduled 5th/20th IST reminders.
     # Existing organization automation flags alone never turn this on.
     saasyto_auto_reminders_enabled: bool = False
+    # Separate approval for transactional collection acknowledgements.
+    saasyto_receipt_confirmations_enabled: bool = False
 
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
@@ -114,6 +116,7 @@ class Settings(BaseSettings):
                     self.saasyto_delivery_enabled,
                     self.saasyto_sender_approved,
                     self.saasyto_worker_enabled,
+                    self.saasyto_receipt_confirmations_enabled,
                     self.otp_delivery_enabled,
                     self.otp_saasyto_enabled,
                     self.otp_activation_notice_enabled,
@@ -161,6 +164,15 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "Scheduled Saasyto reminders require approved production worker"
+            )
+        if self.saasyto_receipt_confirmations_enabled and not (
+            self.saasyto_worker_enabled
+            and self.app_env == "production"
+            and self.saasyto_delivery_enabled
+            and self.saasyto_sender_approved
+        ):
+            raise ValueError(
+                "Saasyto collection acknowledgements require approved production worker"
             )
         if self.saasyto_local_dynamic_enabled:
             if not (self.app_env == "development" and self.local_demo_login_enabled):
