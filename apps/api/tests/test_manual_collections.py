@@ -1,6 +1,6 @@
 """Manual collection acceptance: financial attestation, consent and idempotency."""
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -19,7 +19,6 @@ from app.models import (
     ManualCollection,
     MessageDispatch,
     MessageOutbox,
-    OrganizationSettings,
     Prospect,
     VerifiedCredit,
 )
