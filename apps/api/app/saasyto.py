@@ -50,8 +50,8 @@ def saasyto_status(
             if getattr(cfg, "saasyto_enable_after", None) else None
         ),
         sender_approved=cfg.saasyto_sender_approved,
-        worker_enabled=cfg.saasyto_worker_enabled,
-        monthly_reminders_enabled=cfg.saasyto_auto_reminders_enabled,
+        worker_enabled=getattr(cfg, "saasyto_worker_enabled", False),
+        monthly_reminders_enabled=getattr(cfg, "saasyto_auto_reminders_enabled", False),
         credentials_configured=credentials,
         webhook_verified=False,
         connection_tested=False,
