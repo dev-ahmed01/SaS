@@ -19,8 +19,6 @@ from app.communication_results import router as communication_results_router
 from app.config import get_settings
 from app.dashboard import router as dashboard_router
 from app.db import get_engine
-from app.messaging import admin_router as messaging_admin_router
-from app.messaging import internal_router as messaging_internal_router
 from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
 from app.prospect_bulk import router as prospect_bulk_router
@@ -56,8 +54,6 @@ app.include_router(communication_bulk_consent_router)
 app.include_router(saasyto_router)
 app.include_router(saasyto_campaigns_admin_router)
 app.include_router(saasyto_campaigns_internal_router)
-app.include_router(messaging_admin_router)
-app.include_router(messaging_internal_router)
 app.include_router(dashboard_router)
 
 
