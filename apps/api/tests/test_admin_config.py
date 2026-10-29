@@ -40,7 +40,7 @@ def test_hosted_database_requires_tls_and_independent_secrets(env: str) -> None:
             "database_url": base["database_url"] + "?sslmode=" + mode,
         })
         assert valid.app_env == env
-        assert valid.messaging_delivery_enabled is False
+        assert valid.saasyto_delivery_enabled is False
     with pytest.raises(ValidationError, match="PostgreSQL TLS"):
         Settings(**{
             **base,
@@ -64,7 +64,7 @@ def test_mysql_staging_trial_is_explicit_local_and_send_disabled():
     trial = Settings(**base)
     assert trial.mysql_staging_trial_enabled
     assert not trial.saasyto_delivery_enabled
-    assert not trial.messaging_delivery_enabled
+    assert not trial.saasyto_auto_reminders_enabled
 
     for invalid in (
         {**base, "app_env": "production"},
@@ -77,7 +77,7 @@ def test_mysql_staging_trial_is_explicit_local_and_send_disabled():
         )},
         {**base, "database_url": base["database_url"] + "?ssl_disabled=true"},
         {**base, "saasyto_delivery_enabled": True},
-        {**base, "messaging_sender_approved": True},
+        {**base, "saasyto_auto_reminders_enabled": True},
         {**base, "otp_delivery_enabled": True},
     ):
         with pytest.raises(ValidationError):
@@ -93,4 +93,17 @@ def test_mysql_staging_flag_cannot_authorize_production_without_migrated_schema(
             database_url="mysql+pymysql://u:p@127.0.0.1:3306/sas_mysql_trial_ci_001",
             auth_secret="a" * 48,
             upi_match_secret="b" * 48,
+        )
+
+
+
+def test_saasyto_auto_reminders_need_standing_production_worker():
+    with pytest.raises(ValidationError, match="Scheduled Saasyto reminders"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            database_url="postgresql+psycopg://u:p@db.example.org/sas?sslmode=require",
+            auth_secret="a" * 48,
+            upi_match_secret="b" * 48,
+            saasyto_auto_reminders_enabled=True,
         )
