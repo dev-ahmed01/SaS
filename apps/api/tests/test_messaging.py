@@ -2,6 +2,14 @@
 
 import uuid
 from datetime import UTC, date, timedelta
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+
+from app.bootstrap_admin import provision_admin
+from app.main import app
 from types import SimpleNamespace
 
 from pydantic import SecretStr
@@ -15,7 +23,6 @@ from test_reminders import (
     promoter,
     set_start,
     sponsor,
-    system,  # noqa: F401 -- imported pytest fixture
 )
 
 from app.models import (
@@ -32,6 +39,43 @@ from app.saasyto_monthly_reminders import (
     live_monthly_message,
     prepare_due_saasyto_reminders,
 )
+
+
+
+@pytest.fixture
+def system(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    from app.models import Base
+
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        provision_admin(
+            db, email="office@foundation.org",
+            password="synthetic-long-admin-password",
+            organization_name="Emlen Foundation",
+            amount_paise=50000,
+        )
+    monkeypatch.setattr("app.auth.get_engine", lambda: engine)
+    monkeypatch.setattr(
+        "app.auth.get_settings",
+        lambda: SimpleNamespace(
+            auth_secret="synthetic-auth-secret-more-than-thirty-two-characters",
+            app_env="test",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.prospects.get_settings",
+        lambda: SimpleNamespace(
+            upi_match_secret="synthetic-independent-upi-hmac-key-for-tests",
+        ),
+    )
+    with TestClient(app) as client:
+        yield client, engine
+    engine.dispose()
 
 
 def config(when=OCT_5, *, enabled=True, disclose=True):
