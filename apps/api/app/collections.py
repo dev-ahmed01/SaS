@@ -565,105 +565,12 @@ def resend_collection_confirmation(
     db: Annotated[Session, Depends(db_session)],
     response: Response,
 ) -> CollectionResendOutput:
-    """Queue at most one explicit, consent-checked retry via the existing worker.
+    """Fail closed until a separately approved Saasyto receipt workflow exists.
 
-    This does not itself call WhatsApp. Unknown/accepted/claimed provider
-    attempts may have succeeded and MUST NOT be duplicated.
+    Legacy accepted/unknown attempts may have reached the recipient; a newly
+    queued repeat could duplicate a real receipt. No Pabbly sender remains.
     """
-    admin = context[0]
-    settings = db.scalars(select(OrganizationSettings).where(
-        OrganizationSettings.organization_id == admin.organization_id,
-    ).with_for_update()).one_or_none()
-    cfg = get_settings()
-    now = utc_now()
-    cutoff = getattr(cfg, "messaging_enable_after", None)
-    if not (
-        settings and settings.automation_enabled
-        and getattr(cfg, "messaging_delivery_enabled", False)
-        and getattr(cfg, "messaging_sender_approved", False)
-        and cutoff is not None and as_utc(cutoff) <= now
-    ):
-        raise HTTPException(status_code=503, detail="Approved receipt sending is not enabled")
-
-    receipt = db.scalars(select(ManualCollection).where(
-        ManualCollection.organization_id == admin.organization_id,
-        ManualCollection.id == collection_id,
-    )).one_or_none()
-    if receipt is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    if db.scalar(select(ManualCollectionReversal.id).where(
-        ManualCollectionReversal.organization_id == admin.organization_id,
-        ManualCollectionReversal.collection_id == collection_id,
-    )):
-        raise HTTPException(status_code=409, detail="Reversed collections cannot send receipts")
-
-    person = db.scalars(select(Prospect).where(
-        Prospect.organization_id == admin.organization_id,
-        Prospect.id == receipt.prospect_id,
-    ).with_for_update()).one_or_none()
-    number = (person.whatsapp_number or person.mobile_number) if person else None
-    if not person or person.archived_at or not person.whatsapp_opt_in or not number:
-        raise HTTPException(
-            status_code=409, detail="Sponsor is not eligible for a WhatsApp receipt"
-        )
-    if address_opted_out(db, admin.organization_id, "whatsapp", number):
-        raise HTTPException(status_code=409, detail="WhatsApp permission is withdrawn")
-    permission = evaluate_recipients(
-        db, admin.organization_id, [person], "whatsapp", "update",
-    )
-    if len(permission) != 1 or permission[0][2] != "eligible":
-        raise HTTPException(
-            status_code=409, detail="Documented WhatsApp update permission is required"
-        )
-
-    outboxes = db.scalars(select(MessageOutbox).where(
-        MessageOutbox.organization_id == admin.organization_id,
-        MessageOutbox.collection_id == collection_id,
-    ).with_for_update()).all()
-    originals = [e for e in outboxes if e.event_type == "collection_recorded"]
-    if len(originals) != 1:
-        raise HTTPException(status_code=409, detail="Original confirmation unavailable")
-
-    existing = next(
-        (e for e in outboxes if e.event_type == "collection_confirmation_resend"), None
-    )
-    if existing is not None:
-        response.headers["Cache-Control"] = "no-store"
-        return CollectionResendOutput(
-            status="already_queued",
-            notice="A manual resend has already been queued for this collection.",
-        )
-
-    original = originals[0]
-    attempt = db.scalars(select(MessageDispatch).where(
-        MessageDispatch.organization_id == admin.organization_id,
-        MessageDispatch.outbox_id == original.id,
-    )).one_or_none()
-    if attempt is None or attempt.status not in ("failed", "cancelled", "sent", "delivered"):
-        raise HTTPException(
-            status_code=409,
-            detail="Original confirmation is pending or unconfirmed; do not send a duplicate.",
-        )
-    queued = MessageOutbox(
-        organization_id=admin.organization_id, prospect_id=receipt.prospect_id,
-        collection_id=collection_id, event_type="collection_confirmation_resend",
-        status="awaiting_integration",
-    )
-    db.add(queued)
-    db.flush()
-    db.add(AuditEvent(
-        organization_id=admin.organization_id, actor_admin_id=admin.id,
-        action="collection.confirmation_resend_queued", entity_type="manual_collection",
-        entity_id=str(collection_id), before_data={"previous_status": attempt.status},
-        after_data={"request_id": str(payload.request_id), "outbox_id": str(queued.id)},
-    ))
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="Resend was already requested") from exc
-    response.headers["Cache-Control"] = "no-store"
-    return CollectionResendOutput(
-        status="queued",
-        notice="Resend queued for the approved dispatch worker; delivery is not confirmed.",
+    raise HTTPException(
+        status_code=503,
+        detail="Saasyto collection receipt resends are not yet enabled",
     )
