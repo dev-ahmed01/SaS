@@ -56,7 +56,7 @@ There are TWO distinct sponsor states: CRM activation stage (active/inactive) an
 | Crash recovery | Internal runner already reconciles stale claims to UNKNOWN after 15 minutes; production private worker was missing that call. | Fixed in this branch, pending all CI |
 | OTP route | Saasyto OTP or separately configured Meta OTP, selected prospect phone only, unconfirmed provider delivery does not validate OTP. | Need production sender setup, provider reply semantics and protected process logs |
 | Campaign controls | Recipient check + Admin approval before send. Communication automation rules display active=false; definitions are NOT autonomous senders. | Must not turn on automatic publication without approval |
-| 5th/20th automation | Existing automated monthly reminder execution calls legacy Pabbly webhook via messaging.py, NOT Saasyto campaigns. | **BLOCKER**: choose one approved scheduler/transport and test; avoid double sends if both enabled |
+| 5th/20th automation | Updated on this migration branch: the legacy Pabbly worker/callback routes were removed, and a separately approved 5th/20th IST scheduler prepares Saasyto campaign runs. Production activation and worker behavior remain unverified. | Single Saasyto transport now implemented on branch; needs CI, worker/staging proof and sign-off before activation. Historical Pabbly dispatch records remain read-only. |
 | Scale | At 90 seconds/attempt, 10,000 messages need at least 250 hours (~10.4 days), excluding outages. | Not a same-day 10k broadcast guarantee |
 
 Saasyto public product marketing: https://saasyto.com/whatsapp-personal/ advertises unlimited plans, API integration and scheduling, but states no platform can guarantee protection from WhatsApp bans. A separate official product guide at https://saasyto.com/product/saasyto-personal-whatsapp-subscription/ recommends 90–120 seconds between messages for its **dashboard campaign** workflow, and an official blog at https://saasyto.com/send-bulk-broadcast-whatsapp-messages-in-2024/ advertises webhooks for incoming/outgoing/disconnection events. Neither is a published contract for this CRM's particular direct-send response fields, webhook signing, daily API throughput or delivery statuses. Do not use another provider's API docs as if they were Saasyto.
@@ -73,7 +73,7 @@ Saasyto public product marketing: https://saasyto.com/whatsapp-personal/ adverti
 | DB-06 | BLOCKER | Trial copier is single-transaction synthetic localhost only and is not a restartable production importer. Need abort/recovery, all 35 table parity and independent ledger/tenant checks on a restored source. |
 | HOST-01 | BLOCKER | DirectAdmin Node.js/Python setup screens do not establish Node 22 SSR, FastAPI ASGI, process stability, cron execution, memory/process limits or backup restore. Test isolated site on exact plan. |
 | WA-01 | BLOCKER | Endpoint-specific Saasyto reply, idempotency, quotas and authenticated delivery webhooks are not verified by public product information. Obtain documented contract or owner-supervised integration evidence. |
-| WA-02 | BLOCKER | Automatic 5th/20th reminders use a different Pabbly delivery system; Saasyto automation is not automatically wired. Define one audited sender and ensure no duplicate delivery. |
+| WA-02 | BLOCKER | Pabbly runtime removed on the branch. Saasyto monthly reminder preparation, consent revalidation and one-attempt queue are integrated but remain default-off pending real staging validation. Define one audited sender and ensure no duplicate delivery. |
 | QA-01 | HIGH | CI MySQL 8.4 service uses a newer patch build than target screenshot's MySQL 8.4.11. Verify that specific target version before cutover. |
 | QA-02 | HIGH | Preserve secrets necessary to match stored UPI/phone hashes, OTP hashes, session and signature state, or use an explicit safe rotation process. Never place secrets into GitHub. |
 | QA-03 | HIGH | Historic dataset may contain old statuses, unusual JSON/timestamps, financial reversals and missing values absent from synthetic fixtures; test full real-history restore and reconciliation. |
@@ -98,3 +98,13 @@ Still required: exact InterServer MySQL patch; full old financial history with b
 **NO-GO** if any donor/contact/finance/audit/message row is missing, if a permission rule is weakened, if a historical record must be dropped, if recipient delivery is invented from gateway acceptance, if the production app/worker cannot restart, or if backup restore is unproven.
 
 Only after a fully verified backup-derived rehearsal, exact accounting/record parity, vendor/hosting acceptance tests, chosen reminder sender and rollback plan should a controlled write freeze and InterServer cutover be considered. No real database transfer or live WhatsApp activation is authorized by this audit.
+
+
+## Saasyto-only implementation update (29 October 2026)
+
+- Pabbly send/callback code and configuration are removed on this branch, as are the old frontend delivery-status proxy and its Pabbly metrics. Existing historical database tables/rows are retained as read-only evidence; they are not reinterpreted as Saasyto receipts.
+- The sole active campaign sender is the Saasyto private worker. A new separately gated monthly scheduler prepares Sponsor reminders on the configured 5th IST and one consolidated Promoter reminder on the configured 20th IST. Per-recipient messages are recomputed from live balances and consent before the worker calls Saasyto.
+- Unique monthly reminder batch constraints plus deterministic campaign request IDs prevent duplicate schedules; already attempted legacy reminders cannot send through Saasyto again.
+- Previously queued reminders expire when the IST day passes. Actual provider delivery/read callbacks remain unverified and are not inferred from HTTP acceptance.
+- Payment collection confirmation outbox records are retained, but an automatic Saasyto receipt confirmation/re-send flow has **not** been approved or implemented. The manual resend endpoint now returns a safe unavailable response, rather than invoking the deleted Pabbly worker.
+- See SAASYTO_ONLY_TRANSPORT.md for configuration gates, safety requirements, and current exclusions. Release still NO-GO pending full CI, versioned MySQL production migrations, authoritative backup/restore and InterServer worker/runtime tests.
