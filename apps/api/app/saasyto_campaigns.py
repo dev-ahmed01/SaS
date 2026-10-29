@@ -730,6 +730,22 @@ def run_due(
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
     reconciled = _reconcile_stale_claims(db)
+    # The external cron-to-API scheduler must create the same due monthly
+    # campaigns as the local private worker. Historically this endpoint only
+    # dispatched pre-approved runs; 5th/20th batches were never created.
+    # Never generate standing monthly campaigns outside approved production.
+    if (
+        getattr(cfg, "app_env", None) == "production"
+        and getattr(cfg, "saasyto_worker_enabled", False)
+        and getattr(cfg, "saasyto_auto_reminders_enabled", False)
+    ):
+        from app.saasyto_monthly_reminders import (
+            expire_overdue_reminders,
+            prepare_due_saasyto_reminders,
+        )
+
+        expire_overdue_reminders(db)
+        prepare_due_saasyto_reminders(db, cfg)
     counts = _dispatch_due(db, cfg)
     if reconciled:
         counts["unknown"] = counts.get("unknown", 0) + reconciled
