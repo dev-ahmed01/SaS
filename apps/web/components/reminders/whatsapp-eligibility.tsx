@@ -17,7 +17,9 @@ type Preview={
 };
 type Batch={
   id:string;kind:Kind;period_month:string;scheduled_on:string;
-  recipient_count:number;status:"prepared"|"partially_delivered"|"delivered";delivered_count:number;
+  recipient_count:number;status:"prepared"|"partially_delivered"|"delivered";
+  delivered_count:number;accepted_unverified_count:number;
+  unknown_count:number;queued_count:number;
 };
 type BatchPage={items:Batch[];total:number};
 const money=(value:number)=>(value/100).toLocaleString("en-IN",{
@@ -208,7 +210,14 @@ export function WhatsAppEligibility(){
              ?"Delivered · "+batch.delivered_count+"/"+batch.recipient_count
              :batch.status==="partially_delivered"
                ?"Partially delivered · "+batch.delivered_count+"/"+batch.recipient_count
-               :"Prepared, not confirmed sent"}
+               :batch.accepted_unverified_count>0
+               ?"Submitted to Saasyto (not delivery-confirmed) · "+
+                 batch.accepted_unverified_count+"/"+batch.recipient_count
+               :batch.unknown_count>0
+                 ?"Unknown provider outcome · "+batch.unknown_count
+                 :batch.queued_count>0
+                   ?"Queued in Saasyto · "+batch.queued_count
+                   :"Prepared, not confirmed sent"}
          </span></td>
       </tr>)}</tbody></table></div>
     </section>
