@@ -32,6 +32,7 @@ from app.models import (
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
 )
+from app.saasyto_client import Submission
 from app.saasyto_monthly_reminders import (
     _request_id,
     expire_overdue_reminders,
@@ -245,3 +246,85 @@ def test_overdue_queue_is_suppressed_and_not_reattempted(system):
         assert expire_overdue_reminders(
             db, OCT_5.astimezone(UTC) + timedelta(days=1),
         ) == 0
+
+
+
+@pytest.mark.parametrize("when,kind", [
+    (OCT_5, "sponsor"),
+    (OCT_20, "promoter"),
+])
+def test_actual_cron_http_entrypoint_creates_and_sends_one_monthly_message(
+    system, monkeypatch, when, kind,
+):
+    """Walk Admin contact -> standing policy -> HTTP cron -> provider adapter.
+
+    The Saasyto transport is mocked; this is NOT an external WhatsApp send.
+    A later cron tick cannot replay the same recipient.
+    """
+    client, engine = system
+    csrf = login(client)
+    owner = sponsor(client, csrf, 3091)
+    set_start(engine, owner["id"], date(2026, 10, 1))
+    if kind == "promoter":
+        agent = promoter(client, csrf, 3092)
+        assign(engine, agent["id"], owner["id"])
+    enable_automation(engine)
+    now = when.astimezone(UTC)
+    cfg = config(when)
+    cfg.app_env = "production"
+    token = cfg.saasyto_runner_secret.get_secret_value()
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    monkeypatch.setattr("app.saasyto_campaigns.utc_now", lambda: now)
+    monkeypatch.setattr("app.saasyto_monthly_reminders.utc_now", lambda: now)
+    outgoing = []
+
+    def fake_send(_cfg, *, phone, message):
+        outgoing.append((phone, message))
+        return Submission("accepted_unverified")
+
+    monkeypatch.setattr("app.saasyto_campaigns.send_text", fake_send)
+    path = "/internal/saasyto/dispatch"
+    assert client.post(path).status_code == 401
+    result = client.post(path, headers={
+        "X-Saasyto-Runner-Token": token,
+    })
+    assert result.status_code == 200, result.text
+    assert result.json().get("accepted_unverified") == 1
+    assert len(outgoing) == 1
+    assert "Sponsor a Salah" in outgoing[0][1]
+    if kind == "promoter":
+        assert "Sponsor 3091" in outgoing[0][1]
+    else:
+        assert "₹500.00" in outgoing[0][1]
+    with Session(engine) as db:
+        row = db.scalars(select(CommunicationCampaign)).one()
+        assert row.provider_template_id == (
+            "sas_auto_sponsor_v1" if kind == "sponsor"
+            else "sas_auto_promoter_v1"
+        )
+        attempt = db.scalars(select(SaasytoCampaignRecipient)).one()
+        assert attempt.status == "accepted_unverified"
+    again = client.post(path, headers={"X-Saasyto-Runner-Token": token})
+    assert again.status_code == 200
+    assert len(outgoing) == 1
+
+
+def test_manual_reminder_cannot_reserve_month_when_saasyto_auto_is_on(
+    system, monkeypatch,
+):
+    client, engine = system
+    csrf = login(client)
+    enable_automation(engine)
+    cfg = config()
+    cfg.app_env = "production"
+    monkeypatch.setattr("app.reminders.get_settings", lambda: cfg)
+    monkeypatch.setattr(
+        "app.reminders.utc_now", lambda: OCT_5.astimezone(UTC),
+    )
+    manual = client.post("/v1/reminders/prepare", headers=csrf, json={
+        "kind": "sponsor", "request_id": str(uuid.uuid4()),
+    })
+    assert manual.status_code == 409, manual.text
+    assert "scheduled through Saasyto" in manual.json()["detail"]
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(ReminderBatch)) == 0
