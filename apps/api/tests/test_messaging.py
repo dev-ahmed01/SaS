@@ -328,3 +328,27 @@ def test_manual_reminder_cannot_reserve_month_when_saasyto_auto_is_on(
     assert "scheduled through Saasyto" in manual.json()["detail"]
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(ReminderBatch)) == 0
+
+
+
+def test_production_http_cron_respects_worker_kill_switch(system, monkeypatch):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, 3093)
+    set_start(engine, person["id"], date(2026, 10, 1))
+    enable_automation(engine)
+    cfg = config()
+    cfg.app_env = "production"
+    cfg.saasyto_worker_enabled = False
+    monkeypatch.setattr("app.saasyto_campaigns.get_settings", lambda: cfg)
+    monkeypatch.setattr(
+        "app.saasyto_campaigns.utc_now", lambda: OCT_5.astimezone(UTC),
+    )
+    token = cfg.saasyto_runner_secret.get_secret_value()
+    denied = client.post("/internal/saasyto/dispatch", headers={
+        "X-Saasyto-Runner-Token": token,
+    })
+    assert denied.status_code == 503, denied.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(CommunicationCampaign)) == 0
+        assert db.scalar(select(func.count()).select_from(SaasytoCampaignRun)) == 0
