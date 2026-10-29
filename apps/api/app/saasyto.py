@@ -19,6 +19,8 @@ class ProviderStatus(BaseModel):
     local_dynamic_mode: bool = False
     activation_cutoff: str | None = None
     sender_approved: bool
+    worker_enabled: bool
+    monthly_reminders_enabled: bool
     credentials_configured: bool
     webhook_verified: bool
     connection_tested: bool
@@ -48,6 +50,8 @@ def saasyto_status(
             if getattr(cfg, "saasyto_enable_after", None) else None
         ),
         sender_approved=cfg.saasyto_sender_approved,
+        worker_enabled=cfg.saasyto_worker_enabled,
+        monthly_reminders_enabled=cfg.saasyto_auto_reminders_enabled,
         credentials_configured=credentials,
         webhook_verified=False,
         connection_tested=False,
