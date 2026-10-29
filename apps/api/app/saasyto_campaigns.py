@@ -729,6 +729,13 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    # A disabled private worker must also disable the production HTTP cron
+    # entry point. Otherwise a separately scheduled HTTP POST could continue
+    # sending despite an operator disabling the worker.
+    if getattr(cfg, "app_env", None) == "production" and not getattr(
+        cfg, "saasyto_worker_enabled", False
+    ):
+        raise HTTPException(status_code=503, detail="Saasyto worker disabled")
     reconciled = _reconcile_stale_claims(db)
     # The external cron-to-API scheduler must create the same due monthly
     # campaigns as the local private worker. Historically this endpoint only
