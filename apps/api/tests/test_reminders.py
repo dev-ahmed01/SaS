@@ -64,6 +64,16 @@ def system(monkeypatch):
             upi_match_secret="synthetic-independent-upi-hmac-key-for-tests",
         ),
     )
+    # In-memory reminder API tests have no deployment DATABASE_URL. Mock the
+    # outbound transport gate, not the production configuration validation.
+    monkeypatch.setattr(
+        "app.reminders.get_settings",
+        lambda: SimpleNamespace(
+            app_env="test",
+            saasyto_auto_reminders_enabled=False,
+            saasyto_worker_enabled=False,
+        ),
+    )
     with TestClient(app) as client:
         yield client, engine
     engine.dispose()
