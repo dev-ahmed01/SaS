@@ -4,7 +4,6 @@ import uuid
 from datetime import UTC, date, timedelta
 from types import SimpleNamespace
 
-import pytest
 from pydantic import SecretStr
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -28,7 +27,6 @@ from app.models import (
     SaasytoCampaignRecipient,
     SaasytoCampaignRun,
 )
-from app.saasyto_client import Submission
 from app.saasyto_monthly_reminders import (
     _request_id,
     live_monthly_message,
