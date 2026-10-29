@@ -346,3 +346,59 @@ def prepare_due_saasyto_reminders(db: Session, cfg, now: datetime | None = None)
                 db.rollback()
         db.rollback()
     return count
+
+
+
+def expire_overdue_reminders(
+    db: Session, now: datetime | None = None, *, limit: int = 250,
+) -> int:
+    """Suppress queued monthly sends that missed their IST calendar day.
+
+    At 90 seconds per attempt, a large batch may outlast the 5th/20th. It
+    must not silently deliver a previous-day reminder. Suppress in batches
+    without consuming the provider's sender-wide minimum interval.
+    Claimed attempts are left for unknown-outcome reconciliation.
+    """
+    now = now or utc_now()
+    today = ist_today(now)
+    rows = db.execute(select(
+        SaasytoCampaignRecipient,
+        SaasytoCampaignRun,
+    ).join(
+        SaasytoCampaignRun,
+        SaasytoCampaignRecipient.run_id == SaasytoCampaignRun.id,
+    ).join(
+        CommunicationCampaign,
+        SaasytoCampaignRun.campaign_id == CommunicationCampaign.id,
+    ).join(
+        ReminderBatch,
+        ReminderBatch.organization_id == CommunicationCampaign.organization_id,
+    ).where(
+        CommunicationCampaign.request_id == ReminderBatch.request_id,
+        CommunicationCampaign.provider_template_id.in_(tuple(MARKER.values())),
+        SaasytoCampaignRecipient.status == "queued",
+        SaasytoCampaignRun.status == "approved",
+        ReminderBatch.scheduled_on < today,
+    ).order_by(
+        ReminderBatch.scheduled_on,
+        SaasytoCampaignRecipient.id,
+    ).limit(limit).with_for_update(skip_locked=True)).all()
+    if not rows:
+        return 0
+    changed_runs = set()
+    for recipient, run in rows:
+        recipient.status = "suppressed"
+        recipient.reason = "reminder_day_expired"
+        recipient.finished_at = now
+        changed_runs.add(run.id)
+    db.commit()
+    for run_id in changed_runs:
+        run = db.get(SaasytoCampaignRun, run_id)
+        outstanding = db.scalar(select(SaasytoCampaignRecipient.id).where(
+            SaasytoCampaignRecipient.run_id == run_id,
+            SaasytoCampaignRecipient.status.in_(("queued", "claimed")),
+        ).limit(1))
+        if run is not None and run.status == "approved" and outstanding is None:
+            run.status = "completed"
+    db.commit()
+    return len(rows)
