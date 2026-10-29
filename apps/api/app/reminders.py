@@ -23,6 +23,7 @@ from app.accounting import (
 )
 from app.auth import db_session, get_admin, require_csrf
 from app.communication_consent import evaluate_recipients
+from app.config import get_settings
 from app.models import (
     AdminSession,
     AdminUser,
@@ -373,6 +374,22 @@ def prepare(
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
         return _batch_read(database, existing)
+    # Once standing Saasyto reminders are enabled, a preview-only manual
+    # batch would consume the unique organization/month/kind key and stop the
+    # actual worker from creating any sendable Saasyto campaign. Fail closed
+    # rather than quietly swallowing the scheduled monthly reminder.
+    cfg = get_settings()
+    if (
+        settings.automation_enabled
+        and getattr(cfg, "app_env", None) == "production"
+        and getattr(cfg, "saasyto_auto_reminders_enabled", False)
+        and getattr(cfg, "saasyto_worker_enabled", False)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Monthly reminders are scheduled through Saasyto; "
+            "manual preparation is disabled while automation is active",
+        )
     # Only *new* batches are subject to the no-catch-up configured-day gate.
     if today != scheduled:
         raise HTTPException(
