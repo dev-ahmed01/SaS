@@ -449,7 +449,19 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
         return None
     if SPONSOR_TOKENS.search(row.body) and not isinstance(person, Prospect):
         return None
-    message = _render(row.body, person, now)
+    # Standing-approved 5th/20th reminders use the same durable Saasyto
+    # recipient queue. Resolve the amount/assignment against the LIVE ledger;
+    # never rely on the batch snapshot or a generic campaign template.
+    if row.provider_template_id in (
+        "sas_auto_sponsor_v1", "sas_auto_promoter_v1",
+    ):
+        from app.saasyto_monthly_reminders import live_monthly_message
+
+        message = live_monthly_message(db, row, person, now, cfg)
+        if not message:
+            return None
+    else:
+        message = _render(row.body, person, now)
     return phone, message
 
 
@@ -717,7 +729,30 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    # A disabled private worker must also disable the production HTTP cron
+    # entry point. Otherwise a separately scheduled HTTP POST could continue
+    # sending despite an operator disabling the worker.
+    if getattr(cfg, "app_env", None) == "production" and not getattr(
+        cfg, "saasyto_worker_enabled", False
+    ):
+        raise HTTPException(status_code=503, detail="Saasyto worker disabled")
     reconciled = _reconcile_stale_claims(db)
+    # The external cron-to-API scheduler must create the same due monthly
+    # campaigns as the local private worker. Historically this endpoint only
+    # dispatched pre-approved runs; 5th/20th batches were never created.
+    # Never generate standing monthly campaigns outside approved production.
+    if (
+        getattr(cfg, "app_env", None) == "production"
+        and getattr(cfg, "saasyto_worker_enabled", False)
+        and getattr(cfg, "saasyto_auto_reminders_enabled", False)
+    ):
+        from app.saasyto_monthly_reminders import (
+            expire_overdue_reminders,
+            prepare_due_saasyto_reminders,
+        )
+
+        expire_overdue_reminders(db)
+        prepare_due_saasyto_reminders(db, cfg)
     counts = _dispatch_due(db, cfg)
     if reconciled:
         counts["unknown"] = counts.get("unknown", 0) + reconciled

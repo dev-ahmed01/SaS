@@ -46,10 +46,12 @@ def test_worker_uses_private_database_not_network_or_recipient_input(monkeypatch
             return False
 
     monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", lambda db:
+                        messages.append(("reconcile", db)) or 1)
     monkeypatch.setattr(worker, "_dispatch_due", lambda db, settings:
-                        messages.append((db, settings)) or {"claimed": 1, "unknown": 1})
+                        messages.append(("dispatch", db, settings)) or {"claimed": 1})
     assert worker.main(["--once"]) == 0
-    assert len(messages) == 1
+    assert [row[0] for row in messages] == ["reconcile", "dispatch"]
 
 
 def test_worker_never_retries_exception_inside_same_tick(monkeypatch):
@@ -71,6 +73,71 @@ def test_worker_never_retries_exception_inside_same_tick(monkeypatch):
         raise OSError("synthetic unknown provider state")
 
     monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", lambda db: 0)
     monkeypatch.setattr(worker, "_dispatch_due", fail)
     assert worker.dispatch_once() == 1
     assert len(calls) == 1
+
+
+def test_stale_claim_recovery_is_never_resent(monkeypatch):
+    """An interrupted provider attempt is marked unknown before any dispatch."""
+    monkeypatch.setattr(
+        worker, "get_settings", lambda: cfg(enabled=True, environment="production")
+    )
+    monkeypatch.setattr(worker, "get_engine", lambda: object())
+    actions = []
+
+    class FakeSession:
+        def __init__(self, _engine):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def reconcile(_db):
+        actions.append("recovered_unknown")
+        return 3
+
+    def dispatch(_db, _cfg):
+        assert actions == ["recovered_unknown"]
+        actions.append("new_queue_only")
+        return {"claimed": 0}
+
+    monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", reconcile)
+    monkeypatch.setattr(worker, "_dispatch_due", dispatch)
+    assert worker.dispatch_once() == 0
+    assert actions == ["recovered_unknown", "new_queue_only"]
+
+
+def test_reconciliation_error_blocks_further_dispatch(monkeypatch):
+    monkeypatch.setattr(
+        worker, "get_settings", lambda: cfg(enabled=True, environment="production")
+    )
+    monkeypatch.setattr(worker, "get_engine", lambda: object())
+
+    class FakeSession:
+        def __init__(self, _engine):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(
+        worker,
+        "_reconcile_stale_claims",
+        lambda _db: (_ for _ in ()).throw(RuntimeError("synthetic recovery failed")),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_dispatch_due",
+        lambda *_: (_ for _ in ()).throw(AssertionError("No send after failure")),
+    )
+    assert worker.dispatch_once() == 1

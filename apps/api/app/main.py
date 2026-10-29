@@ -19,8 +19,6 @@ from app.communication_results import router as communication_results_router
 from app.config import get_settings
 from app.dashboard import router as dashboard_router
 from app.db import get_engine
-from app.messaging import admin_router as messaging_admin_router
-from app.messaging import internal_router as messaging_internal_router
 from app.payouts import router as payouts_router
 from app.promoters import router as promoters_router
 from app.prospect_bulk import router as prospect_bulk_router
@@ -56,8 +54,6 @@ app.include_router(communication_bulk_consent_router)
 app.include_router(saasyto_router)
 app.include_router(saasyto_campaigns_admin_router)
 app.include_router(saasyto_campaigns_internal_router)
-app.include_router(messaging_admin_router)
-app.include_router(messaging_internal_router)
 app.include_router(dashboard_router)
 
 
@@ -71,7 +67,15 @@ def readiness() -> JSONResponse:
     try:
         with get_engine().connect() as connection:
             connection.execute(text("SELECT 1"))
-            if get_settings().app_env != "test":
+            cfg = get_settings()
+            if cfg.app_env != "test" and not getattr(
+                cfg, "mysql_staging_trial_enabled", False
+            ):
+                # PostgreSQL deployments require the full Alembic head.
+                # The separately guarded MySQL trial checks its exact mapped
+                # schema, uniqueness index, FK enforcement and financial
+                # triggers in db._mysql_staging_engine before reaching here.
+                # It must NEVER claim a PostgreSQL Alembic revision.
                 # Development also needs up-to-date Alembic schema. A healthy
                 # TCP/SQL connection alone is not application readiness.
                 actual = set(

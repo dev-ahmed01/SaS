@@ -159,3 +159,89 @@ jobs:
         run: npx playwright test --grep "all seven approved modules"
       - name: Run desktop and mobile browser tests
         run: npx playwright test
+
+  mysql_trial:
+    name: Disposable MySQL 8.4 schema and integrity trial
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_mysql_ephemeral_password
+          MYSQL_DATABASE: sas_mysql_trial_ci_001
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pci_mysql_ephemeral_password"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 25
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      APP_ENV: test
+      SAS_MYSQL_TRIAL_ONLY: '1'
+      SAS_MYSQL_TRIAL_URL: mysql+pymysql://root:ci_mysql_ephemeral_password@127.0.0.1:3306/sas_mysql_trial_ci_001
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/requirements-mysql-trial.txt
+      - name: Install test-only MySQL driver
+        run: python -m pip install -r requirements-mysql-trial.txt
+      - name: Lint MySQL schema sandbox
+        run: python -m ruff check app/mysql_trial_schema.py tests/test_mysql_trial_schema.py
+      - name: Validate schema and isolation against disposable MySQL 8.4
+        run: python -m pytest -q tests/test_mysql_trial_schema.py
+
+  mysql_copy_trial:
+    name: Disposable PostgreSQL 16 to MySQL 8.4 data-copy rehearsal
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trial_copy
+          POSTGRES_PASSWORD: ci_pg_trial_ephemeral
+          POSTGRES_DB: sas_pg_trial_ci_001
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U trial_copy -d sas_pg_trial_ci_001"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_mysql_ephemeral_password
+          MYSQL_DATABASE: sas_mysql_trial_ci_001
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pci_mysql_ephemeral_password"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 25
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      APP_ENV: test
+      SAS_MYSQL_TRIAL_ONLY: '1'
+      SAS_MYSQL_COPY_TRIAL_ONLY: '1'
+      SAS_PG_TRIAL_SOURCE_URL: postgresql+psycopg://trial_copy:ci_pg_trial_ephemeral@127.0.0.1:5432/sas_pg_trial_ci_001
+      SAS_MYSQL_TRIAL_URL: mysql+pymysql://root:ci_mysql_ephemeral_password@127.0.0.1:3306/sas_mysql_trial_ci_001
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/requirements-mysql-trial.txt
+      - name: Install pinned synthetic trial dependencies
+        run: python -m pip install -r requirements-mysql-trial.txt
+      - name: Lint and test trial copy safety
+        run: |
+          python -m ruff check app/mysql_trial_copy.py tests/test_mysql_trial_copy.py
+          python -m pytest -q tests/test_mysql_trial_copy.py

@@ -210,9 +210,10 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
                   disabled={busy||resendBusy!==null}
                   onClick={()=>choose(row,"delete")}>Delete</button>
                 <button type="button" className="text-action"
-                  disabled={busy||resendBusy!==null}
+                  disabled={true}
+                  title="Collection receipt resends are paused until the Saasyto-only receipt flow is approved."
                   onClick={()=>void resend(row)}>
-                  {resendBusy===row.id?"Queuing…":"Resend confirmation"}
+                  Receipt resend unavailable
                 </button>
               </div>}</td>
           </tr>)}</tbody>

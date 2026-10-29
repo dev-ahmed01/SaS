@@ -120,9 +120,10 @@ export function CommunicationAutomations({revision=0}:{revision?:number}){
           </article>)}
       </div>
       <p className="comm-muted comm-history-footnote">
-        Existing monthly reminders remain governed by the Foundation&apos;s
-        5th/20th IST policy. These new rules do not run until a reviewed
-        event dispatcher and channel permissions are activated.
+        Monthly sponsor and promoter reminders are queued through Saasyto
+        on the configured 5th/20th IST dates only when both the Foundation
+        automation switch and the approved Saasyto worker are enabled.
+        Saved custom trigger definitions remain inactive until separately reviewed.
       </p>
     </section>
   </div>;

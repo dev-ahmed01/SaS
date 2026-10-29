@@ -17,7 +17,9 @@ type Preview={
 };
 type Batch={
   id:string;kind:Kind;period_month:string;scheduled_on:string;
-  recipient_count:number;status:"prepared"|"partially_delivered"|"delivered";delivered_count:number;
+  recipient_count:number;status:"prepared"|"partially_delivered"|"delivered";
+  delivered_count:number;accepted_unverified_count:number;
+  unknown_count:number;queued_count:number;
 };
 type BatchPage={items:Batch[];total:number};
 const money=(value:number)=>(value/100).toLocaleString("en-IN",{
@@ -31,6 +33,7 @@ export function WhatsAppEligibility(){
   const [revision,setRevision]=useState(0);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
+  const [autoManaged,setAutoManaged]=useState(false);
   const [ack,setAck]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
@@ -65,8 +68,31 @@ export function WhatsAppEligibility(){
     return ()=>controller.abort();
   },[revision]);
 
+  useEffect(()=>{
+    const controller=new AbortController();
+    Promise.all([
+      fetch("/api/admin/settings",{cache:"no-store",signal:controller.signal}),
+      fetch("/api/admin/communication/provider/saasyto",{
+        cache:"no-store",signal:controller.signal,
+      }),
+    ]).then(async ([settings,provider])=>{
+      if(!settings.ok||!provider.ok)throw Error("Automation status unavailable");
+      const organization=await settings.json() as {automation_enabled:boolean};
+      const transport=await provider.json() as {
+        monthly_reminders_enabled:boolean;worker_enabled:boolean;
+      };
+      if(!controller.signal.aborted){
+        setAutoManaged(Boolean(
+          organization.automation_enabled&&transport.monthly_reminders_enabled&&
+          transport.worker_enabled,
+        ));
+      }
+    }).catch(()=>{if(!controller.signal.aborted)setAutoManaged(false);});
+    return ()=>controller.abort();
+  },[revision]);
+
   async function prepare(){
-    if(!preview?.is_due_today||saving||!ack)return;
+    if(!preview?.is_due_today||saving||!ack||autoManaged)return;
     setSaving(true);setError("");setMessage("");
     if(!request.current)request.current=crypto.randomUUID();
     try{
@@ -117,7 +143,7 @@ export function WhatsAppEligibility(){
       </div>
     </section>
 
-    <p className="reminder-no-send" role="status">WhatsApp sending: off.</p>
+    <p className="reminder-no-send" role="status">Monthly reminders use the Saasyto campaign queue on the scheduled IST date when the Foundation automation and approved sender are enabled. A preview does not submit any messages.</p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {message&&<p role="status" className="form-success">{message}</p>}
     <div className="accounting-metrics">
@@ -151,7 +177,10 @@ export function WhatsAppEligibility(){
           </tr>)}</tbody>
       </table></div>
       <div className="reminder-prepare">
-        <label className="checkbox-field">
+        {autoManaged?<p className="accounting-footnote" role="status">
+          Saasyto manages this month's reminder preparation automatically.
+          Manual batch preparation is disabled to prevent duplicate or missed sends.
+        </p>:<><label className="checkbox-field">
           <input type="checkbox" checked={ack}
             onChange={event=>setAck(event.target.checked)}/>
           <span>I understand this prepares a record only and sends no WhatsApp messages.</span>
@@ -162,7 +191,7 @@ export function WhatsAppEligibility(){
           {saving?"Preparing…":"Prepare batch (do not send)"}
         </button>
 
-         <p className="accounting-footnote">{isAlreadyPrepared?"Already prepared this month.":preview?.is_due_today?"Ready to prepare.":"Available on the scheduled reminder day."}</p>
+         <p className="accounting-footnote">{isAlreadyPrepared?"Already prepared this month.":preview?.is_due_today?"Ready to prepare.":"Available on the scheduled reminder day."}</p></>}
       </div>
     </section>
     <section className="reminder-review" aria-label="Reminder preparation history">
@@ -181,7 +210,14 @@ export function WhatsAppEligibility(){
              ?"Delivered · "+batch.delivered_count+"/"+batch.recipient_count
              :batch.status==="partially_delivered"
                ?"Partially delivered · "+batch.delivered_count+"/"+batch.recipient_count
-               :"Prepared, not confirmed sent"}
+               :batch.accepted_unverified_count>0
+               ?"Submitted to Saasyto (not delivery-confirmed) · "+
+                 batch.accepted_unverified_count+"/"+batch.recipient_count
+               :batch.unknown_count>0
+                 ?"Unknown provider outcome · "+batch.unknown_count
+                 :batch.queued_count>0
+                   ?"Queued in Saasyto · "+batch.queued_count
+                   :"Prepared, not confirmed sent"}
          </span></td>
       </tr>)}</tbody></table></div>
     </section>

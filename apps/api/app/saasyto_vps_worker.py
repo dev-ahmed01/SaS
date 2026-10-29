@@ -1,7 +1,9 @@
 """Production-only Saasyto worker for a private InterServer VPS container.
 
 Never serves HTTP, never accepts recipient input and never runs in staging.
-The campaign queue is approved by Admin separately and the database enforces
+Normal campaigns require individual approval; standing monthly reminders also
+require the organization's audited automation switch and explicit deployment approval.
+The database enforces
 rolling-minute claim rate and one-attempt-per-recipient semantics.
 """
 import argparse
@@ -12,7 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_engine
-from app.saasyto_campaigns import _dispatch_due
+from app.saasyto_campaigns import _dispatch_due, _reconcile_stale_claims
+from app.saasyto_monthly_reminders import (
+    expire_overdue_reminders,
+    prepare_due_saasyto_reminders,
+)
 
 
 def dispatch_once() -> int:
@@ -27,7 +33,17 @@ def dispatch_once() -> int:
         return 2
     try:
         with Session(get_engine()) as db:
+            # A crash can interrupt a committed claim after the provider
+            # accepted the message. Reconcile it as UNKNOWN; never retry.
+            reconciled = _reconcile_stale_claims(db)
+            # All standing monthly scheduling is disabled by default.
+            if getattr(cfg, "saasyto_auto_reminders_enabled", False):
+                # Never send a previous-day 5th/20th reminder.
+                expire_overdue_reminders(db)
+                prepare_due_saasyto_reminders(db, cfg)
             outcome = _dispatch_due(db, cfg)
+            if reconciled:
+                outcome["unknown"] = outcome.get("unknown", 0) + reconciled
         # Only a sanitized count summary. Never print recipient addresses,
         # personalization, provider payloads, account tokens or OTP content.
         allowed = {"claimed", "accepted_unverified", "rejected", "unknown", "suppressed"}

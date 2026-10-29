@@ -23,10 +23,12 @@ from app.accounting import (
 )
 from app.auth import db_session, get_admin, require_csrf
 from app.communication_consent import evaluate_recipients
+from app.config import get_settings
 from app.models import (
     AdminSession,
     AdminUser,
     AuditEvent,
+    CommunicationCampaign,
     MessageDispatch,
     OrganizationSettings,
     Promoter,
@@ -34,6 +36,8 @@ from app.models import (
     Prospect,
     ReminderBatch,
     ReminderIntent,
+    SaasytoCampaignRecipient,
+    SaasytoCampaignRun,
     SponsorshipRate,
 )
 from app.security import utc_now
@@ -87,6 +91,9 @@ class BatchRead(BaseModel):
     recipient_count: int
     status: Literal["prepared", "partially_delivered", "delivered"]
     delivered_count: int
+    accepted_unverified_count: int = 0
+    unknown_count: int = 0
+    queued_count: int = 0
 
 
 class BatchPage(BaseModel):
@@ -249,8 +256,9 @@ def _build_preview(
         total_outstanding_paise=sum(item.outstanding_paise for item in recipients),
         recipients=recipients,
         notice=(
-            "Eligibility preview only. No WhatsApp or Pabbly delivery is enabled. "
-            "Delivery must recheck consent, paid status and assignments."
+            "Eligibility preview only. Saasyto is the sole active WhatsApp campaign "
+            "transport; delivery requires explicit sender approval, a due "
+            "campaign and live consent/balance checks."
         ),
     )
 
@@ -272,10 +280,33 @@ def _batch_read(db: Session, row: ReminderBatch) -> BatchRead:
         "delivered" if row.recipient_count and delivered == row.recipient_count
         else "partially_delivered" if delivered > 0 else "prepared"
     )
+    # Saasyto's gateway acceptance is not a delivery or read receipt. Match
+    # automated batches using their reserved request ID, not display titles.
+    send_rows = db.execute(select(
+        SaasytoCampaignRecipient.status,
+        func.count(SaasytoCampaignRecipient.id),
+    ).join(
+        SaasytoCampaignRun,
+        SaasytoCampaignRecipient.run_id == SaasytoCampaignRun.id,
+    ).join(
+        CommunicationCampaign,
+        SaasytoCampaignRun.campaign_id == CommunicationCampaign.id,
+    ).where(
+        SaasytoCampaignRecipient.organization_id == row.organization_id,
+        CommunicationCampaign.organization_id == row.organization_id,
+        CommunicationCampaign.request_id == row.request_id,
+        CommunicationCampaign.provider_template_id.in_(
+            ("sas_auto_sponsor_v1", "sas_auto_promoter_v1")
+        ),
+    ).group_by(SaasytoCampaignRecipient.status)).all()
+    counts = {state: total for state, total in send_rows}
     return BatchRead(
         id=row.id, kind=row.kind, period_month=row.period_month,
         scheduled_on=row.scheduled_on, recipient_count=row.recipient_count,
         status=status, delivered_count=delivered,
+        accepted_unverified_count=counts.get("accepted_unverified", 0),
+        unknown_count=counts.get("unknown", 0),
+        queued_count=counts.get("queued", 0),
     )
 
 
@@ -343,6 +374,22 @@ def prepare(
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store"
         return _batch_read(database, existing)
+    # Once standing Saasyto reminders are enabled, a preview-only manual
+    # batch would consume the unique organization/month/kind key and stop the
+    # actual worker from creating any sendable Saasyto campaign. Fail closed
+    # rather than quietly swallowing the scheduled monthly reminder.
+    cfg = get_settings()
+    if (
+        settings.automation_enabled
+        and getattr(cfg, "app_env", None) == "production"
+        and getattr(cfg, "saasyto_auto_reminders_enabled", False)
+        and getattr(cfg, "saasyto_worker_enabled", False)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Monthly reminders are scheduled through Saasyto; "
+            "manual preparation is disabled while automation is active",
+        )
     # Only *new* batches are subject to the no-catch-up configured-day gate.
     if today != scheduled:
         raise HTTPException(

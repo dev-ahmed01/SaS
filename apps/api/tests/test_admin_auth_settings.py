@@ -299,9 +299,11 @@ def test_automation_enable_is_separate_audited_fail_closed_admin_action(
     csrf = sign_in(client)
     monkeypatch.setattr("app.admin_settings.get_settings", lambda: SimpleNamespace(
         app_env="test",
-        messaging_delivery_enabled=False,
-        messaging_sender_approved=False,
-        messaging_enable_after=None,
+        saasyto_delivery_enabled=False,
+        saasyto_sender_approved=False,
+        saasyto_worker_enabled=False,
+        saasyto_auto_reminders_enabled=False,
+        saasyto_enable_after=None,
     ))
     url = "/v1/settings/automation"
     enable = {"enabled": True, "confirmation": "ENABLE WHATSAPP"}
@@ -316,9 +318,11 @@ def test_automation_enable_is_separate_audited_fail_closed_admin_action(
 
     monkeypatch.setattr("app.admin_settings.get_settings", lambda: SimpleNamespace(
         app_env="production",
-        messaging_delivery_enabled=True,
-        messaging_sender_approved=True,
-        messaging_enable_after=utc_now() + timedelta(days=1),
+        saasyto_delivery_enabled=True,
+        saasyto_sender_approved=True,
+        saasyto_worker_enabled=True,
+        saasyto_auto_reminders_enabled=True,
+        saasyto_enable_after=utc_now() + timedelta(days=1),
     ))
     accepted = client.post(url, headers={"X-CSRF-Token": csrf}, json=enable)
     assert accepted.status_code == 200, accepted.text

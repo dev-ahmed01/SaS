@@ -1,5 +1,6 @@
 """Deployment configuration, deliberately separate from organization business settings."""
 
+import re
 from datetime import datetime
 from functools import lru_cache
 from typing import Literal
@@ -14,25 +15,18 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "staging", "production"] = "development"
     database_url: str
+    # Allows a disposable localhost MySQL *staging* rehearsal only. No live
+    # InterServer database, no production authorization or sending.
+    mysql_staging_trial_enabled: bool = False
     auth_secret: str | None = None
     upi_match_secret: str | None = None
     # Never enable for staging/production; local ephemeral DB only.
     local_demo_login_enabled: bool = False
 
-    # Global kill switch, independent of organization settings.
-    messaging_delivery_enabled: bool = False
-    messaging_sender_approved: bool = False
-    messaging_enable_after: datetime | None = None
-    messaging_runner_secret: str | None = None
-    messaging_callback_secret: str | None = None
-    pabbly_webhook_url: str | None = None
-    pabbly_signature_secret: str | None = None
-    whatsapp_template_payment: str | None = None
-    whatsapp_template_sponsor: str | None = None
-    whatsapp_template_promoter: str | None = None
+    # Sender-agnostic foundation approval for including sponsor financial
+    # details in a promoter's consolidated reminder.
     promoter_disclosure_approved: bool = False
-    # Saasyto account/API connector. Separate from the existing Pabbly reminder
-    # transport and Meta Cloud OTP adapter. Default OFF, even with credentials.
+    # Single WhatsApp campaign connector. Always disabled by default.
     saasyto_delivery_enabled: bool = False
     saasyto_sender_approved: bool = False
     saasyto_instance_id: str | None = None
@@ -55,6 +49,9 @@ class Settings(BaseSettings):
     # Opt-in production dispatcher only. A VPS deploy or secret presence never
     # starts WhatsApp sending automatically.
     saasyto_worker_enabled: bool = False
+    # Separate standing approval for scheduled 5th/20th IST reminders.
+    # Existing organization automation flags alone never turn this on.
+    saasyto_auto_reminders_enabled: bool = False
 
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
@@ -100,8 +97,31 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Local demo credentials require the loopback-only sas_dev PostgreSQL database"
                 )
-        if self.app_env in ("staging", "production") and not self.database_url.startswith(
-            "postgresql+psycopg://"
+        mysql_trial = self.mysql_staging_trial_enabled
+        if mysql_trial:
+            parsed_trial = urlsplit(self.database_url)
+            if not (
+                self.app_env == "staging"
+                and parsed_trial.scheme == "mysql+pymysql"
+                and parsed_trial.hostname == "127.0.0.1"
+                and parsed_trial.port == 3306
+                and parsed_trial.username
+                and parsed_trial.password
+                and re.fullmatch(r"/sas_mysql_trial_[a-z0-9_]{3,48}", parsed_trial.path)
+                and not parsed_trial.query
+                and not parsed_trial.fragment
+                and not any((
+                    self.saasyto_delivery_enabled,
+                    self.saasyto_sender_approved,
+                    self.saasyto_worker_enabled,
+                    self.otp_delivery_enabled,
+                    self.otp_saasyto_enabled,
+                    self.otp_activation_notice_enabled,
+                ))
+            ):
+                raise ValueError("MySQL staging trial must be isolated and send-disabled")
+        if self.app_env in ("staging", "production") and not (
+            self.database_url.startswith("postgresql+psycopg://") or mysql_trial
         ):
             raise ValueError("Staging and production require PostgreSQL via psycopg")
         if self.app_env in ("staging", "production") and (
@@ -112,7 +132,7 @@ class Settings(BaseSettings):
             not self.upi_match_secret or len(self.upi_match_secret) < 32
         ):
             raise ValueError("Staging and production require UPI_MATCH_SECRET of 32+ characters")
-        if self.app_env in ("staging", "production"):
+        if self.app_env in ("staging", "production") and not mysql_trial:
             parsed_db = urlsplit(self.database_url)
             tls_options = parse_qs(parsed_db.query, keep_blank_values=True)
             modes = tls_options.get("sslmode", [])
@@ -133,6 +153,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Private Saasyto worker requires explicit production sender approval"
             )
+        if self.saasyto_auto_reminders_enabled and not (
+            self.saasyto_worker_enabled
+            and self.app_env == "production"
+            and self.saasyto_delivery_enabled
+            and self.saasyto_sender_approved
+        ):
+            raise ValueError(
+                "Scheduled Saasyto reminders require approved production worker"
+            )
         if self.saasyto_local_dynamic_enabled:
             if not (self.app_env == "development" and self.local_demo_login_enabled):
                 raise ValueError("Dynamic Saasyto local sending requires loopback demo mode")
@@ -141,8 +170,6 @@ class Settings(BaseSettings):
             if self.saasyto_local_test_phone or self.saasyto_local_test_phone_2:
                 raise ValueError("Dynamic local mode cannot configure recipient phone numbers")
         if self.saasyto_local_test_enabled:
-            import re
-
             if not (self.app_env == "development" and self.local_demo_login_enabled):
                 raise ValueError("Saasyto local test requires protected loopback demo mode")
             # The local-demo validator above already enforces exactly
@@ -157,8 +184,6 @@ class Settings(BaseSettings):
         elif self.saasyto_local_test_phone_2:
             raise ValueError("Second local Saasyto phone requires guarded local test mode")
         if self.saasyto_delivery_enabled:
-            import re
-
             local_pilot = self.app_env == "development" and (
                 self.saasyto_local_test_enabled or self.saasyto_local_dynamic_enabled
             )
@@ -222,8 +247,6 @@ class Settings(BaseSettings):
                 "Activation notice requires approved Saasyto sending and enabled OTP"
             )
         if self.otp_delivery_enabled:
-            import re
-
             if self.app_env not in ("production", "test"):
                 raise ValueError("WhatsApp OTP delivery is restricted to approved production")
             if not self.otp_secret or len(self.otp_secret) < 32:
@@ -238,37 +261,6 @@ class Settings(BaseSettings):
                 raise ValueError("Invalid WhatsApp authentication template language")
             if not re.fullmatch(r"v[0-9]{1,2}\.0", self.otp_meta_graph_version):
                 raise ValueError("Unsupported Meta Graph API version")
-        if self.messaging_delivery_enabled:
-            if self.app_env not in ("test", "production"):
-                raise ValueError("Messaging dispatch is restricted to approved production")
-            if not self.messaging_sender_approved:
-                raise ValueError("Messaging sender business approval is required")
-            if (
-                self.messaging_enable_after is None
-                or self.messaging_enable_after.tzinfo is None
-            ):
-                raise ValueError("Messaging requires a timezone-aware enable-after cutoff")
-            for label, secret in (
-                ("runner", self.messaging_runner_secret),
-                ("callback", self.messaging_callback_secret),
-                ("Pabbly signature", self.pabbly_signature_secret),
-            ):
-                if secret is None or len(secret) < 32:
-                    raise ValueError(f"Messaging {label} secret must be 32+ characters")
-            url = urlsplit(self.pabbly_webhook_url or "")
-            if (
-                url.scheme != "https"
-                or url.hostname != "connect.pabbly.com"
-                or url.username or url.password or url.fragment
-                or not url.path.startswith("/workflow/")
-            ):
-                raise ValueError("Use a configured HTTPS Pabbly Connect workflow webhook")
-            if not all((
-                self.whatsapp_template_payment,
-                self.whatsapp_template_sponsor,
-                self.whatsapp_template_promoter,
-            )):
-                raise ValueError("All approved WhatsApp template identifiers are required")
         return self
 
 
