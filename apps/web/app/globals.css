@@ -1282,7 +1282,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .promoter-two-column{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start;margin-top:20px}
 .promoter-column{display:flex;flex-direction:column;gap:16px;min-width:0}
 .promoter-column .crm-detail-card{margin:0}
-.payout-inline-row{display:grid;grid-template-columns:1fr 1fr 1.45fr;gap:14px;min-width:0}
+.payout-inline-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;min-width:0}
+.payout-inline-row .field{min-width:0}
 .crm-followup-form{display:flex;flex-direction:column;gap:13px;margin:12px 0 23px}
 .crm-followup-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 @media(max-width:850px){.promoter-two-column{grid-template-columns:1fr}.payout-inline-row,.crm-followup-fields{grid-template-columns:1fr}}
@@ -1741,23 +1742,42 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 .crm-profile-disclosure .crm-overview-grid {margin-top:12px;}
 .crm-profile-disclosure .crm-overview-grid .crm-summary-tile {background:var(--canvas);}
 .prospects-table input[type="checkbox"] {width:16px;height:16px;accent-color:var(--forest);cursor:pointer;}
-/* Sponsor and billing month on row one; payment details on row two. */
-.collection-entry-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;align-items:start;}
-.collection-entry-grid .collection-sponsor {grid-column:span 3;min-width:0;}
-.collection-entry-grid .collection-month {grid-column:span 1;min-width:0;}
-.collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
-.collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;min-width:0;}
+/* Collection: sponsor; payment/amount/transaction; sponsorship month/date.
+   Six tracks make the desktop 3+2 rows line up without altering form behavior. */
+.manual-collections-workspace .collection-entry-grid {
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:24px 22px;
+  align-items:start;
+}
+.collection-entry-grid .collection-sponsor {grid-column:1/-1;min-width:0;}
+.collection-entry-grid .collection-method,
+.collection-entry-grid .collection-amount,
+.collection-entry-grid .collection-reference {grid-column:span 2;min-width:0;}
+.collection-entry-grid .collection-month,
+.collection-entry-grid .collection-date {grid-column:span 3;min-width:0;}
 .collection-entry-grid input,.collection-entry-grid select {max-width:100%;}
-@media(max-width:1000px){
-  .collection-entry-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
-  .collection-entry-grid .collection-sponsor {grid-column:span 2;}
-  .collection-entry-grid .collection-month {grid-column:span 2;}
+@media(max-width:1050px){
+  .manual-collections-workspace .collection-entry-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .collection-entry-grid .collection-sponsor,
+  .collection-entry-grid .collection-reference {grid-column:1/-1;}
+  .collection-entry-grid .collection-method,
+  .collection-entry-grid .collection-amount,
+  .collection-entry-grid .collection-month,
+  .collection-entry-grid .collection-date {grid-column:span 1;}
 }
 @media(max-width:600px){
-  .collection-entry-grid {grid-template-columns:minmax(0,1fr);}
-  .collection-entry-grid .collection-sponsor,.collection-entry-grid .collection-month,
-  .collection-entry-grid .collection-date,.collection-entry-grid .collection-amount,
-  .collection-entry-grid .collection-method,.collection-entry-grid .collection-reference {grid-column:span 1;}
+  .manual-collections-workspace .collection-entry-grid {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .collection-entry-grid .collection-sponsor,
+  .collection-entry-grid .collection-method,
+  .collection-entry-grid .collection-amount,
+  .collection-entry-grid .collection-reference,
+  .collection-entry-grid .collection-month,
+  .collection-entry-grid .collection-date {grid-column:1/-1;}
 }
 
 /* Date, stable stage ID, next date and IST time in one follow-up row. */
