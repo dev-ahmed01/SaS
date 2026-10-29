@@ -144,10 +144,12 @@ def change_automation(
         cfg = get_settings()
         if not (
             cfg.app_env == "production"
-            and cfg.messaging_delivery_enabled
-            and cfg.messaging_sender_approved
-            and cfg.messaging_enable_after is not None
-            and cfg.messaging_enable_after.tzinfo is not None
+            and cfg.saasyto_delivery_enabled
+            and cfg.saasyto_sender_approved
+            and cfg.saasyto_worker_enabled
+            and cfg.saasyto_auto_reminders_enabled
+            and cfg.saasyto_enable_after is not None
+            and cfg.saasyto_enable_after.tzinfo is not None
         ):
             raise HTTPException(
                 status_code=409,
