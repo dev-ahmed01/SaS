@@ -163,7 +163,7 @@ export function ManualCollections(){
               onChange={e=>{setRupees(e.target.value);update();}}/>}
           </div>
           <label className="field collection-reference"><span className="field-label">Transaction ID</span>
-            <input aria-label="Transaction reference" minLength={6} maxLength={100}
+            <input aria-label="Transaction ID" minLength={6} maxLength={100}
               value={reference} placeholder="Enter transaction ID if available"
               onChange={e=>{setReference(e.target.value);update();}}/></label>          <label className="field collection-month"><span className="field-label">Sponsorship month *</span>
             <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
