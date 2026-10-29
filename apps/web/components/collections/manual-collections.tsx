@@ -165,7 +165,8 @@ export function ManualCollections(){
           <label className="field collection-reference"><span className="field-label">Transaction ID</span>
             <input aria-label="Transaction ID" minLength={6} maxLength={100}
               value={reference} placeholder="Enter transaction ID if available"
-              onChange={e=>{setReference(e.target.value);update();}}/></label>          <label className="field collection-month"><span className="field-label">Sponsorship month *</span>
+              onChange={e=>{setReference(e.target.value);update();}}/></label>
+          <label className="field collection-month"><span className="field-label">Sponsorship month *</span>
             <input aria-label="Sponsorship month" required type="month" max={istDate().slice(0,7)}
               value={period} onChange={e=>{setPeriod(e.target.value);update();}}/>
           </label>
