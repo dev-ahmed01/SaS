@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import sys
 import uuid
 from datetime import timedelta
 from types import SimpleNamespace
@@ -31,6 +32,21 @@ from app.security import utc_now
 RUNNER="synthetic-runner-key-more-than-32-characters"
 CALLBACK="synthetic-callback-key-more-than-32-characters"
 HMAC_SECRET="synthetic-webhook-hmac-key-more-than-32-characters"
+
+
+@pytest.fixture(autouse=True)
+def _stable_reminder_test_day(monkeypatch):
+    """Synthetic reminder days never violate the DB's 1–28 CHECK constraint.
+
+    Reminder scheduling is tested against a fixed valid calendar day when CI
+    runs on the 29th–31st. Production IST scheduling remains unchanged.
+    """
+    actual = ist_today()
+    if actual.day > 28:
+        synthetic = actual.replace(day=28)
+        monkeypatch.setattr(sys.modules[__name__], "ist_today", lambda _now=None: synthetic)
+        monkeypatch.setattr("app.messaging.ist_today", lambda _now=None: synthetic)
+        monkeypatch.setattr("app.reminders.ist_today", lambda _now=None: synthetic)
 
 
 @pytest.fixture
