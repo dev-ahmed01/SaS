@@ -801,6 +801,33 @@ test("Accounting rejects forged requests and never exposes payment write actions
   expect(unsupported.status()).toBe(404);
 });
 
+test("Collections has sponsor, payment trio and billing date pair in order",async ({page,isMobile})=>{
+  await page.goto("/collections");
+  const sponsor=page.getByRole("textbox",{name:"Search sponsor"});
+  const method=page.getByRole("combobox",{name:"Payment method"});
+  const amount=page.getByRole("combobox",{name:"Amount received (₹)"});
+  const transaction=page.getByRole("textbox",{name:"Transaction ID"});
+  const month=page.getByLabel("Sponsorship month");
+  const date=page.getByLabel("Received date");
+  for(const field of [sponsor,method,amount,transaction,month,date]){
+    await expect(field).toBeVisible();
+  }
+  await expect(page.locator(".collection-reference .field-label")).toHaveText("Transaction ID");
+  await expect(transaction).toHaveAttribute("placeholder","Enter transaction ID if available");
+  const boxes=await Promise.all([sponsor,method,amount,transaction,month,date].map(x=>x.boundingBox()));
+  if(!isMobile){
+    expect(boxes[0].y).toBeLessThan(boxes[1].y);
+    expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+    expect(Math.abs(boxes[2].y-boxes[3].y)).toBeLessThan(20);
+    expect(boxes[1].x).toBeLessThan(boxes[2].x);
+    expect(boxes[2].x).toBeLessThan(boxes[3].x);
+    expect(Math.abs(boxes[4].y-boxes[5].y)).toBeLessThan(20);
+    expect(boxes[4].y).toBeGreaterThan(boxes[3].y);
+  }else{
+    for(let i=1;i<boxes.length;i++)expect(boxes[i-1].y).toBeLessThan(boxes[i].y);
+  }
+});
+
 test("manual collection amount accepts only ₹250 denominations",async ({page})=>{
   await page.goto("/collections");
   const tiers=page.getByRole("combobox",{name:"Amount received (₹)"});
@@ -858,7 +885,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   const payment=page.getByRole("combobox",{name:"Amount received (₹)"});
   await expect(payment).toHaveValue("");
   await payment.selectOption(String(agreed));
-  await page.getByRole("textbox",{name:"Transaction reference"}).fill("TESTREF"+id);
+  await page.getByRole("textbox",{name:"Transaction ID"}).fill("TESTREF"+id);
   await expect(page.getByRole("checkbox",{name:/Foundation's records/})).toHaveCount(0);
   const save=page.getByRole("button",{name:"Save Collection"});
   await expect(save).toBeEnabled();
@@ -897,7 +924,7 @@ test("Duplicate manual reference cannot create a second contribution",async ({pa
   const receivedOn=await received.inputValue();
   expect(receivedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   const month=await page.locator('input[type="month"]').inputValue();
-  await page.getByRole("textbox",{name:"Transaction reference"}).fill("DUPEREF"+id);
+  await page.getByRole("textbox",{name:"Transaction ID"}).fill("DUPEREF"+id);
   await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
   await page.getByRole("button",{name:"Save Collection"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
@@ -937,7 +964,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(name);
   await page.getByRole("option",{name:new RegExp(name)}).click();
   await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption(String(agreed));
-  await page.getByRole("textbox",{name:"Transaction reference"}).fill("REVERSAL"+id);
+  await page.getByRole("textbox",{name:"Transaction ID"}).fill("REVERSAL"+id);
   await page.getByRole("button",{name:"Save Collection"}).scrollIntoViewIfNeeded();
   await page.getByRole("button",{name:"Save Collection"}).click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
@@ -1040,24 +1067,31 @@ test("Recorded one-time payouts remain in All and are excluded from Active recur
   await expect(page.getByRole("region",{name:"All payout plans"})
     .getByRole("row",{name:new RegExp("OneTime "+id)})).toBeVisible();
 });
-test("Add Payout aligns payment method, amount and date with purpose and reference below",async ({page,isMobile})=>{
+test("Add Payout aligns method, amount and UTR above date and purpose",async ({page,isMobile})=>{
   await page.goto("/payouts");
   await expect(page.getByRole("combobox",{name:"Payout type"})).toHaveCount(0);
   const method=page.getByRole("combobox",{name:"Payout payment type"});
   const amount=page.getByRole("textbox",{name:"Payout amount (₹)"});
+  const reference=page.getByRole("textbox",{name:"UTR"});
   const date=page.getByLabel("Payout date");
   const purpose=page.getByRole("textbox",{name:"Payout purpose"});
-  const reference=page.getByRole("textbox",{name:"UTR"});
-  for(const field of [method,amount,date,purpose,reference]){
+  for(const field of [method,amount,reference,date,purpose]){
     await expect(field).toBeVisible();
   }
   await expect(date).toHaveAttribute("type","date");
-  const boxes=await Promise.all([method,amount,date,purpose,reference].map(x=>x.boundingBox()));
+  const boxes=await Promise.all([method,amount,reference,date,purpose].map(x=>x.boundingBox()));
   if(!isMobile){
     expect(Math.abs(boxes[0].y-boxes[1].y)).toBeLessThan(20);
     expect(Math.abs(boxes[1].y-boxes[2].y)).toBeLessThan(20);
+    expect(boxes[0].x).toBeLessThan(boxes[1].x);
+    expect(boxes[1].x).toBeLessThan(boxes[2].x);
     expect(Math.abs(boxes[3].y-boxes[4].y)).toBeLessThan(20);
     expect(boxes[3].y).toBeGreaterThan(boxes[2].y);
+  }else{
+    expect(boxes[0].y).toBeLessThan(boxes[1].y);
+    expect(boxes[1].y).toBeLessThan(boxes[2].y);
+    expect(boxes[2].y).toBeLessThan(boxes[3].y);
+    expect(boxes[3].y).toBeLessThan(boxes[4].y);
   }
 });
 test("Payout write gateway rejects forged origins, missing CSRF and invalid routes",async ({page})=>{
@@ -1371,7 +1405,7 @@ test("mobile collection form stays clickable with populated recent history",asyn
   await page.getByRole("textbox",{name:"Search sponsor"}).fill(data.name);
   await page.getByRole("option",{name:new RegExp(data.name)}).click();
   await page.getByRole("combobox",{name:"Amount received (₹)"}).selectOption("250");
-  await page.getByRole("textbox",{name:"Transaction reference"}).fill("FINALHISTORY"+suffix);
+  await page.getByRole("textbox",{name:"Transaction ID"}).fill("FINALHISTORY"+suffix);
   const save=page.getByRole("button",{name:"Save Collection"});
   await save.scrollIntoViewIfNeeded();
   await expect.poll(async()=>await save.evaluate(el=>{
