@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.saasyto_monthly_reminders import (
     _request_id,
+    expire_overdue_reminders,
     live_monthly_message,
     prepare_due_saasyto_reminders,
 )
@@ -219,3 +220,28 @@ def test_prepared_legacy_batch_blocks_duplicate_saasyto_send(system):
         ) == 0
         assert db.scalar(select(func.count()).select_from(CommunicationCampaign)) == 0
         assert db.scalar(select(func.count()).select_from(MessageDispatch)) == 0
+
+
+
+def test_overdue_queue_is_suppressed_and_not_reattempted(system):
+    client, engine = system
+    csrf = login(client)
+    person = sponsor(client, csrf, 3007)
+    set_start(engine, person["id"], date(2026, 10, 1))
+    enable_automation(engine)
+    with Session(engine) as db:
+        assert prepare_due_saasyto_reminders(
+            db, config(), OCT_5.astimezone(UTC),
+        ) == 1
+        assert expire_overdue_reminders(
+            db, OCT_5.astimezone(UTC) + timedelta(days=1),
+        ) == 1
+        item = db.scalars(select(SaasytoCampaignRecipient)).one()
+        run = db.scalars(select(SaasytoCampaignRun)).one()
+        assert item.status == "suppressed"
+        assert item.reason == "reminder_day_expired"
+        assert item.claimed_at is None
+        assert run.status == "completed"
+        assert expire_overdue_reminders(
+            db, OCT_5.astimezone(UTC) + timedelta(days=1),
+        ) == 0
