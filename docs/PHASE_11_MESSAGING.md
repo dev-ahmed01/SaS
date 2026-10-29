@@ -1,3 +1,5 @@
+> ARCHIVED INTEGRATION DESIGN: This document describes the former Pabbly workflow and is retained solely for historical audit. The branch no longer contains a Pabbly runner, callback, or credentials. See `ops/mysql-migration/SAASYTO_ONLY_TRANSPORT.md` for the current sole-provider architecture. Do not deploy or follow the Pabbly setup below.
+
 # Phase 11 — Controlled WhatsApp Delivery Bridge
 
 ## Design and operational status
