@@ -46,6 +46,7 @@ def _stable_reminder_test_day(monkeypatch):
         synthetic = actual.replace(day=28)
         monkeypatch.setattr(sys.modules[__name__], "ist_today", lambda _now=None: synthetic)
         monkeypatch.setattr("app.messaging.ist_today", lambda _now=None: synthetic)
+        monkeypatch.setattr("app.reminders.ist_today", lambda _now=None: synthetic)
 
 
 @pytest.fixture
