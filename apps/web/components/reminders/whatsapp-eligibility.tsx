@@ -117,7 +117,7 @@ export function WhatsAppEligibility(){
       </div>
     </section>
 
-    <p className="reminder-no-send" role="status">WhatsApp sending: off.</p>
+    <p className="reminder-no-send" role="status">Monthly reminders use the Saasyto campaign queue on the scheduled IST date when the Foundation automation and approved sender are enabled. A preview does not submit any messages.</p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {message&&<p role="status" className="form-success">{message}</p>}
     <div className="accounting-metrics">
