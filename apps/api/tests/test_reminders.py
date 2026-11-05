@@ -43,6 +43,9 @@ def system(monkeypatch):
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    # This suite evaluates October 2026; registration must not drift into
+    # the real system month and silently make October reminders ineligible.
+    monkeypatch.setattr("app.prospects._ist_month", lambda: date(2026, 10, 1))
     with Session(engine) as db:
         provision_admin(
             db, email="office@foundation.org",
