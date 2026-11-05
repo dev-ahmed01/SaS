@@ -14,7 +14,8 @@ from app.config import get_settings
 from app.db import get_engine
 from app.saasyto_campaigns import _dispatch_due, _reconcile_stale_claims
 from app.saasyto_monthly_reminders import (
-    expire_overdue_reminders, prepare_due_saasyto_reminders,
+    expire_overdue_reminders,
+    prepare_due_saasyto_reminders,
 )
 
 
