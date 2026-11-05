@@ -730,7 +730,8 @@ def run_due(
     if (cfg.app_env == "production" and cfg.saasyto_worker_enabled
             and getattr(cfg, "saasyto_auto_reminders_enabled", False)):
         from app.saasyto_monthly_reminders import (
-            expire_overdue_reminders, prepare_due_saasyto_reminders,
+            expire_overdue_reminders,
+    prepare_due_saasyto_reminders,
         )
         expire_overdue_reminders(db)
         prepare_due_saasyto_reminders(db, cfg)
