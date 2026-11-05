@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # Opt-in production dispatcher only. A VPS deploy or secret presence never
     # starts WhatsApp sending automatically.
     saasyto_worker_enabled: bool = False
+    # Separate, default-off standing approval for IST 5th/20th Saasyto reminders.
+    saasyto_auto_reminders_enabled: bool = False
 
     # One-recipient, opt-in local pilot. This is deliberately NOT a generic
     # development-mode bypass of the normal production sending restriction.
@@ -132,6 +134,17 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "Private Saasyto worker requires explicit production sender approval"
+            )
+        if self.saasyto_auto_reminders_enabled and not (
+            self.app_env == "production"
+            and self.saasyto_worker_enabled
+            and self.saasyto_delivery_enabled
+            and self.saasyto_sender_approved
+            and not self.messaging_delivery_enabled
+        ):
+            raise ValueError(
+                "Automatic Saasyto reminders require approved production worker "
+                "and disabled legacy Pabbly transport"
             )
         if self.saasyto_local_dynamic_enabled:
             if not (self.app_env == "development" and self.local_demo_login_enabled):
