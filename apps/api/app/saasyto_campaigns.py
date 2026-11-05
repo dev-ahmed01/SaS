@@ -449,7 +449,14 @@ def _eligible_live(db: Session, run: SaasytoCampaignRun,
         return None
     if SPONSOR_TOKENS.search(row.body) and not isinstance(person, Prospect):
         return None
-    message = _render(row.body, person, now)
+    if row.provider_template_id in ("sas_auto_sponsor_v1", "sas_auto_promoter_v1"):
+        # Recheck the live ledger, calendar day and assignments at send time.
+        from app.saasyto_monthly_reminders import live_monthly_message
+        message = live_monthly_message(db, row, person, now, cfg)
+        if not message:
+            return None
+    else:
+        message = _render(row.body, person, now)
     return phone, message
 
 
@@ -717,7 +724,20 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
+    if getattr(cfg, "app_env", None) == "production" and not getattr(
+        cfg, "saasyto_worker_enabled", False
+    ):
+        raise HTTPException(status_code=503, detail="Saasyto worker disabled")
     reconciled = _reconcile_stale_claims(db)
+    if (getattr(cfg, "app_env", None) == "production" and getattr(
+            cfg, "saasyto_worker_enabled", False)
+            and getattr(cfg, "saasyto_auto_reminders_enabled", False)):
+        from app.saasyto_monthly_reminders import (
+            expire_overdue_reminders,
+    prepare_due_saasyto_reminders,
+        )
+        expire_overdue_reminders(db)
+        prepare_due_saasyto_reminders(db, cfg)
     counts = _dispatch_due(db, cfg)
     if reconciled:
         counts["unknown"] = counts.get("unknown", 0) + reconciled
