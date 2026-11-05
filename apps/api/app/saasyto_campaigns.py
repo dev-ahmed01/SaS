@@ -724,10 +724,13 @@ def run_due(
         raise HTTPException(status_code=401, detail="Unauthorized runner")
     if not cfg.saasyto_delivery_enabled or not cfg.saasyto_sender_approved:
         raise HTTPException(status_code=503, detail="Saasyto delivery disabled")
-    if cfg.app_env == "production" and not cfg.saasyto_worker_enabled:
+    if getattr(cfg, "app_env", None) == "production" and not getattr(
+        cfg, "saasyto_worker_enabled", False
+    ):
         raise HTTPException(status_code=503, detail="Saasyto worker disabled")
     reconciled = _reconcile_stale_claims(db)
-    if (cfg.app_env == "production" and cfg.saasyto_worker_enabled
+    if (getattr(cfg, "app_env", None) == "production" and getattr(
+            cfg, "saasyto_worker_enabled", False)
             and getattr(cfg, "saasyto_auto_reminders_enabled", False)):
         from app.saasyto_monthly_reminders import (
             expire_overdue_reminders,
