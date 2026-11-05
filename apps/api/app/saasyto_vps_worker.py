@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_engine
-from app.saasyto_campaigns import _dispatch_due
+from app.saasyto_campaigns import _dispatch_due, _reconcile_stale_claims
 
 
 def dispatch_once() -> int:
@@ -27,10 +27,16 @@ def dispatch_once() -> int:
         return 2
     try:
         with Session(get_engine()) as db:
+            # Claims from an interrupted prior tick are never replayed. Run
+            # the same crash reconciliation as the authenticated API runner.
+            reconciled = _reconcile_stale_claims(db)
             outcome = _dispatch_due(db, cfg)
+            if reconciled:
+                outcome["reconciled_unknown"] = reconciled
         # Only a sanitized count summary. Never print recipient addresses,
         # personalization, provider payloads, account tokens or OTP content.
-        allowed = {"claimed", "accepted_unverified", "rejected", "unknown", "suppressed"}
+        allowed = {"claimed", "accepted_unverified", "rejected", "unknown",
+                   "suppressed", "reconciled_unknown"}
         safe = {key: int(value) for key, value in outcome.items()
                 if key in allowed and isinstance(value, int)}
         print(json.dumps({"saasyto_campaign_tick": safe}, sort_keys=True))

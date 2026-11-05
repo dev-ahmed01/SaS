@@ -76,7 +76,11 @@ python -m app.saasyto_vps_worker --interval-seconds 60
 
 It runs `_dispatch_due` directly against the private PostgreSQL queue
 rather than exposing `/internal/saasyto/dispatch` to the public Caddy
-reverse proxy. It **refuses to run** unless all four gates are true:
+reverse proxy. Each tick first reconciles claims abandoned for over 15 minutes
+as **unknown, without resending**, and logs the sanitized
+`reconciled_unknown` count separately from newly attempted messages.
+A reconciliation failure blocks further dispatch during that tick.
+It **refuses to run** unless all four gates are true:
 `APP_ENV=production`, `SAASYTO_DELIVERY_ENABLED=true`,
 `SAASYTO_SENDER_APPROVED=true`, and `SAASYTO_WORKER_ENABLED=true`.
 These values are **not** set in the VPS staging deployment; no worker

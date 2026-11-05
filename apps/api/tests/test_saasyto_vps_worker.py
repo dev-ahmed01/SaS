@@ -46,6 +46,7 @@ def test_worker_uses_private_database_not_network_or_recipient_input(monkeypatch
             return False
 
     monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", lambda db: 0)
     monkeypatch.setattr(worker, "_dispatch_due", lambda db, settings:
                         messages.append((db, settings)) or {"claimed": 1, "unknown": 1})
     assert worker.main(["--once"]) == 0
@@ -71,6 +72,63 @@ def test_worker_never_retries_exception_inside_same_tick(monkeypatch):
         raise OSError("synthetic unknown provider state")
 
     monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", lambda db: 0)
     monkeypatch.setattr(worker, "_dispatch_due", fail)
     assert worker.dispatch_once() == 1
     assert len(calls) == 1
+
+
+def test_worker_reconciles_abandoned_claims_before_new_dispatch(monkeypatch, capsys):
+    """Crash recovery must run even when no new recipients are due."""
+    monkeypatch.setattr(worker, "get_settings",
+                        lambda: cfg(enabled=True, environment="production"))
+    monkeypatch.setattr(worker, "get_engine", lambda: object())
+    steps = []
+
+    class FakeSession:
+        def __init__(self, _engine):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            return False
+
+    def reconcile(_db):
+        steps.append("reconciled")
+        return 2
+
+    def dispatch(_db, _cfg):
+        steps.append("dispatch")
+        return {}
+
+    monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", reconcile)
+    monkeypatch.setattr(worker, "_dispatch_due", dispatch)
+    assert worker.dispatch_once() == 0
+    assert steps == ["reconciled", "dispatch"]
+    assert '"reconciled_unknown": 2' in capsys.readouterr().out
+
+
+def test_worker_does_not_dispatch_if_reconciliation_fails(monkeypatch):
+    """An interrupted claim cannot be ignored to continue sending."""
+    monkeypatch.setattr(worker, "get_settings",
+                        lambda: cfg(enabled=True, environment="production"))
+    monkeypatch.setattr(worker, "get_engine", lambda: object())
+
+    class FakeSession:
+        def __init__(self, _engine):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            return False
+
+    def fail(_db):
+        raise RuntimeError("synthetic recovery failure")
+
+    monkeypatch.setattr(worker, "Session", FakeSession)
+    monkeypatch.setattr(worker, "_reconcile_stale_claims", fail)
+    monkeypatch.setattr(worker, "_dispatch_due",
+                        lambda *_: (_ for _ in ()).throw(
+                            AssertionError("Must not send when recovery fails")))
+    assert worker.dispatch_once() == 1
