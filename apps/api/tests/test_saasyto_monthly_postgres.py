@@ -49,6 +49,8 @@ def system(monkeypatch):
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    # Synthetic due-day scenarios are in October 2026, not the runner date.
+    monkeypatch.setattr("app.prospects._ist_month", lambda: date(2026, 10, 1))
     with Session(engine) as db:
         provision_admin(
             db, email="office@foundation.org",
