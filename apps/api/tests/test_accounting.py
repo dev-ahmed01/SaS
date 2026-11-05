@@ -259,6 +259,8 @@ def test_archiving_preserves_old_months_but_stops_future_commitments(
     csrf = login(client)
     prospect = _make_history(client, engine, csrf)
     monkeypatch.setattr("app.accounting.utc_now", lambda: CURRENT_UTC)
+    # Archive the synthetic sponsor before November, independent of wall clock.
+    monkeypatch.setattr("app.prospects.utc_now", lambda: datetime(2026, 10, 15, 12, tzinfo=UTC))
     archived = client.delete(
         "/v1/prospects/" + prospect["id"],
         headers={**csrf, "If-Match": "1"},
