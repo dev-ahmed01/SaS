@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_engine
 from app.saasyto_campaigns import _dispatch_due, _reconcile_stale_claims
+from app.saasyto_monthly_reminders import (
+    expire_overdue_reminders, prepare_due_saasyto_reminders,
+)
 
 
 def dispatch_once() -> int:
@@ -30,6 +33,9 @@ def dispatch_once() -> int:
             # Claims from an interrupted prior tick are never replayed. Run
             # the same crash reconciliation as the authenticated API runner.
             reconciled = _reconcile_stale_claims(db)
+            if getattr(cfg, "saasyto_auto_reminders_enabled", False):
+                expire_overdue_reminders(db)
+                prepare_due_saasyto_reminders(db, cfg)
             outcome = _dispatch_due(db, cfg)
             if reconciled:
                 outcome["reconciled_unknown"] = reconciled
