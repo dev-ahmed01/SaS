@@ -198,3 +198,28 @@ def test_role_and_cross_tenant_options_are_restricted(system):
     assert client.post("/v1/settings/field-options", headers=finance_csrf, json={
         "field_key": "payout_purpose", "label": "Staff created",
     }).status_code == 403
+
+
+def test_legacy_payout_idempotency_hash_remains_unchanged():
+    """Old requests carry no purpose_option_id, and may be retried after upgrade."""
+    import hashlib
+    import json
+
+    from app.accounting import ist_today, month_start
+    from app.payouts import PlanCreate, _hash
+
+    old = {
+        "request_id": str(uuid.uuid4()),
+        "payee_name": "Historical synthetic payee",
+        "purpose": "Facilities support",
+        "notes": None, "cadence": "recurring", "amount_paise": 50000,
+        "start_month": month_start(ist_today()).isoformat(),
+        "scheduled_on": None,
+    }
+    model = PlanCreate.model_validate(old)
+    legacy = model.model_dump(mode="json", exclude={"request_id"})
+    legacy.pop("purpose_option_id", None)
+    expected = hashlib.sha256(
+        json.dumps(legacy, sort_keys=True).encode()
+    ).hexdigest()
+    assert _hash(model) == expected
