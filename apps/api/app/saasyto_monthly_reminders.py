@@ -11,10 +11,11 @@ assignments and due date, and never replays an uncertain claim.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, time, UTC
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -263,6 +264,45 @@ def prepare_due_saasyto_reminders(db: Session, cfg, now: datetime | None = None)
             if prior_batch is not None:
                 continue
             preview = _build_preview(db, admin, settings, kind, now)
+            # Fail closed when provider's approved pace cannot finish before
+            # the IST-day expiry. Never quietly enqueue thousands of messages
+            # that the worker will inevitably suppress after midnight.
+            sender_gap = max(
+                float(getattr(cfg, "saasyto_campaign_min_interval_seconds", 90)),
+                60 / max(1, int(getattr(cfg, "saasyto_campaign_max_per_minute", 1))),
+                1.0,
+            )
+            day_end = datetime.combine(
+                today + timedelta(days=1), time.min,
+                tzinfo=ZoneInfo("Asia/Kolkata"),
+            ).astimezone(UTC)
+            available_seconds = max(0.0, (day_end - as_utc(now)).total_seconds() - 300)
+            required_seconds = preview.eligible_recipients * sender_gap
+            if required_seconds > available_seconds:
+                marker = str(_request_id(org_id, kind, month))
+                already = db.scalar(select(AuditEvent.id).where(
+                    AuditEvent.organization_id == org_id,
+                    AuditEvent.action == "saasyto.monthly_reminders_capacity_blocked",
+                    AuditEvent.entity_id == marker,
+                ).limit(1))
+                if already is None:
+                    db.add(AuditEvent(
+                        organization_id=org_id, actor_admin_id=admin.id,
+                        action="saasyto.monthly_reminders_capacity_blocked",
+                        entity_type="reminder_batch", entity_id=marker,
+                        after_data={
+                            "kind": kind,
+                            "month": month.isoformat(),
+                            "eligible": preview.eligible_recipients,
+                            "sender_gap_seconds": sender_gap,
+                            "available_seconds": int(available_seconds),
+                            "required_seconds": int(required_seconds),
+                            "sent": False,
+                        },
+                    ))
+                    db.commit()
+                # Do not change provider pacing or delivery authorization.
+                continue
             if preview.eligible_recipients > MAX_APPROVAL_RECIPIENTS:
                 db.rollback()
                 continue
