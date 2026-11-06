@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { exportAllCsv } from "../../lib/export-csv";
+import { PayoutPaymentHistory } from "./payout-payment-history";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -12,6 +13,7 @@ type Plan = {
   status:"active"|"paused"|"closed"|"scheduled"|"paid"|"overdue";
   next_status:"active"|"paused"|"closed"|null;
   current_month_due_paise:number;current_month_paid_paise:number;payment_count:number;
+  voided?:boolean;
 };
 type PlanPage = {items:Plan[];total:number;limit:number;offset:number;period_month:string};
 type PaymentMethod="upi"|"bank_transfer"|"cash"|"cheque";
@@ -275,7 +277,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
           <td>{plan.purpose}</td><td>{plan.cadence==="recurring"?"Monthly":"One-time"}</td>
           <td>{money(plan.amount_paise)}</td><td>{money(plan.current_month_paid_paise)}</td>
           <td><span className={"status-pill "+plan.status}>
-            {plan.status==="paid"?"Paid":plan.status==="scheduled"?"Scheduled"
+            {plan.voided?"Voided / corrected":plan.status==="paid"?"Paid":plan.status==="scheduled"?"Scheduled"
               :plan.status==="overdue"?"Overdue":plan.status==="paused"?"Paused"
               :plan.status==="closed"?"Closed":"Active"}</span>
             {plan.next_status&&<small className="payout-future">Next: {plan.next_status}</small>}
@@ -307,6 +309,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
           onClick={()=>setOffset(n=>n+20)}>Next</button>
       </div>
     </div>
+    {view==="all"&&<PayoutPaymentHistory onCorrected={()=>setRefresh(n=>n+1)}/>}
     {chosen&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
     }}><section className="edit-modal payout-dialog" role="dialog" aria-modal="true"
