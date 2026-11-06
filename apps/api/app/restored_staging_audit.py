@@ -16,6 +16,7 @@ REQUIRED_TABLES = (
     "alembic_version",
     "organizations",
     "organization_settings",
+    "organization_field_options",
     "prospects",
     "sponsorship_rates",
     "verified_credits",
@@ -38,7 +39,7 @@ REQUIRED_TABLES = (
     "saasyto_campaign_runs",
     "saasyto_campaign_recipients",
 )
-EXPECTED_MIGRATION = "0026_admin_roles"
+EXPECTED_MIGRATION = "0027_field_options"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
@@ -116,6 +117,15 @@ def audit_database(engine) -> dict:
                     LEFT JOIN manual_collections c ON c.id=m.collection_id
                        AND c.organization_id=m.organization_id
                     WHERE c.id IS NULL
+                """,
+                "payout_purpose_options": """
+                    SELECT COUNT(*) FROM payout_plans plan
+                    LEFT JOIN organization_field_options o
+                      ON o.id=plan.purpose_option_id
+                      AND o.organization_id=plan.organization_id
+                      AND o.field_key='payout_purpose'
+                    WHERE plan.purpose_option_id IS NOT NULL
+                      AND (o.id IS NULL OR o.label IS NULL)
                 """,
                 "payout_to_plan": """
                     SELECT COUNT(*) FROM payout_payments p

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_engine
+from app.field_options import seed_payout_purposes
 from app.models import AdminUser, AuditEvent, Organization, OrganizationSettings
 from app.security import PASSWORD_HASHER, hash_password
 from app.sponsorship_policy import (
@@ -74,6 +75,7 @@ def provision_admin(
         ]
     )
     database.flush()
+    seed_payout_purposes(database, org.id)
     database.add(
         AuditEvent(
             organization_id=org.id, actor_admin_id=admin.id,

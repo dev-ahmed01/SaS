@@ -302,7 +302,7 @@ def test_quick_payout_attestation_idempotency_and_utr_uniqueness(api):
     client, csrf, engine = api
     payload = {
         "request_id":str(uuid.uuid4()), "first_name":"Building",
-        "last_name":"Services","purpose":"Foundation maintenance",
+        "last_name":"Services","purpose":"Maintenance",
         "amount_paise":37500,"paid_on":ist_today().isoformat(),
         "payment_method":"upi","payment_reference":"E2EUTR-TEST-0001",
         "funds_disbursed":True,

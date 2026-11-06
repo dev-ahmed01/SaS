@@ -70,14 +70,20 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
     <div className="promoter-list-heading">
       <h3><Icon name={kind==="sponsors"?"users":"user-plus"} size={19}/>
         {title} ({links?.total??"…"})</h3>
+      <p className="crm-muted">{kind==="sponsors"
+        ?"Activated sponsors assigned to this promoter."
+        :"Assign and manage registered prospects for this promoter."}</p>
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {promoter.is_active&&kind==="prospects"&&<div className="promoter-assign-search">
-      <h3>Assign a prospect</h3>
-      <p className="panel-description">Search a registered person to assign.</p>
-      <label className="field"><span className="field-label">Search registered prospects</span>
-        <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search name, phone or city" aria-label="Find sponsor"/></label>
+      <div className="promoter-assign-control">
+        <strong>Assign a prospect</strong>
+        <label className="field"><span className="field-label">Search registered prospects</span>
+          <span className="promoter-assign-input-wrap"><Icon name="search" size={18}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Name, phone or city…" aria-label="Find sponsor"/></span>
+        </label>
+      </div>
       {search.trim().length>=2&&<div className="promoter-candidate-list">
         {available.length===0&&<span className="muted">No matching prospects found.</span>}
         {available.filter(p=>!p.archived_at).map(candidate=>
@@ -92,14 +98,14 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
       <table className="promoter-assignment-table">
         <thead><tr><th scope="col">Name</th><th scope="col">City</th>
           <th scope="col">Sponsorship</th>
-          <th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+          <th scope="col">Stage</th><th scope="col">Action</th></tr></thead>
         <tbody>{links.items.map(link=><tr key={link.assignment_id}>
           <td><Link href={"/prospects/"+link.prospect_id} className="promoter-person-link">{link.full_name}</Link>
             <small>{link.mobile_number}</small></td>
           <td>{link.area_city||"—"}</td>
           <td>{money(link.monthly_contribution_paise)} / month</td>
           <td><span className={"status-pill "+link.crm_stage}>{link.crm_stage==="active"?"Active":"Inactive"}</span></td>
-          <td><button type="button" className="text-action" disabled={busy}
+          <td><button type="button" className="btn btn-secondary btn-row-action" disabled={busy}
             onClick={()=>change({
               id:link.prospect_id,full_name:link.full_name,mobile_number:link.mobile_number,
               version:link.prospect_version,archived_at:null
@@ -110,8 +116,8 @@ export function PromoterSponsors({promoter,onChanged,kind,onCount}:{
       <span className="promoter-empty-icon"><Icon name="users" size={26}/></span>
       <p>No assigned {kind}.</p>
       <small>{kind==="sponsors"
-        ?"Activated sponsors assigned to this promoter will appear here."
-        :"Registered prospects assigned to this promoter will appear here."}</small>
+        ?"Once a prospect is activated, they will appear here as a sponsor."
+        :"Search above to assign a registered prospect to this promoter."}</small>
     </div>:<p role="status">Loading assignments…</p>}
     {links&&links.total>20&&<div className="paging-footer">
       <span>{offset+1}–{Math.min(links.total,offset+20)} of {links.total}</span>

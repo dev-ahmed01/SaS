@@ -67,7 +67,7 @@ def plan_input(kind="recurring", **overrides):
     data = {
         "request_id": str(uuid.uuid4()),
         "payee_name": "Synthetic Caretaker",
-        "purpose": "Facilities support",
+        "purpose": "Maintenance",
         "notes": "Synthetic controlled test data",
         "cadence": kind,
         "amount_paise": 72500,
