@@ -85,12 +85,12 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
     <div className="crm-directory-intro">
       <div>
         <span className="crm-directory-eyebrow">PROSPECT DIRECTORY</span>
-        <h2>${title}</h2>
-        <p>${view===\"all\"?\"Review registrations, contributions and follow-ups.\":\"Manage prospects in this status without losing their history.\"}</p>
+        <h2>{title}</h2>
+        <p>${view==="all"?"Review registrations, contributions and follow-ups.":"Manage prospects in this status without losing their history."}</p>
       </div>
       <div className="crm-directory-count" role="status" aria-live="polite">
-        <strong>${loading&&!page?\"…\":page?.total??0}</strong>
-        <span>${q?\"matching results\":\"records in this view\"}</span>
+        <strong>{loading&&!page?"…":page?.total??0}</strong>
+        <span>{q?"matching results":"records in this view"}</span>
       </div>
     </div>
     <div className="crm-list-tools prospect-list-toolbar">
