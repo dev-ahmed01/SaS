@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.accounting import ist_today, month_start, shift_month
 from app.auth import db_session, get_admin, require_csrf
+from app.field_options import resolve_payout_purpose
 from app.models import (
     AdminSession,
     AdminUser,
@@ -38,7 +39,8 @@ class PlanCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: uuid.UUID
     payee_name: str = Field(min_length=2, max_length=160)
-    purpose: str = Field(min_length=3, max_length=240)
+    purpose: str = Field(min_length=2, max_length=240)
+    purpose_option_id: uuid.UUID | None = None
     notes: str | None = Field(default=None, max_length=800)
     cadence: Literal["recurring", "one_time"]
     amount_paise: int = Field(ge=1, le=MAX_AMOUNT)
@@ -70,6 +72,7 @@ class PlanRead(BaseModel):
     id: uuid.UUID
     payee_name: str
     purpose: str
+    purpose_option_id: uuid.UUID | None = None
     notes: str | None
     cadence: Literal["recurring", "one_time"]
     amount_paise: int
@@ -216,6 +219,7 @@ def _render_plan(
         next_status = future if future != status else None
     return PlanRead(
         id=plan.id, payee_name=plan.payee_name, purpose=plan.purpose,
+        purpose_option_id=plan.purpose_option_id,
         notes=plan.notes, cadence=plan.cadence, amount_paise=plan.amount_paise,
         start_month=plan.start_month, scheduled_on=plan.scheduled_on,
         status=status, next_status=next_status,
@@ -244,7 +248,8 @@ class QuickPayoutCreate(BaseModel):
     request_id: uuid.UUID
     first_name: str = Field(min_length=2, max_length=80)
     last_name: str = Field(default="", max_length=80)
-    purpose: str = Field(min_length=3, max_length=240)
+    purpose: str = Field(min_length=2, max_length=240)
+    purpose_option_id: uuid.UUID | None = None
     amount_paise: int = Field(gt=0, le=MAX_AMOUNT)
     paid_on: date
     payment_method: Literal["upi", "bank_transfer", "cash", "cheque"]
@@ -293,10 +298,12 @@ def record_quick_payout(
     )):
         raise HTTPException(status_code=409, detail="This UTR/reference was already recorded")
     period = month_start(payload.paid_on)
+    choice = resolve_payout_purpose(db, admin.organization_id,
+                                    payload.purpose, payload.purpose_option_id)
     plan = PayoutPlan(
         organization_id=admin.organization_id,
         create_request_id=payload.request_id, create_hash=signature,
-        payee_name=name, purpose=payload.purpose,
+        payee_name=name, purpose=choice.label, purpose_option_id=choice.id,
         notes=None, cadence="one_time", amount_paise=payload.amount_paise,
         start_month=period, scheduled_on=payload.paid_on,
         created_by_admin_id=admin.id,
@@ -365,10 +372,13 @@ def create_plan(
     if payload.cadence == "one_time":
         if payload.scheduled_on is None or month_start(payload.scheduled_on) != payload.start_month:
             raise HTTPException(status_code=422, detail="One-time date must be in its start month")
+    choice = resolve_payout_purpose(db, admin.organization_id,
+                                    payload.purpose, payload.purpose_option_id)
     plan = PayoutPlan(
         organization_id=admin.organization_id,
         create_request_id=payload.request_id, create_hash=sig,
-        payee_name=payload.payee_name, purpose=payload.purpose,
+        payee_name=payload.payee_name, purpose=choice.label,
+        purpose_option_id=choice.id,
         notes=payload.notes, cadence=payload.cadence,
         start_month=payload.start_month, scheduled_on=payload.scheduled_on,
         amount_paise=payload.amount_paise, created_by_admin_id=admin.id,
@@ -386,7 +396,8 @@ def create_plan(
         entity_id=str(plan.id), before_data=None,
         after_data={
             "cadence":payload.cadence, "amount_paise":payload.amount_paise,
-            "start_month":str(payload.start_month), "purpose":payload.purpose,
+            "start_month":str(payload.start_month), "purpose":choice.label,
+            "purpose_option_id":str(choice.id),
         },
     ))
     try:
