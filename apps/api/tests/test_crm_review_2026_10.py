@@ -124,7 +124,7 @@ def test_one_step_payout_attestation_is_idempotent(api):
     client, csrf, engine = api
     payload = {
         "request_id": str(uuid.uuid4()), "first_name": "Support",
-        "last_name": "Vendor", "purpose": "Facility upkeep",
+        "last_name": "Vendor", "purpose": "Maintenance",
         "amount_paise": 25000, "paid_on": ist_today().isoformat(),
         "payment_method": "upi", "payment_reference": "UTRCRMREVIEW1234",
         "funds_disbursed": True,
