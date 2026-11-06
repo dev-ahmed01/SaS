@@ -16,6 +16,14 @@ const navigation: { name: string; href: string; icon: IconName }[] = [
   {name:"Settings",href:"/settings",icon:"settings"},
 ];
 
+const roleModules: Record<string,string[]> = {
+  owner:["dashboard","prospects","promoters","collections","payouts","communication","settings"],
+  crm:["dashboard","prospects","promoters","settings"],
+  finance:["dashboard","prospects","collections","payouts","settings"],
+  messaging:["dashboard","prospects","communication","settings"],
+  viewer:["dashboard","prospects","promoters","collections","payouts","communication","settings"],
+};
+
 const ShellMounted = createContext(false);
 
 export function AppShell({children}:{children:React.ReactNode}) {
@@ -28,6 +36,7 @@ export function AppShell({children}:{children:React.ReactNode}) {
 function AppShellFrame({children}:{children:React.ReactNode}) {
   const pathname = usePathname();
   const [mobileOpen,setMobileOpen] = useState(false);
+  const [role,setRole]=useState<string|null>(null);
   const [signOutError,setSignOutError] = useState("");
   const [signingOut,setSigningOut] = useState(false);
   const [profileOpen,setProfileOpen] = useState(false);
@@ -36,6 +45,17 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const mobileDrawerRef = useRef<HTMLElement>(null);
   const closeDrawer = () => { setMobileOpen(false); setProfileOpen(false); };
+  const visibleNavigation=navigation.filter(item=>
+    (roleModules[role??""]??["dashboard"]).includes(item.href.slice(1))
+  );
+  useEffect(()=>{
+    let mounted=true;
+    fetch("/api/admin/session",{cache:"no-store"})
+      .then(async r=>{if(!r.ok)throw Error();return r.json();})
+      .then(value=>{if(mounted)setRole(String(value.role??"viewer"));})
+      .catch(()=>{if(mounted)setRole("viewer");});
+    return()=>{mounted=false;};
+  },[]);
   useEffect(()=>{
     if(!profileOpen)return;
     const onPointerDown=(event:PointerEvent)=>{
@@ -112,7 +132,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
         <button className="icon-button mobile-close" onClick={closeDrawer} aria-label="Close menu"><Icon name="close"/></button>
       </div>
       <nav className="sidebar-nav" aria-label="Modules">
-        {navigation.map(link=>{
+        {visibleNavigation.map(link=>{
           const active=pathname===link.href || pathname.startsWith(link.href+"/");
           return <Link key={link.href} href={link.href} onClick={closeDrawer} title={link.name} aria-current={active?"page":undefined} className={"sidebar-link"+(active?" active":"")}>
             <Icon name={link.icon} size={18}/><span className="nav-label">{link.name}</span>
