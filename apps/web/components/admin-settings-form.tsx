@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import { TeamAccess } from "./team-access";
+import { FieldOptions } from "./settings/field-options";
 
 type Values = {
   currency_code:string; timezone:string; default_contribution_paise:number;
@@ -98,6 +99,7 @@ export function AdminSettingsForm(){
       </fieldset>
     </form>}
   </section>
+  {!loading&&current&&<FieldOptions csrf={csrf} role={role}/>}
   {role==="owner"&&<TeamAccess csrf={csrf}/>}
   </>;
 }
