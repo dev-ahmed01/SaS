@@ -16,6 +16,7 @@ export function PromoterAssignmentPicker({
   const inputId=useId();
   const listId=inputId+"-results";
   const root=useRef<HTMLDivElement>(null);
+  const inputRef=useRef<HTMLInputElement>(null);
   const [query,setQuery]=useState("");
   const [open,setOpen]=useState(false);
   const [items,setItems]=useState<Promoter[]>([]);
@@ -50,6 +51,7 @@ export function PromoterAssignmentPicker({
 
   function choose(id:string,name:string){
     onChange(id);setLabel(name);setQuery("");setOpen(false);setActive(0);
+    inputRef.current?.blur();
   }
   const shown=[{id:"",full_name:"Unassigned",is_active:true},...items];
   return <div className="field promoter-picker" ref={root}
@@ -58,7 +60,7 @@ export function PromoterAssignmentPicker({
     }}>
     <label className="field-label" htmlFor={inputId}>Assign promoter</label>
     <div className="promoter-picker-input">
-      <input id={inputId} type="text" role="combobox" aria-autocomplete="list"
+      <input ref={inputRef} id={inputId} type="text" role="combobox" aria-autocomplete="list"
         aria-controls={listId} aria-expanded={open}
         aria-activedescendant={open?listId+"-option-"+active:undefined}
         placeholder="Search or assign a promoter…" autoComplete="off"
