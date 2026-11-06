@@ -1250,10 +1250,10 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await page.getByRole("textbox",{name:"Workflow name"}).fill("Monthly demo "+key);
   await page.getByRole("combobox",{name:"Automation trigger"}).selectOption("monthly_sponsor");
   await page.getByRole("combobox",{name:"Automation template"}).selectOption({label:name+" · WhatsApp"});
-  await page.getByRole("button",{name:"Save automation"}).click();
+  await page.getByRole("button",{name:"Save inactive draft"}).click();
   await expect(page.getByText("Monthly demo "+key,{exact:true})).toBeVisible();
   const savedRule=page.locator(".comm-list-card").filter({hasText:"Monthly demo "+key});
-  await expect(savedRule.getByText("Inactive · delivery not connected")).toBeVisible();
+  await expect(savedRule.getByText("Draft only · no automatic delivery")).toBeVisible();
 });
 
 test("Admin attests contact consent and reviews a campaign without sending",async ({page})=>{
