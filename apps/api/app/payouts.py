@@ -289,6 +289,7 @@ def record_quick_payout(
     if db.scalar(select(PayoutPayment.id).where(
         PayoutPayment.organization_id == admin.organization_id,
         PayoutPayment.reference_digest == reference_digest,
+        PayoutPayment.reversed_at.is_(None),
     )):
         raise HTTPException(status_code=409, detail="This UTR/reference was already recorded")
     period = month_start(payload.paid_on)
@@ -546,6 +547,7 @@ def record_disbursement(
     if db.scalars(select(PayoutPayment.id).where(
         PayoutPayment.organization_id == admin.organization_id,
         PayoutPayment.reference_digest == digest,
+        PayoutPayment.reversed_at.is_(None),
     )).first() is not None:
         raise HTTPException(status_code=409, detail="Payment reference already recorded")
     entry = PayoutPayment(
