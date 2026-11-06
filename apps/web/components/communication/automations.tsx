@@ -53,8 +53,8 @@ export function CommunicationAutomations({revision=0}:{revision?:number}){
   const requiredAudience=trigger==="monthly_sponsor"||trigger==="monthly_promoter";
   return <div className="comm-two-column">
     <section className="comm-panel">
-      <div className="comm-panel-header"><div><h2>New automation</h2>
-        <p>Build a reusable trigger from a saved template.</p></div></div>
+      <div className="comm-panel-header"><div><h2>New workflow draft</h2>
+        <p>Prepare a trigger and template pairing. Saving a draft does not send messages.</p></div></div>
       <form className="comm-template-form" onSubmit={save}>
         <label className="field"><span className="field-label">Workflow name *</span>
           <input required minLength={2} maxLength={100} value={name}
@@ -95,15 +95,15 @@ export function CommunicationAutomations({revision=0}:{revision?:number}){
         {error&&<p role="alert" className="form-error">{error}</p>}
         {notice&&<p role="status" className="form-success">{notice}</p>}
         <div className="comm-actions">
-          <span className="comm-muted">Definitions are saved inactive.</span>
+          <span className="comm-muted" role="status">Saved as inactive draft · no messages will be sent</span>
           <button type="submit" className="btn btn-primary" disabled={saving||!templateId}>
-            {saving?"Saving…":"Save automation"}
+            {saving?"Saving…":"Save inactive draft"}
           </button>
         </div>
       </form>
     </section>
     <section className="comm-panel">
-      <div className="comm-panel-header"><h2>Saved workflows</h2>
+      <div className="comm-panel-header"><h2>Workflow drafts &amp; built-in verification</h2>
         <span className="comm-muted">{rules.length+1} workflows</span></div>
       <div className="comm-stack">
         <OtpCopyEditor/>
@@ -113,16 +113,16 @@ export function CommunicationAutomations({revision=0}:{revision?:number}){
             <div className="comm-list-card-text"><strong>{r.name}</strong>
               <span>{triggerOptions.find(x=>x[0]===r.trigger_kind)?.[1]??r.trigger_kind}</span>
               <p>{r.audience} · {r.segment}</p>
-              <span className="comm-inactive-tag">Inactive · delivery not connected</span>
+              <span className="comm-inactive-tag">Draft only · no automatic delivery</span>
             </div>
             <button type="button" className="comm-text-button"
               onClick={()=>remove(r)}>Remove</button>
           </article>)}
       </div>
       <p className="comm-muted comm-history-footnote">
-        Existing monthly reminders remain governed by the Foundation&apos;s
-        5th/20th IST policy. These new rules do not run until a reviewed
-        event dispatcher and channel permissions are activated.
+        Saved workflow drafts never dispatch on their own. The separate, default-off
+        5th/20th IST Saasyto reminder worker must be configured and approved by the
+        Foundation before it can run. Check provider readiness before relying on any automation.
       </p>
     </section>
   </div>;
