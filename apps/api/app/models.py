@@ -87,6 +87,42 @@ class OrganizationSettings(Base):
     organization: Mapped[Organization] = relationship(back_populates="settings")
 
 
+
+class OrganizationFieldOption(Base):
+    """Owner-managed option values; historical payouts retain a label snapshot."""
+
+    __tablename__ = "organization_field_options"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_field_option_org_id"),
+        UniqueConstraint("organization_id", "field_key", "code", name="uq_field_option_code"),
+        UniqueConstraint("organization_id", "field_key", "label_key", name="uq_field_option_label"),
+        CheckConstraint("field_key IN ('payout_purpose')", name="ck_field_option_key"),
+        CheckConstraint("version >= 1", name="ck_field_option_version"),
+        Index("ix_field_option_active_order",
+              "organization_id", "field_key", "is_active", "sort_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    field_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    label: Mapped[str] = mapped_column(String(240), nullable=False)
+    label_key: Mapped[str] = mapped_column(String(240), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 
@@ -673,6 +709,12 @@ class PayoutPlan(Base):
     __tablename__ = "payout_plans"
     __table_args__ = (
         UniqueConstraint("organization_id", "id", name="uq_payout_plan_org_id"),
+        ForeignKeyConstraint(
+            ["organization_id", "purpose_option_id"],
+            ["organization_field_options.organization_id",
+             "organization_field_options.id"],
+            ondelete="RESTRICT", name="fk_payout_purpose_org",
+        ),
         UniqueConstraint("organization_id", "create_request_id", name="uq_payout_create_request"),
         CheckConstraint(
             "cadence IN ('recurring', 'one_time')", name="ck_payout_plan_cadence",
@@ -695,6 +737,7 @@ class PayoutPlan(Base):
     create_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     payee_name: Mapped[str] = mapped_column(String(160), nullable=False)
     purpose: Mapped[str] = mapped_column(String(240), nullable=False)
+    purpose_option_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     notes: Mapped[str | None] = mapped_column(String(800))
     cadence: Mapped[str] = mapped_column(String(16), nullable=False)
     start_month: Mapped[date] = mapped_column(Date, nullable=False)
