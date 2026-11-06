@@ -33,6 +33,8 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
   const [profileOpen,setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLElement>(null);
   const closeDrawer = () => { setMobileOpen(false); setProfileOpen(false); };
   useEffect(()=>{
     if(!profileOpen)return;
@@ -54,6 +56,33 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
       document.removeEventListener("keydown",onKeyDown);
     };
   },[profileOpen]);
+  useEffect(()=>{
+    if(!mobileOpen)return;
+    const drawer=mobileDrawerRef.current;
+    const menuClose=drawer?.querySelector<HTMLButtonElement>(".mobile-close");
+    menuClose?.focus();
+    const keyDown=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){
+        event.preventDefault();setMobileOpen(false);setProfileOpen(false);
+        mobileToggleRef.current?.focus();
+      }
+      if(event.key!=="Tab"||!drawer)return;
+      const choices=Array.from(drawer.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter(item=>getComputedStyle(item).display!=="none"&&
+        getComputedStyle(item).visibility!=="hidden");
+      if(!choices.length)return;
+      const first=choices[0],last=choices[choices.length-1];
+      if(event.shiftKey&&document.activeElement===first){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey&&document.activeElement===last){
+        event.preventDefault();first.focus();
+      }
+    };
+    document.addEventListener("keydown",keyDown);
+    return ()=>document.removeEventListener("keydown",keyDown);
+  },[mobileOpen]);
+
   async function signOut(){
     if(signingOut)return;
     setSigningOut(true);setSignOutError("");
@@ -73,7 +102,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
   return <ShellMounted.Provider value={true}><div className="app-frame">
     <a href="#main-content" className="skip-link">Skip to content</a>
     {mobileOpen && <button className="drawer-scrim" aria-label="Close navigation" onClick={closeDrawer}/>}
-    <aside className={"site-sidebar"+(mobileOpen?" mobile-open":"")} aria-label="Main navigation">
+    <aside ref={mobileDrawerRef} className={"site-sidebar"+(mobileOpen?" mobile-open":"")} aria-label="Main navigation">
       <div className="sidebar-head">
         <Link className="brand-link" href="/dashboard" onClick={closeDrawer} aria-label="Emlen Foundation home">
           <span className="brand-mark"><Icon name="moon" size={33}/></span>
@@ -109,7 +138,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
     </aside>
     <div className="app-content">
       <header className="topbar">
-        <button className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
+        <button ref={mobileToggleRef} className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
         <h1 className="topbar-name">{navigation.find(link=>pathname===link.href || pathname.startsWith(link.href+"/"))?.name ?? "Dashboard"}</h1>
         <IstClock/>
       </header>
