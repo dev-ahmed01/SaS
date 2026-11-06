@@ -6,6 +6,7 @@ import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { AccountingOverview } from "../accounting/accounting-overview";
 import { exportAllCsv } from "../../lib/export-csv";
 import { formatCRMDate } from "../../lib/crm-dates";
+import { useDialogFocus } from "../../lib/dialog-focus";
 
 type Payment = {
   id: string;
@@ -200,6 +201,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
     }finally{setResendBusy(null);}
   }
 
+  const reversalDialogRef=useDialogFocus<HTMLElement>(Boolean(selected),()=>{if(!busy)close();});
   return <section className="collection-review" aria-label="Collection review">
     <div className="review-heading">
       <div>
@@ -268,7 +270,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
       if(event.target===event.currentTarget)close();
     }}>
       <section role="dialog" aria-modal="true" aria-labelledby="reverse-title"
-        className="edit-modal reversal-dialog">
+        className="edit-modal reversal-dialog" ref={reversalDialogRef} tabIndex={-1}>
         <div className="modal-topline">
           <span>Financial correction</span>
           <button type="button" className="text-action" onClick={close} disabled={busy}
