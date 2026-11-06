@@ -15,15 +15,17 @@ function Fact({label,children}:{label:string;children:React.ReactNode}){
   return <div className="promoter-profile-fact"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 function Stat({label,value,icon,onClick}:{
-  label:string;value:string|number;icon:"users"|"user-plus"|"check";onClick?:()=>void;
+  label:string;value:string|number;icon:"users"|"user-plus"|"layers";onClick?:()=>void;
 }){
   return <div className="promoter-metric">
     <span className="promoter-metric-icon"><Icon name={icon} size={22}/></span>
-    <div><span>{label}</span><strong>{value}</strong>
-      {onClick&&<button type="button" className="promoter-metric-link" onClick={onClick}>
-        View {label.toLowerCase()} <span aria-hidden="true">→</span>
-      </button>}
+    <div className="promoter-metric-content">
+      <span>{label}</span><strong>{value}</strong>
+      {label==="Total assigned"&&<small>Sponsors + Prospects</small>}
     </div>
+    {onClick&&<button type="button" className="promoter-metric-link" onClick={onClick}>
+      View {label.toLowerCase()} <span aria-hidden="true">→</span>
+    </button>}
   </div>;
 }
 export function PromoterDetails({id}:{id:string}){
@@ -58,7 +60,7 @@ export function PromoterDetails({id}:{id:string}){
     <Link href="/promoters" className="back-link"><Icon name="arrow-left" size={17}/> All promoters</Link>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {loading?<p role="status">Loading promoter…</p>:record&&<>
-      <header className="promoter-identity-row">
+      <header className="promoter-identity-row promoter-hero">
         <span className="promoter-identity-avatar" aria-hidden="true">{initials}</span>
         <div className="promoter-identity-copy">
           <div className="crm-title-line">
@@ -67,7 +69,21 @@ export function PromoterDetails({id}:{id:string}){
               {record.is_active?"Active":"Inactive"}
             </span>
           </div>
-          <p>{record.mobile_number} · Joined {formatCRMDate(record.created_at)}</p>
+          <div className="promoter-hero-meta">
+            <span><Icon name="message" size={15}/>{record.mobile_number}</span>
+            <span><Icon name="calendar" size={15}/> Joined {formatCRMDate(record.created_at)}</span>
+          </div>
+        </div>
+        <div className="promoter-hero-actions">
+          <button type="button" className="btn btn-secondary" onClick={()=>setEditing(v=>!v)}
+            aria-expanded={editing}>
+            <Icon name="pencil" size={16}/> {editing?"Close edit":"Edit details"}
+          </button>
+          <button type="button"
+            className={"btn "+(record.is_active?"btn-secondary crm-danger-btn":"btn-primary")}
+            onClick={()=>setConfirm(true)}>
+            {record.is_active?"Mark Inactive":"Reactivate"}
+          </button>
         </div>
       </header>
       <div className="promoter-metrics" aria-label="Current promoter assignments">
@@ -75,15 +91,10 @@ export function PromoterDetails({id}:{id:string}){
           onClick={()=>scrollTo("promoter-sponsors")}/>
         <Stat label="Prospects" icon="user-plus" value={prospectCount??"—"}
           onClick={()=>scrollTo("promoter-prospects")}/>
-        <Stat label="Total assigned" icon="check" value={record.sponsor_count}/>
+        <Stat label="Total assigned" icon="layers" value={record.sponsor_count}/>
       </div>
       <section className="crm-detail-card promoter-profile-card" aria-label="Personal details">
-        <div className="crm-panel-heading"><h2>Personal details</h2>
-          <button type="button" className="btn btn-secondary" onClick={()=>setEditing(v=>!v)}
-            aria-expanded={editing}>
-            <Icon name="pencil" size={16}/> {editing?"Close edit":"Edit details"}
-          </button>
-        </div>
+        <div className="crm-panel-heading"><h2><Icon name="users" size={20}/> Personal details</h2></div>
         {editing?<PromoterEditor initial={record} onCancel={()=>setEditing(false)}
           onSaved={()=>{setEditing(false);refresh();}}/>:
           <dl className="promoter-profile-facts">
@@ -107,15 +118,10 @@ export function PromoterDetails({id}:{id:string}){
       </div>
       <div className="promoter-final-row">
         <PromoterNotes promoter={record} onChanged={refresh}/>
-        <div className="crm-redesign-actions" aria-label="Promoter actions">
+        <div className="promoter-danger-footer" aria-label="Additional promoter actions">
           <button type="button" className="btn btn-secondary crm-danger-btn"
             onClick={()=>setDeleteOpen(true)}>
-            <Icon name="trash" size={17}/> Delete promoter
-          </button>
-          <button type="button"
-            className={"btn "+(record.is_active?"btn-secondary crm-danger-btn":"btn-primary")}
-            onClick={()=>setConfirm(true)}>
-            {record.is_active?"Mark Inactive":"Reactivate"}
+            <Icon name="trash" size={16}/> Delete promoter
           </button>
         </div>
       </div>
