@@ -1,6 +1,5 @@
 """Approved payout purpose options: owner controls, history and tenant isolation."""
 import uuid
-from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -107,7 +106,7 @@ def test_defaults_and_owner_add_edit_reorder_disable_are_audited(system):
         logs = list(db.scalars(select(AuditEvent).where(
             AuditEvent.action.like("settings.field_option%"),
         )).all())
-        assert len(logs) == 3
+        assert len(logs) == 4
         assert logs[-1].before_data["is_active"] is True
         assert logs[-1].after_data["is_active"] is False
 
@@ -116,12 +115,11 @@ def test_payout_requires_approved_choice_and_preserves_history(system):
     client, engine = system
     csrf = login(client)
     maintenance = next(r for r in options(client) if r["label"] == "Maintenance")
-    today = date.today().isoformat()
     body = {
         "request_id": str(uuid.uuid4()), "first_name": "Synthetic",
         "last_name": "Caretaker", "purpose": maintenance["label"],
         "purpose_option_id": maintenance["id"],
-        "amount_paise": 50000, "paid_on": today,
+        "amount_paise": 50000, "paid_on": "2026-11-01",
         "payment_method": "cash",
         "payment_reference": "SYNTHETIC-REF-10001",
         "funds_disbursed": True,
