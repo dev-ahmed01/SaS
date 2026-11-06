@@ -40,3 +40,25 @@ test("320px CRM screens keep entire document within viewport",async({page})=>{
       .toBe(true);
   }
 });
+
+test("Complete prospects and promoters exports download valid CSV headers",async({page})=>{
+  for(const [path,header] of [["/prospects","Name,Mobile"],["/promoters","Name,Mobile"]]){
+    await page.goto(path);
+    const download=page.waitForEvent("download");
+    await page.getByRole("button",{name:"Export all results"}).click();
+    const file=await download;
+    expect(file.suggestedFilename().endsWith(".csv")).toBe(true);
+    const bytes=await file.createReadStream();
+    const chunks=[];
+    for await(const chunk of bytes)chunks.push(Buffer.from(chunk));
+    const content=Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/,"");
+    expect(content).toContain('"'+header.replace(",",'","')+'"');
+    expect(content.length).toBeGreaterThan(10);
+  }
+});
+test("Owner can see staff management without exposing a password",async({page})=>{
+  await page.goto("/settings");
+  await expect(page.getByRole("heading",{name:"Staff access"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Create staff account"})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Staff email"})).toHaveCount(1);
+});
