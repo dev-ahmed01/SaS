@@ -6,6 +6,7 @@ import { formatCRMDate } from "../../lib/crm-dates";
 import { exportAllCsv } from "../../lib/export-csv";
 import { PayoutPaymentHistory } from "./payout-payment-history";
 import { useDialogFocus } from "../../lib/dialog-focus";
+import { Icon } from "../ui/icon";
 import type { FieldOptionPage, FieldOption } from "../settings/field-options";
 
 type Plan = {
