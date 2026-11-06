@@ -531,7 +531,7 @@ test("Prospect listing shows contribution, follow-ups and selected CSV export",a
   await expect(sidebar.getByText("Sponsor a Salah",{exact:true})).toHaveCount(1);
 });
 
-test("Prospect CRM tabs, profile cards and reasoned inactivity work without changing payment status",async ({page})=>{
+test("Prospect CRM tabs, profile cards and reasoned inactivity work without changing payment status",async ({page,isMobile})=>{
   const name="Stage Candidate "+(Date.now()%1000000);
   await page.goto("/prospects");
   const tabs=page.getByRole("navigation",{name:"Module views"});
