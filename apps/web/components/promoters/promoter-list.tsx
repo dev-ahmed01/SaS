@@ -82,12 +82,12 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
     <div className="crm-directory-intro">
       <div>
         <span className="crm-directory-eyebrow">PROMOTER DIRECTORY</span>
-        <h2>${title}</h2>
+        <h2>{title}</h2>
         <p>Find promoters, review their assigned sponsors and manage their status.</p>
       </div>
       <div className="crm-directory-count" role="status" aria-live="polite">
-        <strong>${loading&&!page?\"…\":page?.total??0}</strong>
-        <span>${q?\"matching results\":\"promoters in this view\"}</span>
+        <strong>{loading&&!page?"…":page?.total??0}</strong>
+        <span>{q?"matching results":"promoters in this view"}</span>
       </div>
     </div>
     <div className="crm-list-tools">
