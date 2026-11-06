@@ -149,6 +149,10 @@ class PaymentPage(BaseModel):
 
 def _hash(payload: BaseModel) -> str:
     fields = payload.model_dump(mode="json", exclude={"request_id"})
+    # Before migration 0027 this field did not exist. Preserve the original
+    # request hash for retries of pre-migration payout requests without an ID.
+    if fields.get("purpose_option_id") is None:
+        fields.pop("purpose_option_id", None)
     return hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
 
 
