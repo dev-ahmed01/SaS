@@ -731,7 +731,7 @@ test("Promoter details safely assign and unassign a sponsor",async ({page})=>{
   await section.getByRole("button",{name:"Assign",exact:true}).click();
   await expect(section.getByRole("button",{name:"Unassign"})).toBeVisible();
   await expect(section.getByRole("link",{name:sponsor})).toBeVisible();
-  await expect(page.locator(".promoter-metric").filter({hasText:"Prospects"})).toContainText("1");
+  await expect(page.locator(".promoter-metric").nth(1)).toContainText("1");
   await section.getByRole("button",{name:"Unassign"}).click();
   await expect(section.getByText("No assigned prospects.")).toBeVisible();
 });
