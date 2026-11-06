@@ -54,7 +54,7 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
       <label className="search-control">
         <Icon name="search" size={18}/><span className="sr-only">Search promoters</span>
         <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search names, mobile, city or occupation…"/>
+          placeholder="Search names, mobile, city or email…"/>
       </label>
       <span className="crm-record-count">{page?.total??0} promoters</span>
     </div>
