@@ -691,6 +691,7 @@ class PayoutPlan(Base):
     start_month: Mapped[date] = mapped_column(Date, nullable=False)
     scheduled_on: Mapped[date | None] = mapped_column(Date)
     amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
     )
@@ -751,8 +752,12 @@ class PayoutPayment(Base):
             "organization_id", "reference_digest", name="uq_payout_payment_reference",
         ),
         UniqueConstraint(
-            "organization_id", "plan_id", "period_month",
-            name="uq_payout_payment_one_per_period",
+            "organization_id", "reversal_request_id", name="uq_payout_reversal_request",
+        ),
+        Index("uq_payout_active_payment_period",
+            "organization_id", "plan_id", "period_month", unique=True,
+            postgresql_where=text("reversed_at IS NULL"),
+            sqlite_where=text("reversed_at IS NULL"),
         ),
         CheckConstraint(
             "amount_paise > 0 AND amount_paise <= 1000000000",
@@ -775,6 +780,12 @@ class PayoutPayment(Base):
     payment_method: Mapped[str] = mapped_column(String(24), nullable=False)
     reference_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     reference_mask: Mapped[str] = mapped_column(String(16), nullable=False)
+    reversed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reversal_request_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    reversal_reason: Mapped[str | None] = mapped_column(String(40))
+    reversed_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("admin_users.id", name="fk_payout_reversed_by_admin", ondelete="SET NULL"),
+    )
     recorded_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("admin_users.id", ondelete="SET NULL"),
     )
