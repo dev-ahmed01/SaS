@@ -1851,3 +1851,16 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .comm-tabs .comm-tab{min-height:48px;overflow-wrap:anywhere;word-break:normal;}
   .page-content{padding-inline:13px;}
 }
+
+
+.payout-export-actions{margin:16px 0;justify-content:flex-start;}
+.payout-payment-history{max-width:none;margin-top:24px;}
+.payout-payment-history .table-scroll{margin-top:16px;}
+.payout-payment-history .data-table{min-width:740px;}
+.payout-payment-history .checkbox-field{margin:16px 0;}
+.review-heading{flex-wrap:wrap;}
+.review-heading>.btn{white-space:nowrap;min-height:40px;}
+@media(max-width:650px){
+  .payout-export-actions .btn{min-height:44px;white-space:normal;}
+  .review-heading>.btn{width:100%;}
+}
