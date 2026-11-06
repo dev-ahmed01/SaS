@@ -1864,3 +1864,16 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
   .payout-export-actions .btn{min-height:44px;white-space:normal;}
   .review-heading>.btn{width:100%;}
 }
+
+
+.settings-fieldset{border:0;margin:0;padding:0;min-width:0;}
+.team-access{margin-top:24px;max-width:none;}
+.team-create-form{border-top:1px solid var(--line);padding-top:18px;margin-top:18px;}
+.team-access .table-scroll{margin-top:22px;}
+.team-access .data-table{min-width:650px;}
+.team-access .data-table select{padding:8px;border:1px solid var(--line);
+  border-radius:6px;max-width:260px;min-height:38px;background:#fff;color:var(--ink);}
+.team-access .data-table .btn{min-height:38px;padding:7px 12px;}
+@media(max-width:650px){
+  .team-access .form-grid{grid-template-columns:1fr;}
+}
