@@ -3,12 +3,14 @@
 import hashlib
 import hmac
 import ipaddress
-from datetime import timedelta
-from typing import Annotated
+import uuid
+from datetime import datetime, timedelta
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -20,6 +22,7 @@ from app.security import (
     as_utc,
     compare_csrf,
     csrf_for_token,
+    hash_password,
     new_session_token,
     throttle_key,
     token_digest,
@@ -61,6 +64,40 @@ def auth_secret() -> str:
     return value
 
 
+def _require_staff_permission(admin: AdminUser, request: Request) -> None:
+    """Enforce tenant staff privileges on the backend, never just in navigation."""
+    role = admin.role or "owner"
+    if role == "owner":
+        return
+    path = request.url.path
+    method = request.method
+    if path in ("/v1/auth/session", "/v1/auth/logout"):
+        return
+    if path.startswith("/v1/auth/users"):
+        raise HTTPException(status_code=403, detail="Owner permission required")
+    if path.startswith("/v1/dashboard"):
+        if method == "GET":
+            return
+        raise HTTPException(status_code=403, detail="Read-only dashboard")
+    if path.startswith("/v1/settings"):
+        if method == "GET":
+            return
+        raise HTTPException(status_code=403, detail="Only owners may change settings")
+    if path.startswith(("/v1/prospects", "/v1/promoters", "/v1/prospect-stages", "/v1/sponsor-otp")):
+        if role == "crm" or method == "GET" and role in (
+            "finance", "messaging", "viewer",
+        ):
+            return
+    if path.startswith(("/v1/collections", "/v1/accounting", "/v1/payouts")):
+        if role == "finance" or role == "viewer" and method == "GET":
+            return
+    if path.startswith(("/v1/communication", "/v1/reminders",
+                        "/v1/saasyto", "/v1/messaging")):
+        if role == "messaging" or role == "viewer" and method == "GET":
+            return
+    raise HTTPException(status_code=403, detail="Insufficient staff permissions")
+
+
 def get_admin(
     request: Request, database: Annotated[Session, Depends(db_session)]
 ) -> tuple[AdminUser, AdminSession, str]:
@@ -75,6 +112,7 @@ def get_admin(
     admin = database.get(AdminUser, record.admin_user_id)
     if admin is None or not admin.is_active or admin.organization_id != record.organization_id:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
+    _require_staff_permission(admin, request)
     return admin, record, raw_token
 
 
@@ -195,9 +233,141 @@ def current_session(
     response.headers["Cache-Control"] = "no-store"
     return {
         "email": admin.email,
+        "role": admin.role,
         "organization_name": organization.name if organization else "",
         "csrf_token": csrf_for_token(token, auth_secret()),
     }
+
+
+
+Role = Literal["owner", "crm", "finance", "messaging", "viewer"]
+
+
+class StaffCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+    password: str = Field(min_length=12, max_length=256)
+    role: Role
+
+
+class StaffPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Role
+    is_active: bool
+
+
+class StaffRead(BaseModel):
+    id: uuid.UUID
+    email: str
+    role: Role
+    is_active: bool
+    created_at: datetime
+
+
+def _staff_out(user: AdminUser) -> StaffRead:
+    return StaffRead(id=user.id, email=user.email, role=user.role,
+                     is_active=user.is_active, created_at=user.created_at)
+
+
+@router.get("/users", response_model=list[StaffRead])
+def list_staff(
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(get_admin)],
+    database: Annotated[Session, Depends(db_session)],
+) -> list[StaffRead]:
+    admin = context[0]
+    if admin.role != "owner":
+        raise HTTPException(status_code=403, detail="Owner permission required")
+    rows = database.scalars(select(AdminUser).where(
+        AdminUser.organization_id == admin.organization_id,
+    ).order_by(AdminUser.email).limit(200)).all()
+    response.headers["Cache-Control"] = "no-store"
+    return [_staff_out(user) for user in rows]
+
+
+@router.post("/users", response_model=StaffRead, status_code=201)
+def add_staff(
+    payload: StaffCreate,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> StaffRead:
+    admin = context[0]
+    if admin.role != "owner":
+        raise HTTPException(status_code=403, detail="Owner permission required")
+    count = database.scalar(select(func.count(AdminUser.id)).where(
+        AdminUser.organization_id == admin.organization_id,
+    )) or 0
+    if count >= 100:
+        raise HTTPException(status_code=409, detail="Staff account limit reached")
+    email = payload.email.strip().lower()
+    new_user = AdminUser(
+        organization_id=admin.organization_id, email=email,
+        password_hash=hash_password(payload.password),
+        role=payload.role, is_active=True,
+    )
+    database.add(new_user)
+    database.flush()
+    database.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="admin.staff_created", entity_type="admin_user",
+        entity_id=str(new_user.id), after_data={"role":payload.role, "email":email},
+    ))
+    try:
+        database.commit()
+    except IntegrityError as exc:
+        database.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered") from exc
+    response.headers["Cache-Control"] = "no-store"
+    return _staff_out(new_user)
+
+
+@router.patch("/users/{staff_id}", response_model=StaffRead)
+def update_staff(
+    staff_id: uuid.UUID,
+    payload: StaffPatch,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> StaffRead:
+    admin = context[0]
+    if admin.role != "owner":
+        raise HTTPException(status_code=403, detail="Owner permission required")
+    user = database.scalars(select(AdminUser).where(
+        AdminUser.id == staff_id,
+        AdminUser.organization_id == admin.organization_id,
+    ).with_for_update()).one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="Staff user not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=409, detail="You cannot change your own access")
+    if user.role == "owner" and user.is_active and (
+        payload.role != "owner" or not payload.is_active
+    ):
+        owners = database.scalar(select(func.count(AdminUser.id)).where(
+            AdminUser.organization_id == admin.organization_id,
+            AdminUser.role == "owner", AdminUser.is_active.is_(True),
+        )) or 0
+        if owners < 2:
+            raise HTTPException(status_code=409, detail="At least one active owner required")
+    before = {"role":user.role, "is_active":user.is_active}
+    user.role = payload.role
+    user.is_active = payload.is_active
+    if not payload.is_active:
+        for session in database.scalars(select(AdminSession).where(
+            AdminSession.admin_user_id == user.id,
+            AdminSession.revoked_at.is_(None),
+        )):
+            session.revoked_at = utc_now()
+    database.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="admin.staff_updated", entity_type="admin_user",
+        entity_id=str(user.id), before_data=before,
+        after_data={"role":user.role, "is_active":user.is_active},
+    ))
+    database.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return _staff_out(user)
 
 
 @router.post("/logout")
