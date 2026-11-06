@@ -25,7 +25,8 @@ test("Campaign deletion confirmation traps focus, handles Escape and restores op
   await page.getByRole("textbox",{name:"Campaign name"}).fill("Synthetic QA campaign for keyboard checks");
   await page.getByRole("textbox",{name:"Message body"}).fill("Synthetic message. No real sends.");
   await page.getByRole("button",{name:"Continue to recipient review"}).click();
-  await page.getByRole("link",{name:"Campaigns",exact:true}).click();
+  await expect(page).toHaveURL(/\/communication\/campaigns#campaign-[0-9a-f-]{36}$/);
+  await page.goto("/communication/campaigns");
   const deleteAll=page.getByRole("button",{name:"Delete all campaigns"});
   await expect(deleteAll).toBeEnabled();
   await deleteAll.click();
