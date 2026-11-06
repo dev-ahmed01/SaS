@@ -365,3 +365,47 @@ def edit_field_option(
             raise HTTPException(status_code=409, detail="Option conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return option_body(row)
+
+
+class FieldOptionReorder(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    field_key: FieldKey
+    item_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
+@router.post("/field-options/reorder")
+def reorder_field_options(
+    payload: FieldOptionReorder, response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    database: Annotated[Session, Depends(db_session)],
+) -> dict:
+    admin = context[0]
+    rows = list(database.scalars(select(OrganizationFieldOption).where(
+        OrganizationFieldOption.organization_id == admin.organization_id,
+        OrganizationFieldOption.field_key == payload.field_key,
+    ).with_for_update()).all())
+    if len(rows) != len(payload.item_ids) or (
+        {row.id for row in rows} != set(payload.item_ids)
+    ):
+        raise HTTPException(status_code=409, detail="Options changed; refresh and retry")
+    if len(set(payload.item_ids)) != len(payload.item_ids):
+        raise HTTPException(status_code=422, detail="Option order contains duplicates")
+    by_id = {row.id: row for row in rows}
+    before = [str(row.id) for row in sorted(rows, key=lambda x: x.sort_order)]
+    for order, option_id in enumerate(payload.item_ids, start=1):
+        row = by_id[option_id]
+        new_order = order * 10
+        if row.sort_order != new_order:
+            row.sort_order = new_order
+            row.version += 1
+    database.add(AuditEvent(
+        organization_id=admin.organization_id, actor_admin_id=admin.id,
+        action="settings.field_options_reordered",
+        entity_type="field_options", entity_id=str(admin.organization_id),
+        before_data={"item_ids": before},
+        after_data={"item_ids": [str(i) for i in payload.item_ids]},
+    ))
+    database.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return {"field_key": payload.field_key,
+            "items": [option_body(by_id[i]) for i in payload.item_ids]}
