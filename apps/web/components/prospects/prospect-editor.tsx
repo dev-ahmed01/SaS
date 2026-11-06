@@ -2,13 +2,13 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Prospect } from "./prospects-types";
+import { PromoterAssignmentPicker } from "./promoter-assignment-picker";
 
 type Values = {
   first_name:string;last_name:string;country_code:string;phone:string;
   email:string;city:string;tokens:string;start_month:string;
-  promoter_id:string;whatsapp_opt_in:boolean;
+  promoter_id:string;
 };
-type PromoterOption = {id:string;full_name:string;is_active:boolean};
 
 const codes=[["India","+91"],["UAE","+971"],["Saudi Arabia","+966"],["USA / Canada","+1"],
   ["United Kingdom","+44"],["Australia","+61"],["Singapore","+65"],["Qatar","+974"],
@@ -49,7 +49,6 @@ function initialValues(initial?:Prospect):Values {
     tokens:String((initial?.monthly_contribution_paise??25000)/25000),
     start_month:initial?.start_month?.slice(0,7)??monthNow(),
     promoter_id:initial?.assigned_promoter_id??"",
-    whatsapp_opt_in:initial?.whatsapp_opt_in??false,
   };
 }
 async function getCsrf():Promise<string>{
@@ -68,33 +67,11 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   const [ready,setReady]=useState(Boolean(initial));
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
-  const [promoters,setPromoters]=useState<PromoterOption[]>([]);
-  const [promoterQuery,setPromoterQuery]=useState("");
-  const [promoterTotal,setPromoterTotal]=useState(0);
-  const [promotersError,setPromotersError]=useState("");
   const [current,setCurrent]=useState<Prospect|undefined>(initial);
   const requestId=useRef<string|null>(null);
   const tokensEdited=useRef(false);
   const isEdit=Boolean(initial);
 
-  useEffect(()=>{
-    const controller=new AbortController();
-    const timer=setTimeout(()=>{
-      const query=new URLSearchParams({active:"true",limit:"30",q:promoterQuery.trim()});
-      fetch("/api/admin/promoters?"+query,{cache:"no-store",signal:controller.signal})
-        .then(async r=>{if(!r.ok)throw Error();return r.json();})
-        .then(data=>{
-          if(controller.signal.aborted)return;
-          setPromoters(data.items??[]);
-          setPromoterTotal(data.total??0);
-          setPromotersError("");
-        })
-        .catch(()=>{
-          if(!controller.signal.aborted)setPromotersError("Promoter search is unavailable. You can save without assigning one.");
-        });
-    },promoterQuery?250:0);
-    return ()=>{clearTimeout(timer);controller.abort();};
-  },[promoterQuery]);
   useEffect(()=>{
     if(initial)return;
     let active=true;
@@ -133,7 +110,6 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         full_name:fullName,first_name:first,last_name:last||null,
         mobile_number:mobile,whatsapp_number:mobile,
         email:values.email.trim()||null,area_city:values.city.trim(),
-        whatsapp_opt_in:values.whatsapp_opt_in,
         monthly_contribution_paise:tokens*25000,
       };
       if(current){body.version=current.version;}
@@ -142,6 +118,8 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
         body.request_id=requestId.current;
         body.start_month=values.start_month+"-01";
         body.upi_ids=[];
+        // Registration is not proof of WhatsApp consent. Keep new contacts opted out.
+        body.whatsapp_opt_in=false;
       }
       const response=await fetch("/api/admin/prospects"+(current?"/"+current.id:""),{
         method:current?"PATCH":"POST",credentials:"same-origin",
@@ -209,12 +187,10 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             <input type="email" autoComplete="email" maxLength={320} value={values.email}
               onChange={e=>set("email",e.target.value)} placeholder="name@example.com"/></label>
         </div>
-        <div className="prospect-field-row one">
+        <div className="prospect-field-row three prospect-financial-row">
           <label className="field"><span className="field-label">City</span>
             <input maxLength={120} autoComplete="address-level2" value={values.city}
               onChange={e=>set("city",e.target.value)} placeholder="City"/></label>
-        </div>
-        <div className="prospect-field-row two">
           <label className="field"><span className="field-label">Sponsorship Tokens *</span>
             <select required aria-label="Sponsorship Tokens"
               value={customTokens?"custom":values.tokens}
@@ -246,31 +222,12 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             </select>
             {isEdit&&<span className="field-helper">Start month is locked once registered to protect accounting history.</span>}</label>
         </div>
-        <div className="prospect-field-row two">
-          <label className="field"><span className="field-label">Find promoter by name or mobile</span>
-            <input aria-label="Search promoters" value={promoterQuery} maxLength={100}
-              placeholder="Search all active promoters…" autoComplete="off"
-              onChange={e=>setPromoterQuery(e.target.value)}/>
-            <span className="field-helper">{promoterTotal>30
-              ?promoterTotal+" matches · showing 30. Keep typing to narrow your search."
-              :"Search across all active promoters, not just the first 100."}</span>
-          </label>
-          <label className="field"><span className="field-label">Select Promoter</span>
-            <select aria-label="Select Promoter" value={values.promoter_id} onChange={e=>set("promoter_id",e.target.value)}>
-              <option value="">Unassigned</option>
-              {values.promoter_id&&!promoters.some(p=>p.id===values.promoter_id)&&
-                <option value={values.promoter_id}>{initial?.assigned_promoter_id===values.promoter_id
-                  ?initial.assigned_promoter_name??"Current promoter":"Selected promoter"}</option>}
-              {promoters.map(p=><option value={p.id} key={p.id}>{p.full_name}</option>)}
-            </select>
-          </label>
+        <div className="prospect-field-row one">
+          <PromoterAssignmentPicker
+            value={values.promoter_id}
+            initialName={initial?.assigned_promoter_name}
+            onChange={id=>set("promoter_id",id)}/>
         </div>
-        {promotersError&&<p className="form-error" role="status">{promotersError}</p>}
-        {!isEdit&&<label className="prospect-consent">
-          <input type="checkbox" checked={values.whatsapp_opt_in}
-            onChange={e=>set("whatsapp_opt_in",e.target.checked)}/>
-          <span>I confirm the sponsor has explicitly agreed to receive WhatsApp reminders and updates. Record this permission once.</span>
-        </label>}
 
       </div>
       {error&&<p className="form-error" role="alert">{error}</p>}
