@@ -25,9 +25,16 @@ def upgrade() -> None:
             ["reversed_by_admin_id"], ["id"], ondelete="SET NULL",
         )
         batch.drop_constraint("uq_payout_payment_one_per_period", type_="unique")
+        batch.drop_constraint("uq_payout_payment_reference", type_="unique")
         batch.create_unique_constraint(
             "uq_payout_reversal_request", ["organization_id", "reversal_request_id"]
         )
+    op.create_index(
+        "uq_payout_active_reference", "payout_payments",
+        ["organization_id", "reference_digest"], unique=True,
+        postgresql_where=sa.text("reversed_at IS NULL"),
+        sqlite_where=sa.text("reversed_at IS NULL"),
+    )
     op.create_index(
         "uq_payout_active_payment_period", "payout_payments",
         ["organization_id", "plan_id", "period_month"], unique=True,
@@ -38,10 +45,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("uq_payout_active_payment_period", table_name="payout_payments")
+    op.drop_index("uq_payout_active_reference", table_name="payout_payments")
     # A downgrade requires active and reversed receipts not to overlap by
     # original period; DB uniqueness will prevent unsafe loss of evidence.
     with op.batch_alter_table("payout_payments") as batch:
         batch.drop_constraint("uq_payout_reversal_request", type_="unique")
+        batch.create_unique_constraint(
+            "uq_payout_payment_reference", ["organization_id", "reference_digest"],
+        )
         batch.create_unique_constraint(
             "uq_payout_payment_one_per_period",
             ["organization_id", "plan_id", "period_month"],
