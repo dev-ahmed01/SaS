@@ -73,7 +73,7 @@ test("Phase 3 payout entry and register keep disbursement attestation explicit",
   const register=page.getByRole("region",{name:"All payout plans"});
   await expect(register.locator(".payout-phase3-list-header")).toBeVisible();
   await expect(register.locator(".payout-phase3-count")).toBeVisible();
-  await expect(register.getByRole("textbox",{name:"Payout accounting month"})).toBeVisible();
+  await expect(register.getByLabel("Payout accounting month")).toBeVisible();
   await expect(register.getByRole("button",{name:"Export payout plans"})).toBeVisible();
   await expect(register.getByRole("button",{name:"Export payments"})).toBeVisible();
 });
