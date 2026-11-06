@@ -66,19 +66,31 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [promoters,setPromoters]=useState<PromoterOption[]>([]);
+  const [promoterQuery,setPromoterQuery]=useState("");
+  const [promoterTotal,setPromoterTotal]=useState(0);
   const [promotersError,setPromotersError]=useState("");
   const [current,setCurrent]=useState<Prospect|undefined>(initial);
   const requestId=useRef<string|null>(null);
   const isEdit=Boolean(initial);
 
   useEffect(()=>{
-    let active=true;
-    fetch("/api/admin/promoters?active=true&limit=100",{cache:"no-store"})
-      .then(async r=>{if(!r.ok)throw Error();return r.json();})
-      .then(data=>{if(active)setPromoters(data.items??[]);})
-      .catch(()=>{if(active)setPromotersError("Promoters are unavailable. You can save without one.");});
-    return ()=>{active=false;};
-  },[]);
+    const controller=new AbortController();
+    const timer=setTimeout(()=>{
+      const query=new URLSearchParams({active:"true",limit:"30",q:promoterQuery.trim()});
+      fetch("/api/admin/promoters?"+query,{cache:"no-store",signal:controller.signal})
+        .then(async r=>{if(!r.ok)throw Error();return r.json();})
+        .then(data=>{
+          if(controller.signal.aborted)return;
+          setPromoters(data.items??[]);
+          setPromoterTotal(data.total??0);
+          setPromotersError("");
+        })
+        .catch(()=>{
+          if(!controller.signal.aborted)setPromotersError("Promoter search is unavailable. You can save without assigning one.");
+        });
+    },promoterQuery?250:0);
+    return ()=>{clearTimeout(timer);controller.abort();};
+  },[promoterQuery]);
   useEffect(()=>{
     if(initial)return;
     let active=true;
@@ -199,7 +211,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
           <label className="field"><span className="field-label">Sponsorship Tokens *</span>
             <select required aria-label="Sponsorship Tokens"
               value={tokenChoices.includes(Number(values.tokens))?values.tokens:"custom"}
-              onChange={e=>set("tokens",e.target.value==="custom"?"101":e.target.value)}>
+              onChange={e=>set("tokens",e.target.value==="custom"?"":e.target.value)}>
               {tokenChoices.map(count=><option value={count} key={count}>
                 {formatRupees(count*250)} · {count} {count===1?"token":"tokens"}
               </option>)}
@@ -209,7 +221,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
               <input type="number" min="1" max="40000" step="1" required
                 aria-label="Custom sponsorship tokens" value={values.tokens}
                 onChange={e=>set("tokens",e.target.value)}
-                placeholder="Enter whole ₹250 tokens"/>}
+                placeholder="Enter the intended number of tokens"/>}
             <span className="field-helper">{Number.isInteger(Number(values.tokens))&&Number(values.tokens)>0
               ?formatRupees(Number(values.tokens)*250)+" / month"
               :"Choose whole ₹250 tokens"}</span></label>
@@ -223,13 +235,23 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             {isEdit&&<span className="field-helper">Start month is locked once registered to protect accounting history.</span>}</label>
         </div>
         <div className="prospect-field-row two">
+          <label className="field"><span className="field-label">Find promoter by name or mobile</span>
+            <input aria-label="Search promoters" value={promoterQuery} maxLength={100}
+              placeholder="Search all active promoters…" autoComplete="off"
+              onChange={e=>setPromoterQuery(e.target.value)}/>
+            <span className="field-helper">{promoterTotal>30
+              ?promoterTotal+" matches · showing 30. Keep typing to narrow your search."
+              :"Search across all active promoters, not just the first 100."}</span>
+          </label>
           <label className="field"><span className="field-label">Select Promoter</span>
             <select aria-label="Select Promoter" value={values.promoter_id} onChange={e=>set("promoter_id",e.target.value)}>
               <option value="">Unassigned</option>
-              {initial?.assigned_promoter_id&&!promoters.some(p=>p.id===initial.assigned_promoter_id)&&
-                <option value={initial.assigned_promoter_id}>{initial.assigned_promoter_name??"Existing promoter"}</option>}
+              {values.promoter_id&&!promoters.some(p=>p.id===values.promoter_id)&&
+                <option value={values.promoter_id}>{initial?.assigned_promoter_id===values.promoter_id
+                  ?initial.assigned_promoter_name??"Current promoter":"Selected promoter"}</option>}
               {promoters.map(p=><option value={p.id} key={p.id}>{p.full_name}</option>)}
-            </select></label>
+            </select>
+          </label>
         </div>
         {promotersError&&<p className="form-error" role="status">{promotersError}</p>}
         {!isEdit&&<label className="prospect-consent">
