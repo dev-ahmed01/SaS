@@ -25,7 +25,7 @@ export function FieldOptions({csrf,role}:{csrf:string;role:string}){
       {cache:"no-store"});
     if(!res.ok)throw new Error("Could not load configurable payout purposes.");
     const data=await res.json() as FieldOptionPage;
-    setRows(data.items??[]);
+    setRows(data.items??[]);setError("");
   },[]);
   useEffect(()=>{
     let active=true;
@@ -35,8 +35,8 @@ export function FieldOptions({csrf,role}:{csrf:string;role:string}){
     return()=>{active=false;};
   },[load]);
 
-  async function mutate(url:string,method:"POST"|"PATCH",body:unknown,success:string){
-    if(!owner||busy||!csrf)return;
+  async function mutate(url:string,method:"POST"|"PATCH",body:unknown,success:string):Promise<boolean>{
+    if(!owner||busy||!csrf)return false;
     setBusy(true);setError("");setNotice("");
     try{
       const response=await fetch(url,{method,credentials:"same-origin",
@@ -50,8 +50,10 @@ export function FieldOptions({csrf,role}:{csrf:string;role:string}){
       await load();
       setEditing(null);
       setNotice(success);
+      return true;
     }catch(exc){
       setError(exc instanceof Error?exc.message:"Could not update field options.");
+      return false;
     }finally{setBusy(false);}
   }
   async function add(event:FormEvent<HTMLFormElement>){
@@ -60,10 +62,9 @@ export function FieldOptions({csrf,role}:{csrf:string;role:string}){
     if(label.length<2||label.length>240){
       setError("Option labels must contain 2–240 characters.");return;
     }
-    await mutate("/api/admin/settings/field-options","POST",
+    const added=await mutate("/api/admin/settings/field-options","POST",
       {field_key:"payout_purpose",label},"Purpose added.");
-    // The new label is kept visible on error.
-    setNewLabel("");
+    if(added)setNewLabel("");
   }
   async function update(row:FieldOption,body:Record<string,unknown>,success:string){
     await mutate("/api/admin/settings/field-options/"+row.id,"PATCH",
