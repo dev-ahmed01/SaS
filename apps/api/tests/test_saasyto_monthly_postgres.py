@@ -355,3 +355,31 @@ def test_production_http_cron_respects_worker_kill_switch(system, monkeypatch):
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(CommunicationCampaign)) == 0
         assert db.scalar(select(func.count()).select_from(SaasytoCampaignRun)) == 0
+
+
+def test_monthly_reminder_refuses_queue_that_cannot_finish_before_ist_midnight(system):
+    """Never promise a 5th reminder if approved sender pacing makes it impossible."""
+    from app.models import AuditEvent
+
+    client, engine = system
+    csrf = login(client)
+    for suffix in (3191, 3192):
+        person = sponsor(client, csrf, suffix)
+        set_start(engine, person["id"], date(2026, 10, 1))
+    enable_automation(engine)
+    late = OCT_5.replace(hour=23, minute=58).astimezone(UTC)
+    cfg = config(when=late)
+    with Session(engine) as db:
+        assert prepare_due_saasyto_reminders(db, cfg, late) == 0
+        assert db.scalar(select(func.count()).select_from(SaasytoCampaignRun)) == 0
+        blocked = db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "saasyto.monthly_reminders_capacity_blocked",
+        )).all()
+        assert len(blocked) == 1
+        assert blocked[0].after_data["eligible"] == 2
+        assert blocked[0].after_data["sent"] is False
+        assert prepare_due_saasyto_reminders(db, cfg, late) == 0
+        # Repeat ticks do not spam an endless audit-event stream.
+        assert db.scalar(select(func.count(AuditEvent.id)).where(
+            AuditEvent.action == "saasyto.monthly_reminders_capacity_blocked",
+        )) == 1
