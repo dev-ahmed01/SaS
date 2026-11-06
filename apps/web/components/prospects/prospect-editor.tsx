@@ -74,6 +74,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
   const [promotersError,setPromotersError]=useState("");
   const [current,setCurrent]=useState<Prospect|undefined>(initial);
   const requestId=useRef<string|null>(null);
+  const tokensEdited=useRef(false);
   const isEdit=Boolean(initial);
 
   useEffect(()=>{
@@ -102,7 +103,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
       .then(data=>{
         if(!active)return;
         const amount=Number(data.default_contribution_paise);
-        if(Number.isInteger(amount)&&amount>=25000&&amount%25000===0){
+        if(!tokensEdited.current&&Number.isInteger(amount)&&amount>=25000&&amount%25000===0){
           const tokens=amount/25000;
           setValues(v=>({...v,tokens:String(tokens)}));
           setCustomTokens(!tokenChoices.includes(tokens));
@@ -218,6 +219,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             <select required aria-label="Sponsorship Tokens"
               value={customTokens?"custom":values.tokens}
               onChange={e=>{
+                tokensEdited.current=true;
                 const selected=e.target.value;
                 setCustomTokens(selected==="custom");
                 set("tokens",selected==="custom"?"":selected);
@@ -230,7 +232,7 @@ export function ProspectEditor({initial,onSaved,onCancel}:{
             {customTokens&&
               <input type="number" min="1" max="40000" step="1" required
                 aria-label="Custom sponsorship tokens" value={values.tokens}
-                onChange={e=>set("tokens",e.target.value)}
+                onChange={e=>{tokensEdited.current=true;set("tokens",e.target.value);}}
                 placeholder="Enter the intended number of tokens"/>}
             <span className="field-helper">{Number.isInteger(Number(values.tokens))&&Number(values.tokens)>0
               ?formatRupees(Number(values.tokens)*250)+" / month"
