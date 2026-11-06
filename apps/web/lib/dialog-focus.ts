@@ -8,13 +8,17 @@ import { useEffect, useRef } from "react";
  */
 export function useDialogFocus<T extends HTMLElement>(
   isOpen: boolean, onEscape: () => void,
+  restoreFocusRef?: {current: HTMLElement | null},
 ){
   const dialogRef=useRef<T>(null);
   const closeRef=useRef(onEscape);
   closeRef.current=onEscape;
   useEffect(()=>{
     if(!isOpen)return;
-    const opener=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    // Async previews may disable and blur their opener before the modal appears.
+    const opener=restoreFocusRef?.current??(
+      document.activeElement instanceof HTMLElement?document.activeElement:null
+    );
     const root=dialogRef.current;
     if(!root)return;
     const focusable=()=>Array.from(root.querySelectorAll<HTMLElement>(
@@ -45,6 +49,6 @@ export function useDialogFocus<T extends HTMLElement>(
       document.removeEventListener("keydown",onKey,true);
       if(opener?.isConnected)opener.focus({preventScroll:true});
     };
-  },[isOpen]);
+  },[isOpen,restoreFocusRef]);
   return dialogRef;
 }
