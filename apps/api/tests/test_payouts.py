@@ -359,3 +359,98 @@ def test_plan_paging_counts_current_active_plans_before_rendering(system):
     assert all_page.status_code == 200
     assert all_page.json()["total"] == 7
     assert len(all_page.json()["items"]) == 1
+
+
+def test_audited_quick_payout_reversal_voids_obligation_and_keeps_original(system):
+    """A wrong outgoing entry must not remain counted as paid or due."""
+    client, engine = system
+    csrf = login(client)
+    one = create(client, csrf, "one_time")
+    first = client.post(
+        "/v1/payouts/plans/" + one["id"] + "/payments",
+        headers=csrf, json=pay_input(),
+    )
+    assert first.status_code == 201, first.text
+    payment_id = first.json()["id"]
+    payload = {
+        "request_id": str(uuid.uuid4()),
+        "confirmation": "REVERSE",
+        "reason": "wrong_amount",
+    }
+    route = f"/v1/payouts/payments/{payment_id}/reverse"
+    assert client.post(route, json=payload).status_code == 403
+    changed = client.post(route, headers=csrf, json=payload)
+    assert changed.status_code == 201, changed.text
+    assert changed.json()["reversed"] is True
+    assert changed.json()["reversal_reason"] == "wrong_amount"
+    assert client.post(route, headers=csrf, json=payload).status_code == 200
+    assert client.post(route, headers=csrf, json={
+        **payload, "request_id": str(uuid.uuid4()),
+    }).status_code == 409
+    after = client.get("/v1/payouts/plans").json()["items"][0]
+    assert after["voided"] is True
+    assert after["status"] == "closed"
+    assert after["current_month_due_paise"] == 0
+    assert after["current_month_paid_paise"] == 0
+    assert after["payment_count"] == 0
+    history = client.get("/v1/payouts/payments").json()
+    assert history["total"] == 1
+    assert history["items"][0]["reversed"] is True
+    assert "SYNTHETICPAYOUT0001" not in str(history)
+    assert client.post(
+        "/v1/payouts/plans/" + one["id"] + "/payments",
+        headers=csrf, json=pay_input(
+            request_id=str(uuid.uuid4()),
+            payment_reference="SYNTHETICNEWENTRY0002",
+        ),
+    ).status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(PayoutPayment)) == 1
+        assert db.scalar(select(func.count()).select_from(AuditEvent).where(
+            AuditEvent.action == "payout.payment_reversed",
+        )) == 1
+
+
+def test_audited_recurring_payment_can_be_corrected_without_double_count(system):
+    client, _engine = system
+    csrf = login(client)
+    plan = create(client, csrf)
+    route = f"/v1/payouts/plans/{plan['id']}/payments"
+    first = client.post(route, headers=csrf, json=pay_input())
+    assert first.status_code == 201, first.text
+    correction = client.post(
+        f"/v1/payouts/payments/{first.json()['id']}/reverse",
+        headers=csrf,
+        json={"request_id": str(uuid.uuid4()), "confirmation": "REVERSE",
+              "reason": "wrong_reference"},
+    )
+    assert correction.status_code == 201, correction.text
+    replacement = client.post(route, headers=csrf, json=pay_input(
+        request_id=str(uuid.uuid4()),
+        payment_reference="CORRECTEDPAYOUT0002",
+    ))
+    assert replacement.status_code == 201, replacement.text
+    summary = client.get("/v1/payouts/plans").json()["items"][0]
+    assert summary["current_month_due_paise"] == 72500
+    assert summary["current_month_paid_paise"] == 72500
+    assert summary["payment_count"] == 1
+    history = client.get("/v1/payouts/payments").json()
+    assert history["total"] == 2
+    assert sum(not p["reversed"] for p in history["items"]) == 1
+
+
+def test_payout_reversal_missing_or_invalid_request_fails_closed(system):
+    client, _engine = system
+    csrf = login(client)
+    assert client.post(
+        f"/v1/payouts/payments/{uuid.uuid4()}/reverse",
+        headers=csrf,
+        json={"request_id": str(uuid.uuid4()), "confirmation": "REVERSE",
+              "reason": "other"},
+    ).status_code == 404
+    assert client.post(
+        f"/v1/payouts/payments/{uuid.uuid4()}/reverse",
+        headers=csrf,
+        json={"request_id": str(uuid.uuid4()), "confirmation": "DELETE",
+              "reason": "other"},
+    ).status_code == 422
