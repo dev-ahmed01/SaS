@@ -2,6 +2,7 @@
 
 import {FormEvent,useEffect,useRef,useState} from "react";
 import {formatCRMDate} from "../../lib/crm-dates";
+import {useDialogFocus} from "../../lib/dialog-focus";
 
 type Payment={
   id:string;plan_id:string;payee_name:string;period_month:string;paid_on:string;
@@ -73,6 +74,7 @@ export function PayoutPaymentHistory({onCorrected}:{onCorrected:()=>void}){
       setError(e instanceof Error?e.message:"Unable to reverse the ledger entry.");
     }finally{setSaving(false);}
   }
+  const paymentDialogRef=useDialogFocus<HTMLElement>(Boolean(selected),()=>{if(!saving)close();});
   return <section className="content-panel payout-payment-history" aria-label="Recorded payouts and corrections">
     <h2>Recorded outgoing payments</h2>
     <p className="panel-description">These records are administrative attestations, not bank transfers.
@@ -110,7 +112,7 @@ export function PayoutPaymentHistory({onCorrected}:{onCorrected:()=>void}){
     {selected&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
     }}><section className="edit-modal payout-dialog" role="dialog"
-      aria-modal="true" aria-labelledby="payout-reversal-heading">
+      aria-modal="true" aria-labelledby="payout-reversal-heading" ref={paymentDialogRef} tabIndex={-1}>
       <div className="modal-topline"><span>Financial correction</span>
         <button type="button" className="text-action" onClick={close}
           disabled={saving}>Close</button></div>

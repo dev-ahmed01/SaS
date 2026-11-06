@@ -1188,8 +1188,8 @@ test("Communication is a full-width, preview-free CRM composer",async ({page})=>
   await page.goto("/communication/automations");
   await expect(page).toHaveURL(/\/communication\/templates$/);
   await expect(page.getByRole("heading",{name:"New template"})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"Saved workflows"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"New workflow draft"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Workflow drafts & built-in verification"})).toBeVisible();
   const activation=page.getByRole("article",{name:"Sponsorship activation workflow"});
   await expect(activation).toBeVisible();
   // Activation copy lives in a saved workflow, not another standalone panel.
@@ -1209,7 +1209,7 @@ test("Sponsor personalization variables are visible without provider template ID
   await expect(page.getByRole("textbox",{name:/Approved WhatsApp template ID/}))
     .toHaveCount(0);
   await page.goto("/communication/templates");
-  await expect(page.getByRole("heading",{name:"New automation"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"New workflow draft"})).toBeVisible();
   const activation=page.getByRole("article",{name:"Sponsorship activation workflow"});
   await expect(activation).toBeVisible();
   await activation.getByRole("button",{name:"Edit message"}).click();
@@ -1250,10 +1250,10 @@ test("Communication templates, campaign plans and rules persist across navigatio
   await page.getByRole("textbox",{name:"Workflow name"}).fill("Monthly demo "+key);
   await page.getByRole("combobox",{name:"Automation trigger"}).selectOption("monthly_sponsor");
   await page.getByRole("combobox",{name:"Automation template"}).selectOption({label:name+" · WhatsApp"});
-  await page.getByRole("button",{name:"Save automation"}).click();
+  await page.getByRole("button",{name:"Save inactive draft"}).click();
   await expect(page.getByText("Monthly demo "+key,{exact:true})).toBeVisible();
   const savedRule=page.locator(".comm-list-card").filter({hasText:"Monthly demo "+key});
-  await expect(savedRule.getByText("Inactive · delivery not connected")).toBeVisible();
+  await expect(savedRule.getByText("Draft only · no automatic delivery")).toBeVisible();
 });
 
 test("Admin attests contact consent and reviews a campaign without sending",async ({page})=>{

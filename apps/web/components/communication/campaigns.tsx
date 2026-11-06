@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CampaignResultDetails } from "./campaign-results";
 import { apiGet, apiWrite, istDisplay } from "./types";
 import type { Campaign } from "./types";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
+import { useDialogFocus } from "../../lib/dialog-focus";
 
 type Summary={
   campaign_id:string;run_status:"not_approved"|"approved"|"cancelled"|"completed";
@@ -45,6 +46,7 @@ export function CommunicationCampaigns({revision}:{revision:number}){
   }|null>(null);
   const [purgeConfirmation,setPurgeConfirmation]=useState("");
   const [purgeBusy,setPurgeBusy]=useState(false);
+  const purgeOpenButtonRef=useRef<HTMLButtonElement>(null);
   const [cancelling,setCancelling]=useState<string|null>(null);
 
   useEffect(()=>{
@@ -109,6 +111,8 @@ export function CommunicationCampaigns({revision}:{revision:number}){
       setPurgePreview(null);
     }finally{setPurgeBusy(false);}
   }
+  const purgeDialogRef=useDialogFocus<HTMLElement>(Boolean(purgePreview),
+    ()=>{if(!purgeBusy)setPurgePreview(null);},purgeOpenButtonRef);
   const counts={
     all:items.length,
     completed:items.filter(item=>campaignState(item,results[item.id])==="Completed").length,
@@ -198,14 +202,14 @@ export function CommunicationCampaigns({revision}:{revision:number}){
     </div>
     <div className="comm-history-bottom">
       <span>Submitted = accepted by the gateway, not confirmed delivered.</span>
-      <button type="button" className="comm-text-button crm-danger-btn"
+      <button ref={purgeOpenButtonRef} type="button" className="comm-text-button crm-danger-btn"
         disabled={purgeBusy||!items.length} onClick={()=>void openCampaignPurge()}>
         Delete all campaigns
       </button>
     </div>
     {purgePreview&&<div className="crm-dialog-scrim" role="presentation">
       <section className="crm-dialog" role="dialog" aria-modal="true"
-        aria-label="Delete all campaigns">
+        aria-label="Delete all campaigns" ref={purgeDialogRef} tabIndex={-1}>
         <div className="crm-dialog-head"><h2>Delete all campaigns?</h2>
           <button type="button" className="text-action"
             onClick={()=>setPurgePreview(null)} disabled={purgeBusy}>Close</button></div>
