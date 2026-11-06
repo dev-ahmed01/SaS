@@ -11,8 +11,13 @@ from sqlalchemy.pool import StaticPool
 from app.bootstrap_admin import provision_admin
 from app.main import app
 from app.models import (
-    AdminUser, AuditEvent, Base, Organization, OrganizationFieldOption,
-    OrganizationSettings, PayoutPlan,
+    AdminUser,
+    AuditEvent,
+    Base,
+    Organization,
+    OrganizationFieldOption,
+    OrganizationSettings,
+    PayoutPlan,
 )
 from app.security import hash_password
 
