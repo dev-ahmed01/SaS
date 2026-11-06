@@ -116,9 +116,7 @@ export function PayoutAdd(){
       <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>
         {saving?"Recording…":"Save Payout"}</button></div>
     </form>
-  </section>
-  {view==="all"&&<PayoutPaymentHistory onCorrected={()=>setRefresh(n=>n+1)}/>}
-  </>;
+  </section>;
 }
 
 export function PayoutList({view}:{view:"all"|"active"}){
@@ -361,5 +359,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
         </form>
       </div>
     </section></div>}
-  </section>;
+  </section>
+  {view==="all"&&<PayoutPaymentHistory onCorrected={()=>setRefresh(n=>n+1)}/>}
+  </>;
 }
