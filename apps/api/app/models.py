@@ -42,6 +42,12 @@ class Organization(Base):
 
 class AdminUser(Base):
     __tablename__ = "admin_users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('owner', 'crm', 'finance', 'messaging', 'viewer')",
+            name="ck_admin_user_role",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -49,6 +55,7 @@ class AdminUser(Base):
     )
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="owner", server_default="owner")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
