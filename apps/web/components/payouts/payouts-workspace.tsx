@@ -116,7 +116,9 @@ export function PayoutAdd(){
       <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>
         {saving?"Recording…":"Save Payout"}</button></div>
     </form>
-  </section>;
+  </section>
+  {view==="all"&&<PayoutPaymentHistory onCorrected={()=>setRefresh(n=>n+1)}/>}
+  </>;
 }
 
 export function PayoutList({view}:{view:"all"|"active"}){
@@ -248,7 +250,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
     }catch(e){setError(e instanceof Error?e.message:"Unable to confirm action.");}
     finally{setSaving(false);}
   }
-  return <section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
+  return <><section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
     <div className="payout-list-title"><div>
       <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
@@ -309,7 +311,6 @@ export function PayoutList({view}:{view:"all"|"active"}){
           onClick={()=>setOffset(n=>n+20)}>Next</button>
       </div>
     </div>
-    {view==="all"&&<PayoutPaymentHistory onCorrected={()=>setRefresh(n=>n+1)}/>}
     {chosen&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
     }}><section className="edit-modal payout-dialog" role="dialog" aria-modal="true"
