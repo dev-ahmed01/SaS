@@ -757,8 +757,10 @@ class PayoutPayment(Base):
         UniqueConstraint(
             "organization_id", "request_id", name="uq_payout_payment_request",
         ),
-        UniqueConstraint(
-            "organization_id", "reference_digest", name="uq_payout_payment_reference",
+        Index(
+            "uq_payout_active_reference", "organization_id", "reference_digest",
+            unique=True, postgresql_where=text("reversed_at IS NULL"),
+            sqlite_where=text("reversed_at IS NULL"),
         ),
         UniqueConstraint(
             "organization_id", "reversal_request_id", name="uq_payout_reversal_request",
