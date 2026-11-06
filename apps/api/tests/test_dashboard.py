@@ -91,7 +91,7 @@ def payout(client, csrf):
     today = ist_today()
     body = {
         "request_id": str(uuid.uuid4()), "payee_name": "Synthetic Caretaker",
-        "purpose": "Facilities maintenance", "notes": None,
+        "purpose": "Maintenance", "notes": None,
         "cadence": "recurring", "amount_paise": 20000,
         "start_month": month_start(today).isoformat(), "scheduled_on": None,
     }
