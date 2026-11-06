@@ -86,7 +86,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
       <div>
         <span className="crm-directory-eyebrow">PROSPECT DIRECTORY</span>
         <h2>{title}</h2>
-        <p>${view==="all"?"Review registrations, contributions and follow-ups.":"Manage prospects in this status without losing their history."}</p>
+        <p>{view==="all"?"Review registrations, contributions and follow-ups.":"Manage prospects in this status without losing their history."}</p>
       </div>
       <div className="crm-directory-count" role="status" aria-live="polite">
         <strong>{loading&&!page?"…":page?.total??0}</strong>
