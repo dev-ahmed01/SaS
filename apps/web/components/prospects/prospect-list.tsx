@@ -81,11 +81,26 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
     }finally{setExporting(false);}
   }
 
-  return <section className="crm-list" aria-label={title}>
+  return <section className="crm-list crm-directory crm-prospect-directory" aria-label={title}>
+    <div className="crm-directory-intro">
+      <div>
+        <span className="crm-directory-eyebrow">PROSPECT DIRECTORY</span>
+        <h2>{title}</h2>
+        <p>{view==="all"?"Review registrations, contributions and follow-ups.":"Manage prospects in this status without losing their history."}</p>
+      </div>
+      <div className="crm-directory-count" role="status" aria-live="polite">
+        <strong>{loading&&!page?"…":page?.total??0}</strong>
+        <span>{q?"matching results":"records in this view"}</span>
+      </div>
+    </div>
     <div className="crm-list-tools prospect-list-toolbar">
-      <label className="search-control"><Icon name="search" size={18}/><span className="sr-only">Search prospects</span>
-        <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search names, WhatsApp, city, email…"/></label>
+      <div className="crm-directory-search">
+        <label className="search-control"><Icon name="search" size={18}/><span className="sr-only">Search prospects</span>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search names, WhatsApp, city or email…"/></label>
+        {search&&<button type="button" className="crm-directory-clear"
+          onClick={()=>setSearch("")}>Clear search</button>}
+      </div>
       <div className="crm-list-actions prospect-toolbar-actions">
         {view==="all"&&<Link href="/prospects/bulk" className="btn btn-secondary btn-compact">
           <Icon name="upload" size={16}/> Import prospects

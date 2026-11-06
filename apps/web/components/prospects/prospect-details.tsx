@@ -93,44 +93,79 @@ export function ProspectDetails({id}:{id:string}){
     finally{setBusy(false);setDeleteOpen(false);}
   }
   const entries=filter==="all"?activity:activity.filter(item=>item.kind===filter);
+  const initials=record?.full_name.split(/\s+/).filter(Boolean)
+    .map(part=>part[0]).slice(0,2).join("").toUpperCase()??"";
   return <AppShell><div className="crm-details crm-redesign">
     <Link href="/prospects" className="back-link"><Icon name="arrow-left" size={17}/> All prospects</Link>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {activationNotice&&<p role="status" className="form-success">{activationNotice}</p>}
     {loading?<p role="status">Loading prospect…</p>:record&&<>
-      <div className="crm-details-header">
-        <div><div className="crm-title-line">
-          <h2>{record.full_name}</h2>
-          <span className={"status-pill "+record.crm_stage}>
-            {record.archived_at?"Archived":record.crm_stage==="active"?"Active":"Inactive"}
-          </span></div>
-          <p>Created {formatCRMDate(record.created_at)}</p>
+      <header className="prospect-hero">
+        <span className="prospect-hero-avatar" aria-hidden="true">{initials}</span>
+        <div className="prospect-hero-copy">
+          <div className="crm-title-line">
+            <h2>{record.full_name}</h2>
+            <span className={"status-pill "+record.crm_stage}>
+              {record.archived_at?"Archived":record.crm_stage==="active"?"Active":"Inactive"}
+            </span>
+          </div>
+          <div className="prospect-hero-meta">
+            <span><Icon name="message" size={15}/>{record.mobile_number}</span>
+            <span><Icon name="calendar" size={15}/> Created {formatCRMDate(record.created_at)}</span>
+          </div>
           {record.crm_stage==="active"&&noticeRecord&&noticeLabels[noticeRecord.status]&&
-            <p className="crm-muted" role="status">
+            <p className="crm-muted prospect-hero-notice" role="status">
               WhatsApp acknowledgement: {noticeLabels[noticeRecord.status]}
               {noticeRecord.attempted_at&&
                 <span> · {formatCRMDate(noticeRecord.attempted_at)}</span>}
             </p>}
         </div>
-      </div>
-      <div className="crm-summary-strip">
-        <Tile label="Assigned promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
-        <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)}
-          <small>{record.monthly_contribution_paise/25000} × ₹250</small></Tile>
-        <Tile label="Start month">{formatCRMDate(record.start_month)}</Tile>
-        <Tile label="Payment status">{record.lifecycle_status==="new"?"Never paid":record.lifecycle_status}</Tile>
+        <div className="prospect-hero-actions">
+          {!record.archived_at&&<button type="button" className="btn btn-secondary"
+            onClick={()=>setEditing(v=>!v)} aria-expanded={editing}>
+            <Icon name="pencil" size={16}/> {editing?"Close edit":"Edit details"}
+          </button>}
+          <button type="button" className={"btn "+(record.crm_stage==="active"?
+            "btn-secondary crm-danger-btn":"btn-primary")}
+            disabled={Boolean(record.archived_at)}
+            onClick={()=>setStageOpen(true)}>
+            {record.crm_stage==="active"?"Mark Inactive":"Mark Active"}
+          </button>
+        </div>
+      </header>
+      <div className="prospect-overview-metrics" aria-label="Prospect overview">
+        <div className="prospect-overview-metric is-primary">
+          <span className="prospect-overview-icon"><Icon name="wallet" size={21}/></span>
+          <div><span>Total contribution</span>
+            <strong>{money(record.total_contribution_paise)}</strong>
+            <small>Verified contributions to date</small></div>
+        </div>
+        <div className="prospect-overview-metric">
+          <span className="prospect-overview-icon"><Icon name="receipt" size={21}/></span>
+          <div><span>Monthly sponsorship</span>
+            <strong>{money(record.monthly_contribution_paise)}</strong>
+            <small>{record.monthly_contribution_paise/25000} × ₹250</small></div>
+        </div>
+        <div className="prospect-overview-metric">
+          <span className="prospect-overview-icon"><Icon name="users" size={21}/></span>
+          <div><span>Assigned promoter</span>
+            <strong className="prospect-overview-name">{record.assigned_promoter_name??"Unassigned"}</strong>
+            <small>{record.assigned_promoter_name?"Current assignment":"Not assigned"}</small></div>
+        </div>
+        <div className="prospect-overview-metric">
+          <span className="prospect-overview-icon"><Icon name="calendar" size={21}/></span>
+          <div><span>Next follow-up</span>
+            <strong className="prospect-overview-name">{record.next_followup_on?
+              formatCRMDate(record.next_followup_on):"Not scheduled"}</strong>
+            <small>Based on saved CRM follow-ups</small></div>
+        </div>
       </div>
       <section className="crm-detail-card crm-followup-wide">
         <FollowUpLog prospect={record} onSaved={refresh}/>
       </section>
       <div className="crm-redesign-columns">
         <section className="crm-detail-card">
-          <div className="crm-panel-heading"><h2>Personal details</h2>
-            {!record.archived_at&&<button type="button" className="btn btn-secondary"
-              onClick={()=>setEditing(v=>!v)} aria-expanded={editing}>
-              <Icon name="pencil" size={16}/> {editing?"Close edit":"Edit details"}
-            </button>}
-          </div>
+          <div className="crm-panel-heading"><h2><Icon name="users" size={20}/> Personal details</h2></div>
           {editing?<ProspectEditor initial={record}
             onCancel={()=>setEditing(false)} onSaved={()=>{setEditing(false);refresh();}}/>:
             <div className="crm-overview-grid">
@@ -138,11 +173,9 @@ export function ProspectDetails({id}:{id:string}){
               <Tile label="Mobile (WhatsApp)">{record.mobile_number}</Tile>
               <Tile label="Email">{record.email||"—"}</Tile>
               <Tile label="City">{record.area_city||"—"}</Tile>
-              <Tile label="Assigned promoter">{record.assigned_promoter_name??"Unassigned"}</Tile>
-              <Tile label="Monthly sponsorship">{money(record.monthly_contribution_paise)} / month</Tile>
-              <div className="crm-overview-total">
-                <Tile label="Total contribution">{money(record.total_contribution_paise)}</Tile>
-              </div>
+              <Tile label="Start month">{formatCRMDate(record.start_month)}</Tile>
+              <Tile label="Payment status">{record.lifecycle_status==="new"?"Never paid":record.lifecycle_status}</Tile>
+              <Tile label="Total contribution">{money(record.total_contribution_paise)}</Tile>
             </div>}
         </section>
         <section className="crm-detail-card">
@@ -166,12 +199,10 @@ export function ProspectDetails({id}:{id:string}){
           {entries.length===0&&<p className="crm-muted">No recorded activity of this type.</p>}
         </section>
       </div>
-      <div className="crm-redesign-actions" aria-label="Prospect actions">
+      <div className="crm-redesign-actions prospect-danger-footer" aria-label="Additional prospect actions">
         <button type="button" className="btn btn-secondary crm-danger-btn"
           onClick={()=>setDeleteOpen(true)}>
           <Icon name="trash" size={17}/> Delete prospect</button>
-        <button type="button" className="btn btn-primary" disabled={Boolean(record.archived_at)}
-          onClick={()=>setStageOpen(true)}>{record.crm_stage==="active"?"Mark Inactive":"Mark Active"}</button>
       </div>
     </>}
     {stageOpen&&record&&<StageDialog prospect={record} onClose={()=>setStageOpen(false)}

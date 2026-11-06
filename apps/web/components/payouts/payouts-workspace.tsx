@@ -6,6 +6,7 @@ import { formatCRMDate } from "../../lib/crm-dates";
 import { exportAllCsv } from "../../lib/export-csv";
 import { PayoutPaymentHistory } from "./payout-payment-history";
 import { useDialogFocus } from "../../lib/dialog-focus";
+import { Icon } from "../ui/icon";
 import type { FieldOptionPage, FieldOption } from "../settings/field-options";
 
 type Plan = {
@@ -100,7 +101,13 @@ export function PayoutAdd(){
     }catch(e){setError(e instanceof Error?e.message:"Could not record payout.");}
     finally{setSaving(false);}
   }
-  return <section className="content-panel payouts-form" aria-label="Record payout">
+  return <section className="content-panel payouts-form payout-phase3-form" aria-label="Record payout">
+    <div className="payout-phase3-form-intro">
+      <span className="crm-directory-eyebrow">OUTGOING PAYMENTS</span>
+      <h2>Record an outgoing payment</h2>
+      <p>Record a payment only after the funds have actually left the Foundation's account.
+        This form records evidence and does not initiate a bank transfer.</p>
+    </div>
     <form onSubmit={submit}>
       <div className="form-grid">
         <label className="field"><span className="field-label">Payee First Name *</span>
@@ -149,8 +156,12 @@ export function PayoutAdd(){
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
-      <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving||purposeLoading||Boolean(purposeError)||!purposeOptionId}>
+      <div className="payout-phase3-form-bottom">
+        <p className="payout-phase3-safe-note"><Icon name="shield" size={17}/>
+          Every outgoing payment requires a unique bank or receipt reference.</p>
+        <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving||purposeLoading||Boolean(purposeError)||!purposeOptionId}>
         {saving?"Recording…":"Save Payout"}</button></div>
+      </div>
     </form>
   </section>;
 }
@@ -286,8 +297,20 @@ export function PayoutList({view}:{view:"all"|"active"}){
     finally{setSaving(false);}
   }
   return <><section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
-    <div className="payout-list-title">
-      <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
+    <div className="payout-list-title payout-phase3-list-header">
+      <div className="payout-phase3-title">
+        <span className="crm-directory-eyebrow">PAYOUT REGISTER</span>
+        <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
+        <p>{view==="active"?
+          "Review active monthly commitments and schedule future changes.":
+          "Review commitments and recorded disbursements with their audit history."}</p>
+      </div>
+      <div className="payout-phase3-count" role="status" aria-live="polite">
+        <strong>{loading&&!plans?"…":plans?.total??0}</strong>
+        <span>{view==="active"?"active recurring plans":"plans in this view"}</span>
+      </div>
+    </div>
+    <div className="payout-phase3-filters" aria-label="Payout filters and exports">
       <div className="payout-list-toolbar">
         <label className="field payout-month">
           <span className="field-label">Accounting month (IST)</span>
@@ -305,7 +328,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
     {exportNotice&&<p className="crm-muted" role="status">{exportNotice}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
     {error&&<p className="form-error" role="alert">{error}</p>}
-    <div className="table-scroll"><table className="data-table">
+    <div className="table-scroll payout-phase3-table-scroll"><table className="data-table payout-phase3-table">
       <thead><tr><th scope="col">Payee</th><th scope="col">Purpose</th>
         <th scope="col">Frequency</th><th scope="col">Commitment</th>
         <th scope="col">Paid in month</th><th scope="col">Status</th>
@@ -315,7 +338,9 @@ export function PayoutList({view}:{view:"all"|"active"}){
           <h3>No payout plans</h3><p>Create an outgoing commitment using Add Payout.</p>
         </div></td></tr>
         :plans.items.map(plan=><tr key={plan.id}>
-          <td><strong className="table-name">{plan.payee_name}</strong></td>
+          <td><strong className="table-name">{plan.payee_name}</strong>
+            <small className="payout-phase3-payee-caption">{plan.cadence==="recurring"?
+              "Recurring commitment":"One-time commitment"}</small></td>
           <td>{plan.purpose}</td><td>{plan.cadence==="recurring"?"Monthly":"One-time"}</td>
           <td>{money(plan.amount_paise)}</td><td>{money(plan.current_month_paid_paise)}</td>
           <td><span className={"status-pill "+plan.status}>
@@ -342,7 +367,10 @@ export function PayoutList({view}:{view:"all"|"active"}){
           </div></td></tr>)}</tbody>
     </table></div>
     <div className="table-footer paging-footer">
-      <span>{plans?plans.total+" payout plans":"Waiting for records"}</span>
+      <span>{plans?
+        "Showing "+(plans.total?offset+1:0)+"–"+
+          Math.min(offset+20,plans.total)+" of "+plans.total+" plans":
+        "Loading payout plans…"}</span>
       <div className="paging-actions">
         <button className="btn btn-secondary" type="button" disabled={loading||offset===0}
           onClick={()=>setOffset(n=>Math.max(0,n-20))}>Previous</button>
