@@ -94,7 +94,7 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
       <div className="crm-directory-search">
         <label className="search-control">
           <Icon name="search" size={18}/><span className="sr-only">Search promoters</span>
-          <input type="search" value={search} onChange={e=>setSearch(e.target.value)}
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search names, mobile, city or email…"/>
         </label>
         {search&&<button type="button" className="crm-directory-clear"
