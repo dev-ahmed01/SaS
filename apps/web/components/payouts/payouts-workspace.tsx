@@ -6,7 +6,6 @@ import { formatCRMDate } from "../../lib/crm-dates";
 import { exportAllCsv } from "../../lib/export-csv";
 import { PayoutPaymentHistory } from "./payout-payment-history";
 import { useDialogFocus } from "../../lib/dialog-focus";
-import { Icon } from "../ui/icon";
 import type { FieldOptionPage, FieldOption } from "../settings/field-options";
 
 type Plan = {
@@ -150,15 +149,12 @@ export function PayoutAdd(){
                 onClick={()=>setPurposeRetry(x=>x+1)}>Retry</button></span>}
             {!purposeLoading&&!purposeError&&!purposeOptions.length&&
               <span className="crm-muted">No active purposes. An owner can add choices in Settings.</span>}
-            <span className="payout-field-note">Managed from <a href="/settings">Settings → Field Options</a></span>
           </label>
         </div>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
       <div className="payout-phase3-form-bottom">
-        <p className="payout-phase3-safe-note"><Icon name="shield" size={17}/>
-          Every outgoing payment requires a unique bank or receipt reference.</p>
         <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving||purposeLoading||Boolean(purposeError)||!purposeOptionId}>
         {saving?"Recording…":"Save Payout"}</button></div>
       </div>

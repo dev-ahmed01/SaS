@@ -7,9 +7,6 @@ import { Icon } from "../ui/icon";
 import { exportAllCsv } from "../../lib/export-csv";
 import type { Promoter, PromoterPage } from "./promoter-types";
 import { PromoterStatusDialog } from "./promoter-status-dialog";
-import { formatCRMDate } from "../../lib/crm-dates";
-
-const displayDate=formatCRMDate;
 
 export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   const [search,setSearch]=useState("");
@@ -79,17 +76,7 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
 
   const title=view==="all"?"All Promoters":view==="active"?"Active Promoters":"Inactive Promoters";
   return <section className="crm-list crm-directory crm-promoter-directory" aria-label={title}>
-    <div className="crm-directory-intro">
-      <div>
-        <span className="crm-directory-eyebrow">PROMOTER DIRECTORY</span>
-        <h2>{title}</h2>
-        <p>Find promoters, review their assigned sponsors and manage their status.</p>
-      </div>
-      <div className="crm-directory-count" role="status" aria-live="polite">
-        <strong>{loading&&!page?"…":page?.total??0}</strong>
-        <span>{q?"matching results":"promoters in this view"}</span>
-      </div>
-    </div>
+    <div className="crm-list-header-compact"><h2>{title}</h2></div>
     <div className="crm-list-tools">
       <div className="crm-directory-search">
         <label className="search-control">
@@ -111,18 +98,17 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
     {exportProgress&&<p className="crm-muted" role="status">{exportProgress}</p>}
     <div className="table-scroll crm-table-scroll">
       <table className="data-table crm-table promoter-crm-table">
-        <thead><tr>{["Created","Full Name","Mobile","City","Sponsors","Status"].map(col=>
+        <thead><tr>{["Full Name","Mobile","City","Sponsors","Status"].map(col=>
           <th scope="col" key={col}>{col}</th>)}</tr></thead>
         <tbody>
-          {loading&&!page?<tr><td colSpan={6}><p role="status" className="crm-list-empty">Loading promoters…</p></td></tr>
-            :!page?.items.length?<tr><td colSpan={6}>
+          {loading&&!page?<tr><td colSpan={5}><p role="status" className="crm-list-empty">Loading promoters…</p></td></tr>
+            :!page?.items.length?<tr><td colSpan={5}>
               <div className="crm-list-empty">
                 <Icon name="users" size={29}/><h2>No promoters found</h2>
                 <p>{q?"Try another search.":"Add your first promoter to begin."}</p>
                 {view==="all"&&<Link href="/promoters/add" className="btn btn-primary">Add Promoter</Link>}
               </div></td></tr>
             :page.items.map(item=><tr key={item.id}>
-              <td>{displayDate(item.created_at)}</td>
               <td><Link className="crm-person-link" href={"/promoters/"+item.id}>{item.full_name}</Link></td>
               <td>{item.mobile_number}</td>
               <td>{item.area_city||"—"}</td>

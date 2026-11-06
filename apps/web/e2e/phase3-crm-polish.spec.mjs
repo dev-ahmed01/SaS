@@ -9,15 +9,23 @@ async function signIn(page){
 }
 test.beforeEach(async({page})=>signIn(page));
 
-test("Phase 3 directories have one quiet heading, accurate counts and clearable search",async({page,isMobile})=>{
-  for(const target of [
+test("CRM lists use compact headings, clearable search and no Created column",async({page})=>{
+  const targets=[
     {path:"/prospects",title:"All Prospects",search:"Search prospects"},
+    {path:"/prospects/active",title:"Active Prospects",search:"Search prospects"},
+    {path:"/prospects/inactive",title:"Inactive Prospects",search:"Search prospects"},
     {path:"/promoters",title:"All Promoters",search:"Search promoters"},
-  ]){
+    {path:"/promoters/inactive",title:"Inactive Promoters",search:"Search promoters"},
+  ];
+  for(const target of targets){
     await page.goto(target.path);
     const directory=page.locator(".crm-directory");
-    await expect(directory.getByRole("heading",{name:target.title,exact:true})).toBeVisible();
-    await expect(directory.locator(".crm-directory-count")).toBeVisible();
+    const header=directory.locator(".crm-list-header-compact");
+    await expect(header.getByRole("heading",{name:target.title,exact:true})).toBeVisible();
+    await expect(directory.locator(".crm-directory-intro, .crm-directory-count, .crm-directory-eyebrow")).toHaveCount(0);
+    await expect(directory.getByText(/Review registrations, contributions and follow-ups|Manage prospects in this status without losing their history|Find promoters, review their assigned sponsors/)).toHaveCount(0);
+    const columns=await directory.locator("thead th").allTextContents();
+    expect(columns).not.toContain("Created");
     const input=directory.getByRole("textbox",{name:target.search});
     await expect(input).toBeVisible();
     await input.fill("synthetic-unmatched-phase3-123xyz");
@@ -25,10 +33,6 @@ test("Phase 3 directories have one quiet heading, accurate counts and clearable 
     await directory.getByRole("button",{name:"Clear search"}).click();
     await expect(input).toHaveValue("");
     await expect(directory.getByRole("button",{name:"Clear search"})).toHaveCount(0);
-    if(!isMobile){
-      const head=await directory.locator(".crm-directory-intro").boundingBox();
-      expect(head?.height??0).toBeGreaterThan(50);
-    }
   }
 });
 
@@ -68,6 +72,8 @@ test("Phase 3 payout entry and register keep disbursement attestation explicit",
   await expect(form.getByRole("heading",{name:"Record an outgoing payment"})).toBeVisible();
   await expect(form.getByText(/does not initiate a bank transfer/)).toBeVisible();
   await expect(form.getByRole("combobox",{name:"Payout purpose"})).toBeVisible();
+  await expect(form.getByText(/Managed from Settings/)).toHaveCount(0);
+  await expect(form.getByText(/Every outgoing payment requires a unique bank or receipt reference/)).toHaveCount(0);
   await expect(form.getByRole("button",{name:"Save Payout"})).toBeVisible();
   await page.goto("/payouts/all");
   const register=page.getByRole("region",{name:"All payout plans"});

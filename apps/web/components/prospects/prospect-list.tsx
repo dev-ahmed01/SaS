@@ -82,17 +82,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   }
 
   return <section className="crm-list crm-directory crm-prospect-directory" aria-label={title}>
-    <div className="crm-directory-intro">
-      <div>
-        <span className="crm-directory-eyebrow">PROSPECT DIRECTORY</span>
-        <h2>{title}</h2>
-        <p>{view==="all"?"Review registrations, contributions and follow-ups.":"Manage prospects in this status without losing their history."}</p>
-      </div>
-      <div className="crm-directory-count" role="status" aria-live="polite">
-        <strong>{loading&&!page?"…":page?.total??0}</strong>
-        <span>{q?"matching results":"records in this view"}</span>
-      </div>
-    </div>
+    <div className="crm-list-header-compact"><h2>{title}</h2></div>
     <div className="crm-list-tools prospect-list-toolbar">
       <div className="crm-directory-search">
         <label className="search-control"><Icon name="search" size={18}/><span className="sr-only">Search prospects</span>
@@ -116,13 +106,13 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
     <div className="table-scroll crm-table-scroll">
       <table className={"data-table prospects-table crm-table"+(view==="all"?"":" has-status")}>
         <thead><tr>
-          {["Created","Full Name","Mobile","City","Sponsorship","Total contribution","Active date",
+          {["Full Name","Mobile","City","Sponsorship","Total contribution","Active date",
             "Recent follow-up","Next follow-up","Promoter","Stage",...(view==="all"?[]:["Status"])].map(name=>
             <th key={name} scope="col">{name}</th>)}
         </tr></thead>
         <tbody>
-          {loading&&!page?<tr><td colSpan={view==="all"?11:12}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
-          :!page||page.items.length===0?<tr><td colSpan={view==="all"?11:12}>
+          {loading&&!page?<tr><td colSpan={view==="all"?10:11}><p role="status" className="crm-list-empty">Loading prospects…</p></td></tr>
+          :!page||page.items.length===0?<tr><td colSpan={view==="all"?10:11}>
             <div className="crm-list-empty"><Icon name="users" size={29}/>
               <h2>{view==="inactive"?"No inactive prospects":view==="active"?"No active prospects":"No prospects yet"}</h2>
               <p>{q?"Try another search.":view==="all"?"Add a prospect to begin.":"Stage changes will appear here."}</p>
@@ -130,7 +120,6 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
             </div>
           </td></tr>
           :page.items.map(p=><tr key={p.id} className={p.archived_at?"is-archived":""}>
-            <td>{displayDate(p.created_at)}</td>
             <td><Link className="crm-person-link" href={"/prospects/"+p.id}>{p.full_name}</Link>
               {p.archived_at&&<span className="table-subtitle">Archived</span>}</td>
             <td>{p.mobile_number}</td>
