@@ -427,7 +427,7 @@ def test_audited_recurring_payment_can_be_corrected_without_double_count(system)
     assert correction.status_code == 201, correction.text
     replacement = client.post(route, headers=csrf, json=pay_input(
         request_id=str(uuid.uuid4()),
-        payment_reference="CORRECTEDPAYOUT0002",
+        payment_reference="SYNTHETICPAYOUT0001",
     ))
     assert replacement.status_code == 201, replacement.text
     summary = client.get("/v1/payouts/plans").json()["items"][0]
