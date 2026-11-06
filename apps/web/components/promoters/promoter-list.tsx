@@ -78,19 +78,33 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   }
 
   const title=view==="all"?"All Promoters":view==="active"?"Active Promoters":"Inactive Promoters";
-  return <section className="crm-list" aria-label={title}>
+  return <section className="crm-list crm-directory crm-promoter-directory" aria-label={title}>
+    <div className="crm-directory-intro">
+      <div>
+        <span className="crm-directory-eyebrow">PROMOTER DIRECTORY</span>
+        <h2>${title}</h2>
+        <p>Find promoters, review their assigned sponsors and manage their status.</p>
+      </div>
+      <div className="crm-directory-count" role="status" aria-live="polite">
+        <strong>${loading&&!page?\"…\":page?.total??0}</strong>
+        <span>${q?\"matching results\":\"promoters in this view\"}</span>
+      </div>
+    </div>
     <div className="crm-list-tools">
-      <label className="search-control">
-        <Icon name="search" size={18}/><span className="sr-only">Search promoters</span>
-        <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search names, mobile, city or email…"/>
-      </label>
+      <div className="crm-directory-search">
+        <label className="search-control">
+          <Icon name="search" size={18}/><span className="sr-only">Search promoters</span>
+          <input type="search" value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search names, mobile, city or email…"/>
+        </label>
+        {search&&<button type="button" className="crm-directory-clear"
+          onClick={()=>setSearch("")}>Clear search</button>}
+      </div>
       <div className="crm-list-actions">
         <button type="button" className="btn btn-secondary" disabled={exporting}
           onClick={()=>void exportView()}>
           <Icon name="download" size={16}/> {exporting?"Exporting…":"Export all results"}
         </button>
-        <span className="crm-record-count">{page?.total??0} promoters</span>
       </div>
     </div>
     {error&&<p className="form-error" role="alert">{error}</p>}
