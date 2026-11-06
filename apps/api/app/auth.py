@@ -83,7 +83,8 @@ def _require_staff_permission(admin: AdminUser, request: Request) -> None:
         if method == "GET":
             return
         raise HTTPException(status_code=403, detail="Only owners may change settings")
-    if path.startswith(("/v1/prospects", "/v1/promoters", "/v1/prospect-stages", "/v1/sponsor-otp")):
+    if path.startswith(("/v1/prospects", "/v1/promoters",
+                        "/v1/prospect-stages", "/v1/sponsor-otp")):
         if role == "crm" or method == "GET" and role in (
             "finance", "messaging", "viewer",
         ):
