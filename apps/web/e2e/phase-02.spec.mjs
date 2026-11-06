@@ -902,7 +902,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await save.scrollIntoViewIfNeeded();
   await save.click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
-  await expect(page.getByText(/has not been sent/)).toBeVisible();
+  await expect(page.getByText(/No WhatsApp confirmation was prepared because consent is missing/)).toBeVisible();
   await expect(page.getByRole("region",{name:"Recent manual collections"})).toHaveCount(0);
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
