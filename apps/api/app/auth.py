@@ -306,14 +306,14 @@ def add_staff(
         password_hash=hash_password(payload.password),
         role=payload.role, is_active=True,
     )
-    database.add(new_user)
-    database.flush()
-    database.add(AuditEvent(
-        organization_id=admin.organization_id, actor_admin_id=admin.id,
-        action="admin.staff_created", entity_type="admin_user",
-        entity_id=str(new_user.id), after_data={"role":payload.role, "email":email},
-    ))
     try:
+        database.add(new_user)
+        database.flush()
+        database.add(AuditEvent(
+            organization_id=admin.organization_id, actor_admin_id=admin.id,
+            action="admin.staff_created", entity_type="admin_user",
+            entity_id=str(new_user.id), after_data={"role":payload.role, "email":email},
+        ))
         database.commit()
     except IntegrityError as exc:
         database.rollback()
