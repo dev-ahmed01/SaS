@@ -6,6 +6,7 @@ import { formatCRMDate } from "../../lib/crm-dates";
 import { exportAllCsv } from "../../lib/export-csv";
 import { PayoutPaymentHistory } from "./payout-payment-history";
 import { useDialogFocus } from "../../lib/dialog-focus";
+import type { FieldOptionPage, FieldOption } from "../settings/field-options";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -43,6 +44,24 @@ export function PayoutAdd(){
   const [first,setFirst]=useState("");
   const [last,setLast]=useState("");
   const [purpose,setPurpose]=useState("");
+  const [purposeOptionId,setPurposeOptionId]=useState("");
+  const [purposeOptions,setPurposeOptions]=useState<FieldOption[]>([]);
+  const [purposeLoading,setPurposeLoading]=useState(true);
+  const [purposeError,setPurposeError]=useState("");
+  const [purposeRetry,setPurposeRetry]=useState(0);
+  useEffect(()=>{
+    const controller=new AbortController();
+    setPurposeLoading(true);setPurposeError("");
+    fetch("/api/admin/settings/field-options?field_key=payout_purpose&include_inactive=false",{
+      cache:"no-store",signal:controller.signal,
+    }).then(async response=>{
+      if(!response.ok)throw Error("Purpose options could not be loaded.");
+      return await response.json() as FieldOptionPage;
+    }).then(page=>{if(!controller.signal.aborted)setPurposeOptions(page.items??[]);})
+      .catch(()=>{if(!controller.signal.aborted)setPurposeError("Could not load approved purposes.");})
+      .finally(()=>{if(!controller.signal.aborted)setPurposeLoading(false);});
+    return()=>controller.abort();
+  },[purposeRetry]);
   const [method,setMethod]=useState<PaymentMethod>("upi");
   const [value,setValue]=useState("");
   const [paidOn,setPaidOn]=useState(()=>dateIST());
@@ -59,15 +78,16 @@ export function PayoutAdd(){
     const paid=paidOn;
     if(!paise){setError("Enter a valid positive payout amount.");return;}
     if(!paid||paid>dateIST()){setError("Select a valid payment date, not in the future.");return;}
-    if(first.trim().length<2||purpose.trim().length<3||utr.trim().length<6){
-      setError("Enter the payee, purpose and UTR/reference number.");return;
+    if(first.trim().length<2||!purposeOptionId||!purpose||utr.trim().length<6){
+      setError("Enter the payee, choose an approved purpose and add the UTR/reference.");return;
     }
     setSaving(true);setError("");setNotice("");
     if(!request.current)request.current=crypto.randomUUID();
     try{
       const response=await securedPost("/api/admin/payouts/quick",{
         request_id:request.current,first_name:first.trim(),last_name:last.trim(),
-        purpose:purpose.trim(),amount_paise:paise,paid_on:paid,
+        purpose:purpose.trim(),purpose_option_id:purposeOptionId,
+        amount_paise:paise,paid_on:paid,
         payment_method:method,payment_reference:utr.trim().toUpperCase(),
         funds_disbursed:true,
       });
@@ -75,7 +95,7 @@ export function PayoutAdd(){
         ?"This payout or UTR was already recorded. Check All Payouts."
         :response.status===422?"Check the date and payment reference.":"Could not record payout.");
       setNotice("Recorded "+money(paise)+" paid to "+[first,last].filter(Boolean).join(" ")+".");
-      setFirst("");setLast("");setPurpose("");setValue("");setUtr("");
+      setFirst("");setLast("");setPurpose("");setPurposeOptionId("");setValue("");setUtr("");
       request.current=null;
     }catch(e){setError(e instanceof Error?e.message:"Could not record payout.");}
     finally{setSaving(false);}
@@ -108,13 +128,28 @@ export function PayoutAdd(){
             <input type="date" max={dateIST()} required value={paidOn}
               aria-label="Payout date" onChange={e=>{setPaidOn(e.target.value);change();}}/></label>
           <label className="field"><span className="field-label">Purpose *</span>
-            <input required minLength={3} maxLength={240} aria-label="Payout purpose"
-              value={purpose} onChange={e=>{setPurpose(e.target.value);change();}}/></label>
+            <select required aria-label="Payout purpose" disabled={purposeLoading||Boolean(purposeError)}
+              value={purposeOptionId} onChange={e=>{
+                const option=purposeOptions.find(row=>row.id===e.target.value);
+                setPurposeOptionId(option?.id??"");setPurpose(option?.label??"");change();
+              }}>
+              <option value="" disabled>{purposeLoading?"Loading approved purposes…":"Select purpose"}</option>
+              {purposeOptions.map(option=><option value={option.id} key={option.id}>
+                {option.label}
+              </option>)}
+            </select>
+            {purposeError&&<span className="form-error" role="alert">{purposeError}{" "}
+              <button type="button" className="text-action"
+                onClick={()=>setPurposeRetry(x=>x+1)}>Retry</button></span>}
+            {!purposeLoading&&!purposeError&&!purposeOptions.length&&
+              <span className="crm-muted">No active purposes. An owner can add choices in Settings.</span>}
+            <span className="payout-field-note">Managed from <a href="/settings">Settings → Field Options</a></span>
+          </label>
         </div>
       </div>
       {error&&<p role="alert" className="form-error">{error}</p>}
       {notice&&<p role="status" className="form-success">{notice}</p>}
-      <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>
+      <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={saving||purposeLoading||Boolean(purposeError)||!purposeOptionId}>
         {saving?"Recording…":"Save Payout"}</button></div>
     </form>
   </section>;
