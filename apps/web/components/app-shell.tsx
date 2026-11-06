@@ -63,8 +63,9 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
     menuClose?.focus();
     const keyDown=(event:KeyboardEvent)=>{
       if(event.key==="Escape"){
-        event.preventDefault();setMobileOpen(false);setProfileOpen(false);
-        mobileToggleRef.current?.focus();
+        event.preventDefault();
+        if(profileOpen){setProfileOpen(false);profileButtonRef.current?.focus();return;}
+        setMobileOpen(false);mobileToggleRef.current?.focus();
       }
       if(event.key!=="Tab"||!drawer)return;
       const choices=Array.from(drawer.querySelectorAll<HTMLElement>(
@@ -81,7 +82,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
     };
     document.addEventListener("keydown",keyDown);
     return ()=>document.removeEventListener("keydown",keyDown);
-  },[mobileOpen]);
+  },[mobileOpen,profileOpen]);
 
   async function signOut(){
     if(signingOut)return;
