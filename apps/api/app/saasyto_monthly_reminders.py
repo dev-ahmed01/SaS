@@ -12,8 +12,8 @@ assignments and due date, and never replays an uncertain claim.
 
 import uuid
 from datetime import UTC, datetime, time, timedelta
-from zoneinfo import ZoneInfo
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
