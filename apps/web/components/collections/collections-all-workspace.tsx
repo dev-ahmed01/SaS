@@ -190,7 +190,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           <th scope="col">Recorded</th><th scope="col">Status</th><th scope="col">WhatsApp</th>
           <th scope="col">Action</th></tr></thead>
         <tbody>{loading&&!data?<tr><td colSpan={8}>Loading collection history…</td></tr>
-          :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
+          :!data?.items.length?<tr><td colSpan={8}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong><span className="table-subtitle">{row.sponsor_mobile}</span></td>
             <td>{rupees(row.amount_paise)}</td>
@@ -205,10 +205,10 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
               :<div className="collection-row-actions">
                 <button type="button" className="text-action"
                   disabled={busy||resendBusy!==null}
-                  onClick={()=>choose(row,"edit")}>Edit</button>
+                  onClick={()=>choose(row,"edit")}>Correct entry</button>
                 <button type="button" className="text-action"
                   disabled={busy||resendBusy!==null}
-                  onClick={()=>choose(row,"delete")}>Delete</button>
+                  onClick={()=>choose(row,"delete")}>Reverse entry</button>
                 <button type="button" className="text-action"
                   disabled={busy||resendBusy!==null}
                   onClick={()=>void resend(row)}>
