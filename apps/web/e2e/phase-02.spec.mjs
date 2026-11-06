@@ -60,7 +60,7 @@ async function recordQuickPayout(page,first,last,amount,utr) {
   await page.goto("/payouts");
   await page.getByRole("textbox",{name:"Payee First Name"}).fill(first);
   await page.getByRole("textbox",{name:"Payee Last Name"}).fill(last);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Synthetic Foundation facility upkeep");
+  await page.getByRole("combobox",{name:"Payout purpose"}).selectOption({label:"Maintenance"});
   await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill(amount);
   await page.getByRole("textbox",{name:"UTR"}).fill(utr);
   await page.getByRole("button",{name:"Save Payout"}).click();
@@ -1081,7 +1081,7 @@ test("Add Payout aligns method, amount and UTR above date and purpose",async ({p
   const amount=page.getByRole("textbox",{name:"Payout amount (₹)"});
   const reference=page.getByRole("textbox",{name:"UTR"});
   const date=page.getByLabel("Payout date");
-  const purpose=page.getByRole("textbox",{name:"Payout purpose"});
+  const purpose=page.getByRole("combobox",{name:"Payout purpose"});
   for(const field of [method,amount,reference,date,purpose]){
     await expect(field).toBeVisible();
   }
@@ -1125,7 +1125,7 @@ test("Payout requires a valid UTR and does not initiate a transfer",async ({page
   const id=String(Date.now()%1000000).padStart(6,"0");
   await page.goto("/payouts");
   await page.getByRole("textbox",{name:"Payee First Name"}).fill("Caretaker "+id);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Facility upkeep");
+  await page.getByRole("combobox",{name:"Payout purpose"}).selectOption({label:"Maintenance"});
   await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("735.00");
   await page.getByRole("textbox",{name:"UTR"}).fill("BAD");
   await page.getByRole("button",{name:"Save Payout"}).click();
@@ -1149,7 +1149,7 @@ test("Duplicate UTR cannot silently add a second payout",async ({page})=>{
   await recordQuickPayout(page,"Transfer "+id,"Recipient","950.00",utr);
   await page.goto("/payouts");
   await page.getByRole("textbox",{name:"Payee First Name"}).fill("Second "+id);
-  await page.getByRole("textbox",{name:"Payout purpose"}).fill("Duplicate reference check");
+  await page.getByRole("combobox",{name:"Payout purpose"}).selectOption({label:"Maintenance"});
   await page.getByRole("textbox",{name:"Payout amount (₹)"}).fill("950.00");
   await page.getByRole("textbox",{name:"UTR"}).fill(utr);
   await page.getByRole("button",{name:"Save Payout"}).click();
