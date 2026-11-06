@@ -5,7 +5,8 @@
 ## Release-readiness status (October 2026)
 
 **Not approved for live Foundation records.** Read
-[the production readiness checklist](docs/PRODUCTION_READINESS_CHECKLIST.md).
+[the production readiness checklist](docs/PRODUCTION_READINESS_CHECKLIST.md) and
+[November QA hardening and external release gates](docs/QA_HARDENING_2026_11_06.md).
 Hosted environments require TLS-enabled PostgreSQL, correct migrated database
 schema, an explicit HTTPS API and public web origin, and guarded messaging.
 Next.js was updated to the security-patched 15.5.27 series. CI adds production
@@ -21,10 +22,10 @@ Use `main` for current development, [the integration record](docs/INTEGRATION_RE
 
 ## Product boundaries
 
-- Admin-only prospects, promoters, manual collections, full audited corrections, recurring/one-time payout obligations, reminders, settings and dashboard.
+- Organization-scoped admin/staff operations with owner, CRM, finance, messaging and read-only roles; prospects, promoters, manual collections, full audited corrections (including outgoing-payment ledger corrections), recurring/one-time payout obligations, reminders, settings, complete-record CSV exports and dashboard.
 - Approved 13 October 2026: new sponsorship commitments are positive ₹250 increments (new organization default ₹250); any valid positive recorded contribution reactivates, and two completed IST months without net recorded contributions cause inactivity. Sub-₹250 and non-multiple receipts are rejected at entry; historical entries are not repriced or deleted.
 - The Foundation records receipts and outgoing payments **after funds have moved externally**. This application does **not** move money or independently verify bank transactions.
-- Incoming payment acknowledgments and 5th/20th reminders are **prepared but not delivered** until Meta/Pabbly authorization, approved templates, consent, secret configuration, a private dispatcher and signed delivery callbacks have been tested. Provider acceptance is not delivery.
+- Incoming payment acknowledgements and 5th/20th reminders remain **off for real recipient delivery** until the approved Saasyto sender, templates, consent and STOP/re-consent flows, private dispatch worker, provider throttling and independently verified delivery callbacks pass the controlled live pilot. Provider acceptance is not delivery. A fail-closed day-capacity guard is included for automatic reminders.
 - Bank statement import is deferred by the Foundation. No mock donors, fake payment history or delivered-message fixtures are used in the live UI.
 - Operational proof policy and promoter disclosure require Foundation approval before release. Read [decisions](docs/DECISIONS.md) and the appropriate phase documents.
 
