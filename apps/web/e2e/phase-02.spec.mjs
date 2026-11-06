@@ -517,11 +517,11 @@ test("Prospect listing shows contribution, follow-ups and selected CSV export",a
   await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
   await expect(page.locator(".crm-list-tools-right")).toHaveCount(0);
   await expect(page.locator(".prospects-table th").allTextContents()).resolves.toEqual([
-    "", "Created","Full Name","Mobile","City","Sponsorship","Total contribution",
+    "Created","Full Name","Mobile","City","Sponsorship","Total contribution",
     "Active date","Recent follow-up","Next follow-up","Promoter","Stage"
   ]);
-  await expect(page.getByRole("checkbox",{name:"Select all prospects on this page"})).toBeVisible();
-  await expect(page.getByRole("button",{name:/Export selected/})).toBeDisabled();
+  await expect(page.getByRole("checkbox",{name:"Select all prospects on this page"})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:/Export selected/})).toHaveCount(0);
   await expect(page.locator(".crm-row-actions")).toHaveCount(0);
   const weight=await page.locator(".topbar-name")
     .evaluate(el=>getComputedStyle(el).fontWeight);
@@ -881,7 +881,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9826"+id);
-  await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
+  await expect(page.getByRole("checkbox",{name:/sponsor has explicitly agreed/})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await activateNewProspect(page);
@@ -902,7 +902,7 @@ test("Admin records a manual contribution without claiming WhatsApp delivery",as
   await save.scrollIntoViewIfNeeded();
   await save.click();
   await expect(page.getByRole("status").filter({hasText:"Recorded"})).toBeVisible();
-  await expect(page.getByText(/has not been sent/)).toBeVisible();
+  await expect(page.getByText(/No WhatsApp confirmation was prepared because consent is missing/)).toBeVisible();
   await expect(page.getByRole("region",{name:"Recent manual collections"})).toHaveCount(0);
   await page.goto("/collections/all");
   await expect(page.getByRole("heading",{name:"Monthly sponsorship ledger"})).toBeVisible();
@@ -962,7 +962,7 @@ test("Admin reverses a mistaken collection and the net ledger returns to unpaid"
   await page.getByRole("textbox",{name:/First Name/}).fill(name);
   const agreed=Number(await page.getByRole("combobox",{name:"Sponsorship Tokens"}).inputValue())*250;
   await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9847"+id);
-  await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
+  await expect(page.getByRole("checkbox",{name:/sponsor has explicitly agreed/})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
 
@@ -1262,7 +1262,7 @@ test("Admin attests contact consent and reviews a campaign without sending",asyn
   await page.goto("/prospects/add");
   await page.getByRole("textbox",{name:/First Name/}).fill(sponsor);
   await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill("9851"+suffix);
-  await page.getByRole("checkbox",{name:/sponsor has explicitly agreed/}).check();
+  await expect(page.getByRole("checkbox",{name:/sponsor has explicitly agreed/})).toHaveCount(0);
   await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("region",{name:"Communication consent"})).toHaveCount(0);

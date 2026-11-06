@@ -251,16 +251,21 @@ export function PayoutList({view}:{view:"all"|"active"}){
     finally{setSaving(false);}
   }
   return <><section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
-    <div className="payout-list-title"><div>
+    <div className="payout-list-title">
       <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
-    </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
-      <input aria-label="Payout accounting month" type="month" value={period}
-        onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
-    <div className="crm-list-actions payout-export-actions">
-      <button type="button" className="btn btn-secondary" disabled={exporting}
-        onClick={()=>void exportPlans()}>{exporting?"Exporting…":"Export all payout plans"}</button>
-      <button type="button" className="btn btn-secondary" disabled={exporting}
-        onClick={()=>void exportPayments()}>{exporting?"Exporting…":"Export actual payments"}</button>
+      <div className="payout-list-toolbar">
+        <label className="field payout-month">
+          <span className="field-label">Accounting month (IST)</span>
+          <input aria-label="Payout accounting month" type="month" value={period}
+            onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/>
+        </label>
+        <div className="payout-export-actions">
+          <button type="button" className="btn btn-secondary btn-action" disabled={exporting}
+            onClick={()=>void exportPlans()}>{exporting?"Exporting…":"Export payout plans"}</button>
+          <button type="button" className="btn btn-secondary btn-action" disabled={exporting}
+            onClick={()=>void exportPayments()}>{exporting?"Exporting…":"Export payments"}</button>
+        </div>
+      </div>
     </div>
     {exportNotice&&<p className="crm-muted" role="status">{exportNotice}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
@@ -287,17 +292,17 @@ export function PayoutList({view}:{view:"all"|"active"}){
           <td><div className="payout-actions">
             {plan.current_month_due_paise>0&&plan.current_month_paid_paise===0&&
               period<=dateIST().slice(0,7)&&
-              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"paid")}>
+              <button type="button" className="btn btn-secondary btn-row-action" disabled={loading} onClick={()=>open(plan,"paid")}>
                 Record paid</button>}
             {plan.cadence==="recurring"&&!plan.next_status&&plan.status==="active"&&
-              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"pause")}>
+              <button type="button" className="btn btn-secondary btn-row-action" disabled={loading} onClick={()=>open(plan,"pause")}>
                 Pause</button>}
             {plan.cadence==="recurring"&&!plan.next_status&&plan.status==="paused"&&
-              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"resume")}>
+              <button type="button" className="btn btn-secondary btn-row-action" disabled={loading} onClick={()=>open(plan,"resume")}>
                 Resume</button>}
             {plan.cadence==="recurring"&&!plan.next_status&&
               ["active","paused"].includes(plan.status)&&
-              <button type="button" className="text-action" disabled={loading} onClick={()=>open(plan,"close")}>
+              <button type="button" className="btn btn-secondary btn-row-action" disabled={loading} onClick={()=>open(plan,"close")}>
                 Close plan</button>}
           </div></td></tr>)}</tbody>
     </table></div>

@@ -204,16 +204,16 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
   const reversalDialogRef=useDialogFocus<HTMLElement>(Boolean(selected),()=>{if(!busy)close();});
   return <section className="collection-review" aria-label="Collection review">
     <div className="review-heading">
-      <div>
-        <h2>{activeOnly?"Received this month":"Collection history"}</h2>
+      <h2>{activeOnly?"Received this month":"Collection history"}</h2>
+      <div className="review-heading-actions">
+        <label className="field review-month">
+          <span className="field-label">{activeOnly?"Date paid month":"Sponsorship month"}</span>
+          <input type="month" aria-label="Filter collection history by month" value={month}
+            onChange={e=>{setMonth(e.target.value);setOffset(0);}}/>
+        </label>
+        <button type="button" className="btn btn-secondary btn-action" disabled={exporting}
+          onClick={()=>void exportReceipts()}>{exporting?"Exporting…":"Export all receipts"}</button>
       </div>
-      <button type="button" className="btn btn-secondary" disabled={exporting}
-        onClick={()=>void exportReceipts()}>{exporting?"Exporting…":"Export all receipts"}</button>
-      <label className="field review-month">
-        <span className="field-label">{activeOnly?"Date paid month":"Sponsorship month"}</span>
-        <input type="month" aria-label="Filter collection history by month" value={month}
-          onChange={e=>{setMonth(e.target.value);setOffset(0);}}/>
-      </label>
     </div>
     {notice&&<p role="status" className="form-success">{notice}
       {correctionReady&&<span> <Link href="/collections/add">Record corrected collection</Link></span>}

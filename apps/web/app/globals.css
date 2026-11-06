@@ -1877,3 +1877,127 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 @media(max-width:650px){
   .team-access .form-grid{grid-template-columns:1fr;}
 }
+
+
+/* Phase 1 admin workflow polish: no additional Settings navigation/module. */
+.prospect-list-toolbar{
+  display:flex;flex-wrap:nowrap;align-items:center;gap:14px;margin-bottom:18px;
+}
+.prospect-list-toolbar .search-control{flex:1 1 auto;min-width:210px;width:auto;max-width:none;min-height:43px;}
+.prospect-toolbar-actions{display:flex;align-items:center;flex:0 0 auto;gap:8px;margin:0;}
+.btn-compact,.btn-action{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  min-height:43px;padding:9px 14px;border:1px solid #bad7ca;border-radius:8px;
+  background:#fff;color:var(--forest-deep);font:600 12px var(--font-body);
+  text-decoration:none;white-space:nowrap;cursor:pointer;
+  transition:background .15s,border-color .15s,transform .15s;
+}
+.btn-compact:hover:not(:disabled),.btn-action:hover:not(:disabled){
+  background:#eef7f2;border-color:#6a9b85;transform:translateY(-1px);
+}
+.btn-compact:focus-visible,.btn-action:focus-visible,.btn-row-action:focus-visible{
+  outline:3px solid #8dcab1;outline-offset:2px;
+}
+.prospects-table th,.promoter-crm-table th{font-size:12px;letter-spacing:.01em;}
+.prospects-table td,.promoter-crm-table td{font-size:12.5px;line-height:1.45;}
+.prospects-table tbody tr:hover,.promoter-crm-table tbody tr:hover{background:#f6fbf8;}
+.crm-list .table-footer{padding-top:16px;}
+.prospect-form-rows{gap:17px;}
+.prospect-form-intro{margin-bottom:22px;}
+.prospect-field-row.three{grid-template-columns:repeat(3,minmax(0,1fr));}
+.prospect-financial-row>.field{min-width:0;}
+.prospect-financial-row .field-helper{font-size:11px;color:#496659;line-height:1.5;}
+.promoter-picker{position:relative;z-index:5;}
+.promoter-picker-input{display:flex;align-items:center;position:relative;}
+.promoter-picker-input input{
+  width:100%;min-height:47px;padding-right:40px;border:1px solid var(--line);
+  border-radius:8px;background:#fff;font:400 13px var(--font-body);
+}
+.promoter-picker-input input:focus{outline:2px solid #8ac7ac;outline-offset:1px;}
+.promoter-picker-caret{position:absolute;right:15px;color:var(--forest-deep);pointer-events:none;font-size:18px;}
+.promoter-picker-menu{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:25;
+  max-height:245px;overflow-y:auto;padding:5px;
+  border:1px solid #c9ded3;border-radius:10px;background:#fff;
+  box-shadow:0 14px 36px rgba(18,62,42,.14);
+}
+.promoter-picker-option{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  width:100%;min-height:41px;padding:9px 12px;border:0;border-radius:7px;
+  background:#fff;text-align:left;color:var(--forest-deep);
+  font:500 12px var(--font-body);cursor:pointer;
+}
+.promoter-picker-option:hover,.promoter-picker-option.is-highlighted,
+.promoter-picker-option[aria-selected="true"]{background:#edf8f1;}
+.promoter-picker-status{margin:0;padding:9px 12px;color:#4f6659;font:400 12px var(--font-body);}
+.review-heading{display:flex;align-items:center;gap:18px;justify-content:space-between;}
+.review-heading h2{margin:0;font-size:19px;}
+.review-heading-actions{display:flex;align-items:flex-end;justify-content:flex-end;gap:12px;margin-left:auto;}
+.review-heading-actions .review-month{width:190px;flex:none;}
+.review-heading-actions .btn-action{margin:0;flex:none;}
+.collection-row-actions,.payout-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.btn-row-action{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:34px;padding:7px 10px;border-radius:7px;
+  border:1px solid #c9ddd1;background:#fff;color:var(--forest-deep);
+  font:500 11px var(--font-body);white-space:nowrap;text-decoration:none;
+  cursor:pointer;transition:background .15s,border-color .15s;
+}
+.btn-row-action:hover:not(:disabled){background:#eef8f2;border-color:#8fba9f;}
+.btn-row-action:disabled{opacity:.5;cursor:not-allowed;}
+.payout-list-title{align-items:center;gap:15px;margin-bottom:18px;}
+.payout-list-title h2{margin:0;}
+.payout-list-toolbar{display:flex;align-items:flex-end;justify-content:flex-end;gap:12px;margin-left:auto;flex-wrap:wrap;}
+.payout-list-toolbar .payout-month{width:190px;flex:none;}
+.payout-list-toolbar .payout-export-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0;}
+.payout-list-toolbar .btn-action{min-height:43px;}
+.promoter-modern-detail .promoter-identity-row{gap:15px;margin:17px 0 20px;}
+.promoter-modern-detail .promoter-identity-avatar{
+  height:64px;width:64px;flex-basis:64px;font-size:24px;
+}
+.promoter-modern-detail .promoter-identity-copy h2{
+  font-size:clamp(24px,2.4vw,31px);line-height:1.16;letter-spacing:-.025em;
+}
+.promoter-modern-detail .promoter-identity-copy p{font-size:13px;line-height:1.5;}
+.promoter-modern-detail .promoter-metrics{gap:12px;margin-bottom:15px;}
+.promoter-modern-detail .promoter-metric{padding:14px 16px;gap:12px;align-items:center;border-radius:11px;}
+.promoter-modern-detail .promoter-metric-icon{height:39px;width:39px;flex-basis:39px;}
+.promoter-modern-detail .promoter-metric strong{font-size:24px;}
+.promoter-modern-detail .promoter-metric>div>span{font-size:12px;}
+.promoter-modern-detail .promoter-metric-link{
+  min-height:30px;display:inline-flex;align-items:center;font-size:12px;
+  text-decoration:none;
+}
+.promoter-modern-detail .promoter-profile-card{margin-top:15px;}
+.promoter-modern-detail .promoter-profile-facts{gap:15px 22px;}
+.promoter-modern-detail .promoter-profile-fact dt{font-size:12px;}
+.promoter-modern-detail .promoter-profile-fact dd{font-size:13px;font-weight:600;}
+.promoter-modern-detail .crm-assignment-card{padding:20px;}
+.promoter-modern-detail .crm-panel-heading h2{font-size:21px;}
+@media(max-width:1180px){
+  .prospect-list-toolbar{flex-wrap:wrap;}
+  .prospect-list-toolbar .search-control{min-width:min(100%,300px);}
+  .prospect-toolbar-actions{margin-left:auto;}
+  .payout-list-toolbar{width:100%;justify-content:flex-start;margin-left:0;}
+}
+@media(max-width:850px){
+  .prospect-field-row.three{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .prospect-financial-row>.field:first-child{grid-column:1/-1;}
+  .review-heading{align-items:flex-start;flex-wrap:wrap;}
+  .review-heading-actions{width:100%;margin-left:0;justify-content:space-between;}
+}
+@media(max-width:620px){
+  .prospect-list-toolbar{flex-direction:column;align-items:stretch;gap:10px;}
+  .prospect-list-toolbar .search-control{width:100%;min-width:0;}
+  .prospect-toolbar-actions{width:100%;justify-content:stretch;gap:8px;}
+  .prospect-toolbar-actions .btn-compact{flex:1 1 0;min-width:0;padding:9px 8px;font-size:11px;}
+  .prospect-field-row.three{grid-template-columns:minmax(0,1fr);}
+  .prospect-financial-row>.field:first-child{grid-column:auto;}
+  .review-heading-actions{flex-direction:column;align-items:stretch;}
+  .review-heading-actions .review-month,.review-heading-actions .btn-action{width:100%;}
+  .payout-list-toolbar{flex-direction:column;align-items:stretch;}
+  .payout-list-toolbar .payout-month{width:100%;}
+  .payout-list-toolbar .payout-export-actions{width:100%;}
+  .payout-list-toolbar .btn-action{flex:1;white-space:normal;}
+  .promoter-modern-detail .promoter-metric{padding:12px;}
+}
