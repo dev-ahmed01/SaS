@@ -38,7 +38,7 @@ REQUIRED_TABLES = (
     "saasyto_campaign_runs",
     "saasyto_campaign_recipients",
 )
-EXPECTED_MIGRATION = "0024_saasyto_claim_window_index"
+EXPECTED_MIGRATION = "0025_payout_reversal"
 
 
 def validate_restored_target(raw_url: str, *, app_env: str, approved_name: str):
