@@ -11,11 +11,11 @@ assignments and due date, and never replays an uncertain claim.
 """
 
 import uuid
-from datetime import datetime, timedelta, time, UTC
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
