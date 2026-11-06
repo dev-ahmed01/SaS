@@ -45,7 +45,10 @@ class MonthTrend(BaseModel):
 
 
 class Activity(BaseModel):
-    kind: Literal["collection", "reversal", "payout_paid", "payout_reversed", "payout_plan", "reminder"]
+    kind: Literal[
+        "collection", "reversal", "payout_paid", "payout_reversed",
+        "payout_plan", "reminder",
+    ]
     title: str
     amount_paise: int | None
     at: datetime
