@@ -14,7 +14,10 @@ from app.auth import db_session, get_admin, require_csrf
 from app.config import get_settings
 from app.field_options import label_key, normalize_label
 from app.models import (
-    AdminSession, AdminUser, AuditEvent, OrganizationFieldOption,
+    AdminSession,
+    AdminUser,
+    AuditEvent,
+    OrganizationFieldOption,
     OrganizationSettings,
 )
 from app.sponsorship_policy import (
