@@ -517,7 +517,7 @@ test("Prospect listing shows contribution, follow-ups and selected CSV export",a
   await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
   await expect(page.locator(".crm-list-tools-right")).toHaveCount(0);
   await expect(page.locator(".prospects-table th").allTextContents()).resolves.toEqual([
-    "Created","Full Name","Mobile","City","Sponsorship","Total contribution",
+    "Full Name","Mobile","City","Sponsorship","Total contribution",
     "Active date","Recent follow-up","Next follow-up","Promoter","Stage"
   ]);
   await expect(page.getByRole("checkbox",{name:"Select all prospects on this page"})).toHaveCount(0);
@@ -663,7 +663,7 @@ test("Admin creates and searches promoters with the requested CRM fields",async 
   await find.fill(label);
   await expect(page.getByRole("row",{name:new RegExp(label)})).toBeVisible();
   const headers=await page.locator(".promoter-crm-table thead th").allTextContents();
-  expect(headers).toEqual(["Created","Full Name","Mobile","City","Sponsors","Status"]);
+  expect(headers).toEqual(["Full Name","Mobile","City","Sponsors","Status"]);
   await tabs.getByRole("link",{name:"All Promoters",exact:true}).click();
   await expect(page.getByRole("region",{name:"All Promoters"})).toBeVisible();
   await page.getByRole("textbox",{name:"Search promoters"}).fill(label);
