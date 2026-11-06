@@ -5,6 +5,7 @@ import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { formatCRMDate } from "../../lib/crm-dates";
 import { exportAllCsv } from "../../lib/export-csv";
 import { PayoutPaymentHistory } from "./payout-payment-history";
+import { useDialogFocus } from "../../lib/dialog-focus";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -138,6 +139,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const [reference,setReference]=useState("");
   const [confirmed,setConfirmed]=useState(false);
   const [saving,setSaving]=useState(false);
+  const planDialogRef=useDialogFocus<HTMLElement>(Boolean(chosen),()=>{if(!saving)close();});
   const request=useRef<string|null>(null);
   useEffect(()=>{
     const controller=new AbortController();
@@ -312,7 +314,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
     {chosen&&<div className="modal-scrim" onMouseDown={event=>{
       if(event.target===event.currentTarget)close();
     }}><section className="edit-modal payout-dialog" role="dialog" aria-modal="true"
-        aria-labelledby="payout-modal-title">
+        aria-labelledby="payout-modal-title" ref={planDialogRef} tabIndex={-1}>
       <div className="modal-topline"><span>Payout management</span>
         <button type="button" className="text-action" onClick={close} disabled={saving}
           aria-label="Close payout dialog">Close</button></div>
