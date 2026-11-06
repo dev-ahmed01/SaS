@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
+import { exportAllCsv } from "../../lib/export-csv";
 import { formatCRMDate } from "../../lib/crm-dates";
 import type { Prospect,ProspectPage } from "./prospects-types";
 import { reasonLabel } from "./prospects-types";
@@ -25,6 +26,8 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
   const [page,setPage]=useState<ProspectPage|null>(()=>recentSnapshot<ProspectPage>("/api/admin/prospects?"+new URLSearchParams({limit:"20",offset:"0",q:"",...(view!=="all"?{crm_stage:view}:{})})));
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const [exporting,setExporting]=useState(false);
+  const [exportProgress,setExportProgress]=useState("");
   const [selected,setSelected]=useState<Record<string,Prospect>>({});
   useEffect(()=>{
     const timer=setTimeout(()=>{setQ(search);setOffset(0);},250);
@@ -61,6 +64,38 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
       return next;
     });
   }
+  async function exportFullView(){
+    if(exporting)return;
+    setExporting(true);setExportProgress("Preparing complete export…");setError("");
+    try{
+      const params=new URLSearchParams({q});
+      if(view!=="all")params.set("crm_stage",view);
+      const count=await exportAllCsv<Prospect>({
+        url:"/api/admin/prospects?"+params,
+        filename:"sas-prospects-"+view+"-all.csv",
+        onProgress:(done,total)=>setExportProgress("Exporting "+done+" of "+total+" prospects…"),
+        columns:[
+          {title:"Name",value:p=>p.full_name},
+          {title:"Mobile",value:p=>p.mobile_number},
+          {title:"Email",value:p=>p.email},
+          {title:"City",value:p=>p.area_city},
+          {title:"Monthly sponsorship (INR)",value:p=>p.monthly_contribution_paise/100},
+          {title:"Total received (INR)",value:p=>p.total_contribution_paise/100},
+          {title:"Created",value:p=>p.created_at},
+          {title:"Last follow-up",value:p=>p.last_contact_on},
+          {title:"Next follow-up",value:p=>p.next_followup_on},
+          {title:"Promoter",value:p=>p.assigned_promoter_name},
+          {title:"Pipeline stage",value:p=>p.pipeline_stage_name},
+          {title:"CRM status",value:p=>p.crm_stage},
+          {title:"Lifecycle",value:p=>p.lifecycle_status},
+          {title:"Archived",value:p=>Boolean(p.archived_at)},
+        ]
+      });
+      setExportProgress(count+" records exported.");
+    }catch(e){
+      setExportProgress("");setError(e instanceof Error?e.message:"Unable to export prospects.");
+    }finally{setExporting(false);}
+  }
   function exportSelected(){
     const rows=Object.values(selected);
     if(!rows.length)return;
@@ -87,6 +122,10 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
         {view==="all"&&<Link href="/prospects/bulk" className="btn btn-secondary">
           <Icon name="upload" size={16}/> Import prospects
         </Link>}
+        <button type="button" className="btn btn-secondary" disabled={exporting}
+          onClick={()=>void exportFullView()}>
+          <Icon name="download" size={16}/> {exporting?"Exporting…":"Export all results"}
+        </button>
         <button type="button" className="btn btn-secondary"
           disabled={selectedIds.length===0} onClick={exportSelected}>
           <Icon name="download" size={16}/> Export selected ({selectedIds.length})
@@ -94,6 +133,7 @@ export function ProspectList({view}:{view:"all"|"active"|"inactive"}){
       </div>
     </div>
     {error&&<p role="alert" className="form-error">{error}</p>}
+    {exportProgress&&<p role="status" className="crm-muted">{exportProgress}</p>}
     <div className="table-scroll crm-table-scroll">
       <table className={"data-table prospects-table crm-table"+(view==="all"?"":" has-status")}>
         <thead><tr>

@@ -44,6 +44,10 @@ export function IstClock(){
     title={verified?"Time synchronized with Foundation server (Asia/Kolkata)":
       "Showing device time in Asia/Kolkata until server sync is available"}>
     <span className="topbar-clock-dot" aria-hidden="true"/>
-    {time} <span className="topbar-ist-label">IST</span>
+    <span className="topbar-full-time">{time}</span>
+    <span className="topbar-compact-time" aria-hidden="true">{current?.toLocaleTimeString("en-GB",{
+      timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit",hour12:false,
+    })??"--:--"}</span>
+    <span className="topbar-ist-label">IST</span>
   </time>;
 }

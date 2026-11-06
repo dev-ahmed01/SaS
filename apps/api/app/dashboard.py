@@ -20,6 +20,7 @@ from app.auth import db_session, get_admin
 from app.models import (
     AdminSession,
     AdminUser,
+    AuditEvent,
     ManualCollection,
     ManualCollectionReversal,
     MessageDispatch,
@@ -44,7 +45,10 @@ class MonthTrend(BaseModel):
 
 
 class Activity(BaseModel):
-    kind: Literal["collection", "reversal", "payout_paid", "payout_plan", "reminder"]
+    kind: Literal[
+        "collection", "reversal", "payout_paid", "payout_reversed",
+        "payout_plan", "reminder",
+    ]
     title: str
     amount_paise: int | None
     at: datetime
@@ -82,7 +86,7 @@ def term_at(terms: list[PayoutPlanTerm], month: date) -> str | None:
 
 
 def obligation(plan: PayoutPlan, terms: list[PayoutPlanTerm], month: date) -> int:
-    if plan.start_month > month:
+    if plan.start_month > month or plan.voided_at is not None:
         return 0
     if plan.cadence == "one_time":
         return plan.amount_paise if plan.start_month == month else 0
@@ -110,6 +114,12 @@ def recent_activity(db: Session, org: object) -> list[Activity]:
                 amount_paise=getattr(record, "amount_paise", None),
                 at=as_utc(record.created_at), href=href,
             ))
+    for event in db.scalars(select(AuditEvent).where(
+        AuditEvent.organization_id == org,
+        AuditEvent.action == "payout.payment_reversed",
+    ).order_by(AuditEvent.occurred_at.desc()).limit(8)):
+        items.append(Activity(kind="payout_reversed", title="Payout entry reversed",
+            amount_paise=None, at=as_utc(event.occurred_at), href="/payouts/all"))
     return sorted(items, key=lambda row: (row.at, row.kind), reverse=True)[:8]
 
 
@@ -170,7 +180,8 @@ def overview(
                 plan, terms_by_id[plan.id], item.period_month,
             )
     payments = db.scalars(select(PayoutPayment).where(
-        PayoutPayment.organization_id == org
+        PayoutPayment.organization_id == org,
+        PayoutPayment.reversed_at.is_(None),
     )).all()
     monthly_paid = defaultdict(int)
     for payment in payments:
@@ -180,7 +191,7 @@ def overview(
         item.payout_disbursed_paise = monthly_paid[item.period_month]
 
     active_plans = sum(
-        1 for p in plans if p.cadence == "recurring"
+        1 for p in plans if p.voided_at is None and p.cadence == "recurring"
         and p.start_month <= month
         and term_at(terms_by_id[p.id], month) == "active"
     )

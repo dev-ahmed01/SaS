@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { Icon } from "../ui/icon";
+import { exportAllCsv } from "../../lib/export-csv";
 import type { Promoter, PromoterPage } from "./promoter-types";
 import { PromoterStatusDialog } from "./promoter-status-dialog";
 import { formatCRMDate } from "../../lib/crm-dates";
@@ -17,6 +18,8 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
   const [revision,setRevision]=useState(0);
   const [page,setPage]=useState<PromoterPage|null>(()=>recentSnapshot<PromoterPage>("/api/admin/promoters?"+new URLSearchParams({q:"",limit:"20",offset:"0",...(view!=="all"?{active:String(view==="active")}:{})})));
   const [error,setError]=useState("");
+  const [exporting,setExporting]=useState(false);
+  const [exportProgress,setExportProgress]=useState("");
   const [loading,setLoading]=useState(true);
   const [target,setTarget]=useState<Promoter|null>(null);
 
@@ -48,17 +51,50 @@ export function PromoterList({view}:{view:"all"|"active"|"inactive"}){
     return ()=>abort.abort();
   },[fetchPage,revision]);
 
+  async function exportView(){
+    if(exporting)return;
+    setExporting(true);setError("");setExportProgress("Preparing promoter export…");
+    try{
+      const params=new URLSearchParams({q});
+      if(view!=="all")params.set("active",String(view==="active"));
+      const count=await exportAllCsv<Promoter>({
+        url:"/api/admin/promoters?"+params,
+        filename:"sas-promoters-"+view+"-all.csv",
+        onProgress:(count,total)=>setExportProgress("Exporting "+count+" of "+total+" promoters…"),
+        columns:[
+          {title:"Name",value:p=>p.full_name},
+          {title:"Mobile",value:p=>p.mobile_number},
+          {title:"Email",value:p=>p.email},
+          {title:"City",value:p=>p.area_city},
+          {title:"Sponsors",value:p=>p.sponsor_count},
+          {title:"Status",value:p=>p.is_active?"Active":"Inactive"},
+          {title:"WhatsApp consent",value:p=>p.whatsapp_opt_in},
+          {title:"Created",value:p=>p.created_at}
+        ]
+      });
+      setExportProgress(count+" promoters exported.");
+    }catch(e){setExportProgress("");setError(e instanceof Error?e.message:"Export failed.");}
+    finally{setExporting(false);}
+  }
+
   const title=view==="all"?"All Promoters":view==="active"?"Active Promoters":"Inactive Promoters";
   return <section className="crm-list" aria-label={title}>
     <div className="crm-list-tools">
       <label className="search-control">
         <Icon name="search" size={18}/><span className="sr-only">Search promoters</span>
         <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search names, mobile, city or occupation…"/>
+          placeholder="Search names, mobile, city or email…"/>
       </label>
-      <span className="crm-record-count">{page?.total??0} promoters</span>
+      <div className="crm-list-actions">
+        <button type="button" className="btn btn-secondary" disabled={exporting}
+          onClick={()=>void exportView()}>
+          <Icon name="download" size={16}/> {exporting?"Exporting…":"Export all results"}
+        </button>
+        <span className="crm-record-count">{page?.total??0} promoters</span>
+      </div>
     </div>
     {error&&<p className="form-error" role="alert">{error}</p>}
+    {exportProgress&&<p className="crm-muted" role="status">{exportProgress}</p>}
     <div className="table-scroll crm-table-scroll">
       <table className="data-table crm-table promoter-crm-table">
         <thead><tr>{["Created","Full Name","Mobile","City","Sponsors","Status"].map(col=>

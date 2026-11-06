@@ -3,13 +3,14 @@ import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import { backendOrigin } from "../../../../lib/admin-backend";
 
-type Action = "login" | "logout" | "session" | "settings" | "automation";
+type Action = "login" | "logout" | "session" | "settings" | "automation" | "users";
 const allowed: Record<Action, { method: string; path: string }> = {
   login: {method: "POST", path: "/v1/auth/login"},
   logout: {method: "POST", path: "/v1/auth/logout"},
   session: {method: "GET", path: "/v1/auth/session"},
   settings: {method: "GET,PATCH", path: "/v1/settings"},
   automation: {method: "POST", path: "/v1/settings/automation"},
+  users: {method: "GET,POST", path: "/v1/auth/users"},
 };
 const noStore = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 
@@ -48,7 +49,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ action
       return NextResponse.json({detail:"Origin verification failed"}, {status:403,headers:noStore});
     }
     const contentType = request.headers.get("content-type") ?? "";
-    if (request.method === "PATCH" || action === "login" || action === "automation") {
+    if (request.method === "PATCH" || action === "login" || action === "automation" || action === "users") {
       if (!contentType.startsWith("application/json")) {
         return NextResponse.json({detail:"JSON request required"}, {status:415,headers:noStore});
       }

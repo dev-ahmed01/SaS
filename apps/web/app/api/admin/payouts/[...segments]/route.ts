@@ -16,6 +16,10 @@ function allow(segments: string[], method: string): string | null {
       ["GET", "POST"].includes(method)) return "/plans";
   if (segments.length === 1 && segments[0] === "payments" &&
       method === "GET") return "/payments";
+  if (segments.length === 3 && segments[0] === "payments" &&
+      UUID.test(segments[1]) && segments[2] === "reverse" && method === "POST") {
+    return "/payments/" + segments[1] + "/reverse";
+  }
   if (segments.length === 3 && segments[0] === "plans" &&
       UUID.test(segments[1]) && segments[2] === "status" && method === "POST") {
     return "/plans/" + segments[1] + "/status";

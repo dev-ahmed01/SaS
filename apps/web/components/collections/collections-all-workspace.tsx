@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { AccountingOverview } from "../accounting/accounting-overview";
+import { exportAllCsv } from "../../lib/export-csv";
 import { formatCRMDate } from "../../lib/crm-dates";
 
 type Payment = {
@@ -49,7 +50,7 @@ export function CollectionsAllWorkspace({activeOnly=false}:{activeOnly?:boolean}
   const [revision,setRevision] = useState(0);
   return <>
     {!activeOnly&&<AccountingOverview key={revision}/>}
-    {activeOnly&&<CollectionsReview activeOnly onReversed={()=>setRevision(n=>n+1)}/>}
+    <CollectionsReview activeOnly={activeOnly} onReversed={()=>setRevision(n=>n+1)}/>
   </>;
 }
 
@@ -68,6 +69,8 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
   const [typed,setTyped] = useState("");
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
+  const [exporting,setExporting]=useState(false);
+  const [exportNotice,setExportNotice]=useState("");
   const [notice,setNotice] = useState("");
   const requestId = useRef<string|null>(null);
   useEffect(()=>{
@@ -88,6 +91,35 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
   },[month,offset,refresh,activeOnly]);
+
+  async function exportReceipts(){
+    if(exporting)return;
+    setExporting(true);setError("");setExportNotice("Preparing complete receipt export…");
+    try{
+      const params=new URLSearchParams();
+      if(month)params.set(activeOnly?"received_month":"period_month",month+"-01");
+      const count=await exportAllCsv<Payment>({
+        url:"/api/admin/collections?"+params,
+        filename:"sas-collections-"+(month||"all-months")+".csv",
+        onProgress:(done,total)=>setExportNotice("Exporting "+done+" of "+total+" receipts…"),
+        columns:[
+          {title:"Sponsor",value:p=>p.sponsor_name},
+          {title:"Mobile",value:p=>p.sponsor_mobile},
+          {title:"Amount INR",value:p=>p.amount_paise/100},
+          {title:"Sponsorship month",value:p=>p.period_month},
+          {title:"Date paid",value:p=>p.received_on},
+          {title:"Recorded",value:p=>p.recorded_at},
+          {title:"Method",value:p=>p.payment_method},
+          {title:"Reference (masked)",value:p=>p.reference_mask},
+          {title:"Reversed",value:p=>p.reversed},
+          {title:"Reversal reason",value:p=>p.reversal_reason},
+          {title:"WhatsApp status",value:p=>p.message_status}
+        ]
+      });
+      setExportNotice(count+" receipt entries exported.");
+    }catch(e){setExportNotice("");setError(e instanceof Error?e.message:"Receipt export failed.");}
+    finally{setExporting(false);}
+  }
 
   function choose(row:Payment,kind:"edit"|"delete") {
     if(row.reversed)return;
@@ -173,6 +205,8 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
       <div>
         <h2>{activeOnly?"Received this month":"Collection history"}</h2>
       </div>
+      <button type="button" className="btn btn-secondary" disabled={exporting}
+        onClick={()=>void exportReceipts()}>{exporting?"Exporting…":"Export all receipts"}</button>
       <label className="field review-month">
         <span className="field-label">{activeOnly?"Date paid month":"Sponsorship month"}</span>
         <input type="month" aria-label="Filter collection history by month" value={month}
@@ -183,6 +217,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
       {correctionReady&&<span> <Link href="/collections/add">Record corrected collection</Link></span>}
     </p>}
     {error&&<p role="alert" className="form-error">{error}</p>}
+    {exportNotice&&<p role="status" className="crm-muted">{exportNotice}</p>}
     <div className="table-scroll">
       <table className="data-table">
         <thead><tr><th scope="col">Sponsor</th><th scope="col">Amount</th>
@@ -190,7 +225,7 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
           <th scope="col">Recorded</th><th scope="col">Status</th><th scope="col">WhatsApp</th>
           <th scope="col">Action</th></tr></thead>
         <tbody>{loading&&!data?<tr><td colSpan={8}>Loading collection history…</td></tr>
-          :!data?.items.length?<tr><td colSpan={7}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
+          :!data?.items.length?<tr><td colSpan={8}>{activeOnly?"No receipts recorded for this month.":"No manually recorded collections."}</td></tr>
           :data.items.map(row=><tr key={row.id}>
             <td><strong className="table-name">{row.sponsor_name}</strong><span className="table-subtitle">{row.sponsor_mobile}</span></td>
             <td>{rupees(row.amount_paise)}</td>
@@ -205,10 +240,10 @@ export function CollectionsReview({onReversed,activeOnly=false}:{onReversed:()=>
               :<div className="collection-row-actions">
                 <button type="button" className="text-action"
                   disabled={busy||resendBusy!==null}
-                  onClick={()=>choose(row,"edit")}>Edit</button>
+                  onClick={()=>choose(row,"edit")}>Correct entry</button>
                 <button type="button" className="text-action"
                   disabled={busy||resendBusy!==null}
-                  onClick={()=>choose(row,"delete")}>Delete</button>
+                  onClick={()=>choose(row,"delete")}>Reverse entry</button>
                 <button type="button" className="text-action"
                   disabled={busy||resendBusy!==null}
                   onClick={()=>void resend(row)}>

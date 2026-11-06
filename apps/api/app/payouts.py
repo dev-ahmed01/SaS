@@ -27,6 +27,7 @@ from app.models import (
     PayoutPlan,
     PayoutPlanTerm,
 )
+from app.security import utc_now
 
 router = APIRouter(prefix="/v1/payouts", tags=["Admin payouts"])
 REFERENCE = re.compile(r"^[A-Z0-9][A-Z0-9._:/-]{5,99}$")
@@ -80,6 +81,7 @@ class PlanRead(BaseModel):
     current_month_paid_paise: int
     payment_count: int
     created_at: date
+    voided: bool = False
 
 
 class PlanPage(BaseModel):
@@ -131,6 +133,8 @@ class PaymentRead(BaseModel):
     payment_method: str
     reference_mask: str
     evidence: Literal["admin_attested"]
+    reversed: bool = False
+    reversal_reason: str | None = None
 
 
 class PaymentPage(BaseModel):
@@ -183,6 +187,7 @@ def _payments(db: Session, plan: PayoutPlan) -> list[PayoutPayment]:
     return list(db.scalars(select(PayoutPayment).where(
         PayoutPayment.organization_id == plan.organization_id,
         PayoutPayment.plan_id == plan.id,
+        PayoutPayment.reversed_at.is_(None),
     )).all())
 
 
@@ -195,9 +200,10 @@ def _render_plan(
     current = month_start(ist_today())
     upcoming = shift_month(current, 1)
     if plan.cadence == "one_time":
-        status = ("paid" if payments else
+        status = ("closed" if plan.voided_at is not None else
+                  "paid" if payments else
                   "overdue" if plan.scheduled_on < ist_today() else "scheduled")
-        due = plan.amount_paise if plan.start_month == period else 0
+        due = plan.amount_paise if plan.start_month == period and plan.voided_at is None else 0
         next_status = None
     else:
         status = _term_status(terms, current) or "scheduled"
@@ -216,6 +222,7 @@ def _render_plan(
         current_month_due_paise=due,
         current_month_paid_paise=received, payment_count=len(payments),
         created_at=plan.created_at.date() if plan.created_at else ist_today(),
+        voided=plan.voided_at is not None,
     )
 
 
@@ -226,6 +233,8 @@ def _render_payment(db: Session, entry: PayoutPayment) -> PaymentRead:
         period_month=entry.period_month, paid_on=entry.paid_on,
         amount_paise=entry.amount_paise, payment_method=entry.payment_method,
         reference_mask=entry.reference_mask, evidence="admin_attested",
+        reversed=entry.reversed_at is not None,
+        reversal_reason=entry.reversal_reason,
     )
 
 
@@ -280,6 +289,7 @@ def record_quick_payout(
     if db.scalar(select(PayoutPayment.id).where(
         PayoutPayment.organization_id == admin.organization_id,
         PayoutPayment.reference_digest == reference_digest,
+        PayoutPayment.reversed_at.is_(None),
     )):
         raise HTTPException(status_code=409, detail="This UTR/reference was already recorded")
     period = month_start(payload.paid_on)
@@ -414,6 +424,7 @@ def list_plans(
         raise HTTPException(status_code=422, detail="Selected month is out of range")
     clauses = [PayoutPlan.organization_id == admin.organization_id]
     if view == "active":
+        clauses.append(PayoutPlan.voided_at.is_(None))
         # Match _render_plan's *current* status, independent of selected month.
         latest_state = (
             select(PayoutPlanTerm.status).where(
@@ -505,6 +516,8 @@ def record_disbursement(
     admin = context[0]
     _settings(db, admin, lock=True)
     plan = _plan(db, admin, plan_id)
+    if plan.voided_at is not None:
+        raise HTTPException(status_code=409, detail="This payout plan was voided after correction")
     sig = _hash(payload)
     prior = db.scalars(select(PayoutPayment).where(
         PayoutPayment.organization_id == admin.organization_id,
@@ -534,6 +547,7 @@ def record_disbursement(
     if db.scalars(select(PayoutPayment.id).where(
         PayoutPayment.organization_id == admin.organization_id,
         PayoutPayment.reference_digest == digest,
+        PayoutPayment.reversed_at.is_(None),
     )).first() is not None:
         raise HTTPException(status_code=409, detail="Payment reference already recorded")
     entry = PayoutPayment(
@@ -564,6 +578,85 @@ def record_disbursement(
         raise HTTPException(
             status_code=409, detail="Duplicate payment or reference; refresh"
         ) from exc
+    response.headers["Cache-Control"] = "no-store"
+    return _render_payment(db, entry)
+
+
+class PaymentReversalInput(BaseModel):
+    """Reverse an incorrectly recorded payout, not the external bank transfer."""
+
+    model_config = ConfigDict(extra="forbid")
+    request_id: uuid.UUID
+    confirmation: Literal["REVERSE"]
+    reason: Literal[
+        "duplicate_entry", "wrong_payee", "wrong_amount",
+        "funds_not_disbursed", "wrong_reference", "other",
+    ]
+
+
+@router.post("/payments/{payment_id}/reverse", response_model=PaymentRead, status_code=201)
+def reverse_disbursement(
+    payment_id: uuid.UUID,
+    payload: PaymentReversalInput,
+    response: Response,
+    context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
+    db: Annotated[Session, Depends(db_session)],
+) -> PaymentRead:
+    """Audited correction without erasing the original bank evidence.
+
+    A reversal only changes the CRM's recorded ledger. Real money is NOT
+    moved or refunded by this API. A quick one-time obligation is voided
+    because the original disbursement has been declared invalid.
+    """
+    admin = context[0]
+    _settings(db, admin, lock=True)
+    entry = db.scalars(select(PayoutPayment).where(
+        PayoutPayment.id == payment_id,
+        PayoutPayment.organization_id == admin.organization_id,
+    ).with_for_update()).one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Payout payment not found")
+    if entry.reversed_at is not None:
+        if entry.reversal_request_id == payload.request_id:
+            response.status_code = 200
+            response.headers["Cache-Control"] = "no-store"
+            return _render_payment(db, entry)
+        raise HTTPException(status_code=409, detail="This payout is already reversed")
+    existing = db.scalars(select(PayoutPayment).where(
+        PayoutPayment.organization_id == admin.organization_id,
+        PayoutPayment.reversal_request_id == payload.request_id,
+    )).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Reversal request ID already used")
+
+    plan = _plan(db, admin, entry.plan_id)
+    now = utc_now()
+    entry.reversed_at = now
+    entry.reversal_request_id = payload.request_id
+    entry.reversal_reason = payload.reason
+    entry.reversed_by_admin_id = admin.id
+    if plan.cadence == "one_time":
+        plan.voided_at = now
+    db.add(AuditEvent(
+        organization_id=admin.organization_id,
+        actor_admin_id=admin.id,
+        action="payout.payment_reversed",
+        entity_type="payout_payment",
+        entity_id=str(entry.id),
+        before_data={"reversed": False, "amount_paise": entry.amount_paise},
+        after_data={
+            "reversed": True,
+            "reason": payload.reason,
+            "period_month": str(entry.period_month),
+            "plan_voided": plan.cadence == "one_time",
+            "money_moved": False,
+        },
+    ))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Payout reversal conflict") from exc
     response.headers["Cache-Control"] = "no-store"
     return _render_payment(db, entry)
 

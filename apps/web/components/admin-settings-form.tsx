@@ -1,5 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
+import { TeamAccess } from "./team-access";
 
 type Values = {
   currency_code:string; timezone:string; default_contribution_paise:number;
@@ -23,6 +24,7 @@ export function AdminSettingsForm(){
   const [current,setCurrent]=useState<Values|null>(null);
   const [form,setForm]=useState<Editable|null>(null);
   const [csrf,setCsrf]=useState("");
+  const [role,setRole]=useState("viewer");
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [message,setMessage]=useState("");
@@ -37,7 +39,8 @@ export function AdminSettingsForm(){
       const identity=await session.json();
       const settings:Values=await config.json();
       if(mounted){
-        setCsrf(identity.csrf_token);setCurrent(settings);setForm(toForm(settings));
+        setCsrf(identity.csrf_token);setRole(identity.role??"viewer");
+        setCurrent(settings);setForm(toForm(settings));
       }
     }).catch(()=>{if(mounted)setError("Unable to load settings. Check your connection and try again.");})
       .finally(()=>{if(mounted)setLoading(false);});
@@ -48,7 +51,7 @@ export function AdminSettingsForm(){
   }
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
-    if(!form||!current||!csrf||saving)return;
+    if(!form||!current||!csrf||saving||role!=="owner")return;
     const rupees=Number(form.monthly_amount_rupees);
     const paise=Math.round(rupees*100);
     const sponsor_day=Number(form.sponsor_day),promoter_day=Number(form.promoter_day),months=2;
@@ -73,11 +76,13 @@ export function AdminSettingsForm(){
     } catch {setError("Connection problem. Your settings have not been confirmed.");}
     finally{setSaving(false);}
   }
-  return <section className="content-panel" aria-label="Organization configuration">
+  return <><section className="content-panel" aria-label="Organization configuration">
     <h2>Organisation Settings</h2>
     {loading&&<p role="status">Loading settings…</p>}
     {!loading&&!form&&<p role="alert">{error||"Settings unavailable."}</p>}
     {form&&current&&<form onSubmit={submit}>
+      {role!=="owner"&&<p className="crm-muted">Read-only settings. Owners can save changes.</p>}
+      <fieldset className="settings-fieldset" disabled={role!=="owner"}>
       <div className="form-grid">
         <label className="field"><span className="field-label">Default monthly contribution (₹)</span><input type="number" min={current.default_contribution_paise<25000?"0.01":"250"}
           step={current.default_contribution_paise%25000!==0?"any":"250"}
@@ -90,6 +95,9 @@ export function AdminSettingsForm(){
       {message&&<p role="status" className="form-success">{message}</p>}
       {error&&<p role="alert" className="form-error">{error}</p>}
       <div className="form-actions"><button className="btn btn-secondary" type="button" disabled={saving} onClick={()=>{setForm(toForm(current));setError("");setMessage("");}}>Reset</button><button className="btn btn-primary" type="submit" disabled={saving}>{saving?"Saving…":"Save Changes"}</button></div>
+      </fieldset>
     </form>}
-  </section>;
+  </section>
+  {role==="owner"&&<TeamAccess csrf={csrf}/>}
+  </>;
 }

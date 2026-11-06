@@ -16,6 +16,14 @@ const navigation: { name: string; href: string; icon: IconName }[] = [
   {name:"Settings",href:"/settings",icon:"settings"},
 ];
 
+const roleModules: Record<string,string[]> = {
+  owner:["dashboard","prospects","promoters","collections","payouts","communication","settings"],
+  crm:["dashboard","prospects","promoters","settings"],
+  finance:["dashboard","prospects","collections","payouts","settings"],
+  messaging:["dashboard","prospects","communication","settings"],
+  viewer:["dashboard","prospects","promoters","collections","payouts","communication","settings"],
+};
+
 const ShellMounted = createContext(false);
 
 export function AppShell({children}:{children:React.ReactNode}) {
@@ -28,12 +36,26 @@ export function AppShell({children}:{children:React.ReactNode}) {
 function AppShellFrame({children}:{children:React.ReactNode}) {
   const pathname = usePathname();
   const [mobileOpen,setMobileOpen] = useState(false);
+  const [role,setRole]=useState<string|null>(null);
   const [signOutError,setSignOutError] = useState("");
   const [signingOut,setSigningOut] = useState(false);
   const [profileOpen,setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLElement>(null);
   const closeDrawer = () => { setMobileOpen(false); setProfileOpen(false); };
+  const visibleNavigation=navigation.filter(item=>
+    (roleModules[role??""]??["dashboard"]).includes(item.href.slice(1))
+  );
+  useEffect(()=>{
+    let mounted=true;
+    fetch("/api/admin/session",{cache:"no-store"})
+      .then(async r=>{if(!r.ok)throw Error();return r.json();})
+      .then(value=>{if(mounted)setRole(String(value.role??"viewer"));})
+      .catch(()=>{if(mounted)setRole("viewer");});
+    return()=>{mounted=false;};
+  },[]);
   useEffect(()=>{
     if(!profileOpen)return;
     const onPointerDown=(event:PointerEvent)=>{
@@ -54,6 +76,34 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
       document.removeEventListener("keydown",onKeyDown);
     };
   },[profileOpen]);
+  useEffect(()=>{
+    if(!mobileOpen)return;
+    const drawer=mobileDrawerRef.current;
+    const menuClose=drawer?.querySelector<HTMLButtonElement>(".mobile-close");
+    menuClose?.focus();
+    const keyDown=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){
+        event.preventDefault();
+        if(profileOpen){setProfileOpen(false);profileButtonRef.current?.focus();return;}
+        setMobileOpen(false);mobileToggleRef.current?.focus();
+      }
+      if(event.key!=="Tab"||!drawer)return;
+      const choices=Array.from(drawer.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter(item=>getComputedStyle(item).display!=="none"&&
+        getComputedStyle(item).visibility!=="hidden");
+      if(!choices.length)return;
+      const first=choices[0],last=choices[choices.length-1];
+      if(event.shiftKey&&document.activeElement===first){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey&&document.activeElement===last){
+        event.preventDefault();first.focus();
+      }
+    };
+    document.addEventListener("keydown",keyDown);
+    return ()=>document.removeEventListener("keydown",keyDown);
+  },[mobileOpen,profileOpen]);
+
   async function signOut(){
     if(signingOut)return;
     setSigningOut(true);setSignOutError("");
@@ -73,7 +123,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
   return <ShellMounted.Provider value={true}><div className="app-frame">
     <a href="#main-content" className="skip-link">Skip to content</a>
     {mobileOpen && <button className="drawer-scrim" aria-label="Close navigation" onClick={closeDrawer}/>}
-    <aside className={"site-sidebar"+(mobileOpen?" mobile-open":"")} aria-label="Main navigation">
+    <aside ref={mobileDrawerRef} className={"site-sidebar"+(mobileOpen?" mobile-open":"")} aria-label="Main navigation">
       <div className="sidebar-head">
         <Link className="brand-link" href="/dashboard" onClick={closeDrawer} aria-label="Emlen Foundation home">
           <span className="brand-mark"><Icon name="moon" size={33}/></span>
@@ -82,7 +132,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
         <button className="icon-button mobile-close" onClick={closeDrawer} aria-label="Close menu"><Icon name="close"/></button>
       </div>
       <nav className="sidebar-nav" aria-label="Modules">
-        {navigation.map(link=>{
+        {visibleNavigation.map(link=>{
           const active=pathname===link.href || pathname.startsWith(link.href+"/");
           return <Link key={link.href} href={link.href} onClick={closeDrawer} title={link.name} aria-current={active?"page":undefined} className={"sidebar-link"+(active?" active":"")}>
             <Icon name={link.icon} size={18}/><span className="nav-label">{link.name}</span>
@@ -109,7 +159,7 @@ function AppShellFrame({children}:{children:React.ReactNode}) {
     </aside>
     <div className="app-content">
       <header className="topbar">
-        <button className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
+        <button ref={mobileToggleRef} className="icon-button mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Icon name="menu"/></button>
         <h1 className="topbar-name">{navigation.find(link=>pathname===link.href || pathname.startsWith(link.href+"/"))?.name ?? "Dashboard"}</h1>
         <IstClock/>
       </header>

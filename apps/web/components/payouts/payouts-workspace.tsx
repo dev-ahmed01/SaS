@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { recentSnapshot, rememberSnapshot } from "../../lib/module-snapshots";
 import { formatCRMDate } from "../../lib/crm-dates";
+import { exportAllCsv } from "../../lib/export-csv";
+import { PayoutPaymentHistory } from "./payout-payment-history";
 
 type Plan = {
   id:string; payee_name:string; purpose:string; notes:string|null;
@@ -11,6 +13,7 @@ type Plan = {
   status:"active"|"paused"|"closed"|"scheduled"|"paid"|"overdue";
   next_status:"active"|"paused"|"closed"|null;
   current_month_due_paise:number;current_month_paid_paise:number;payment_count:number;
+  voided?:boolean;
 };
 type PlanPage = {items:Plan[];total:number;limit:number;offset:number;period_month:string};
 type PaymentMethod="upi"|"bank_transfer"|"cash"|"cheque";
@@ -126,6 +129,8 @@ export function PayoutList({view}:{view:"all"|"active"}){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
+  const [exporting,setExporting]=useState(false);
+  const [exportNotice,setExportNotice]=useState("");
   const [chosen,setChosen]=useState<Plan|null>(null);
   const [mode,setMode]=useState<"paid"|"pause"|"resume"|"close">("paid");
   const [paymentDate,setPaymentDate]=useState(()=>dateIST());
@@ -150,6 +155,57 @@ export function PayoutList({view}:{view:"all"|"active"}){
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
   },[view,period,offset,refresh]);
+  async function exportPlans(){
+    if(exporting)return;
+    setExporting(true);setError("");setExportNotice("Preparing payout-plan export…");
+    try{
+      const params=new URLSearchParams({view,month:period});
+      const count=await exportAllCsv<Plan>({
+        url:"/api/admin/payouts/plans?"+params,
+        filename:"sas-payout-plans-"+view+"-"+period+".csv",
+        onProgress:(done,total)=>setExportNotice("Exporting "+done+" of "+total+" payout plans…"),
+        columns:[
+          {title:"Payee",value:p=>p.payee_name},
+          {title:"Purpose",value:p=>p.purpose},
+          {title:"Cadence",value:p=>p.cadence},
+          {title:"Commitment INR",value:p=>p.amount_paise/100},
+          {title:"Paid this month INR",value:p=>p.current_month_paid_paise/100},
+          {title:"Due this month INR",value:p=>p.current_month_due_paise/100},
+          {title:"Status",value:p=>p.status},
+          {title:"Next status",value:p=>p.next_status},
+          {title:"Start month",value:p=>p.start_month},
+          {title:"Scheduled date",value:p=>p.scheduled_on},
+        ]
+      });
+      setExportNotice(count+" payout plans exported.");
+    }catch(e){setExportNotice("");setError(e instanceof Error?e.message:"Export failed.");}
+    finally{setExporting(false);}
+  }
+  async function exportPayments(){
+    if(exporting)return;
+    setExporting(true);setError("");setExportNotice("Preparing recorded payments export…");
+    try{
+      type PaymentRow={payee_name:string;period_month:string;paid_on:string;
+        amount_paise:number;payment_method:string;reference_mask:string;evidence:string};
+      const count=await exportAllCsv<PaymentRow>({
+        url:"/api/admin/payouts/payments",
+        filename:"sas-actual-payout-payments-all.csv",
+        onProgress:(done,total)=>setExportNotice("Exporting "+done+" of "+total+" payments…"),
+        columns:[
+          {title:"Payee",value:p=>p.payee_name},
+          {title:"Accounting month",value:p=>p.period_month},
+          {title:"Date paid",value:p=>p.paid_on},
+          {title:"Amount INR",value:p=>p.amount_paise/100},
+          {title:"Method",value:p=>p.payment_method},
+          {title:"Reference (masked)",value:p=>p.reference_mask},
+          {title:"Evidence",value:p=>p.evidence}
+        ]
+      });
+      setExportNotice(count+" payments exported.");
+    }catch(e){setExportNotice("");setError(e instanceof Error?e.message:"Payment export failed.");}
+    finally{setExporting(false);}
+  }
+
   function open(plan:Plan,action:typeof mode){
     if(loading)return; // Stale navigation snapshots are read-only until refresh completes.
     setChosen(plan);setMode(action);setPaymentDate(dateIST());setMethod("upi");
@@ -192,12 +248,19 @@ export function PayoutList({view}:{view:"all"|"active"}){
     }catch(e){setError(e instanceof Error?e.message:"Unable to confirm action.");}
     finally{setSaving(false);}
   }
-  return <section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
+  return <><section className="payouts-workspace" aria-label={view==="active"?"Active payout plans":"All payout plans"}>
     <div className="payout-list-title"><div>
       <h2>{view==="active"?"Active recurring payouts":"All payouts"}</h2>
     </div><label className="field payout-month"><span className="field-label">Accounting month (IST)</span>
       <input aria-label="Payout accounting month" type="month" value={period}
         onChange={e=>{setPeriod(e.target.value);setOffset(0);}}/></label></div>
+    <div className="crm-list-actions payout-export-actions">
+      <button type="button" className="btn btn-secondary" disabled={exporting}
+        onClick={()=>void exportPlans()}>{exporting?"Exporting…":"Export all payout plans"}</button>
+      <button type="button" className="btn btn-secondary" disabled={exporting}
+        onClick={()=>void exportPayments()}>{exporting?"Exporting…":"Export actual payments"}</button>
+    </div>
+    {exportNotice&&<p className="crm-muted" role="status">{exportNotice}</p>}
     {notice&&<p className="form-success" role="status">{notice}</p>}
     {error&&<p className="form-error" role="alert">{error}</p>}
     <div className="table-scroll"><table className="data-table">
@@ -214,7 +277,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
           <td>{plan.purpose}</td><td>{plan.cadence==="recurring"?"Monthly":"One-time"}</td>
           <td>{money(plan.amount_paise)}</td><td>{money(plan.current_month_paid_paise)}</td>
           <td><span className={"status-pill "+plan.status}>
-            {plan.status==="paid"?"Paid":plan.status==="scheduled"?"Scheduled"
+            {plan.voided?"Voided / corrected":plan.status==="paid"?"Paid":plan.status==="scheduled"?"Scheduled"
               :plan.status==="overdue"?"Overdue":plan.status==="paused"?"Paused"
               :plan.status==="closed"?"Closed":"Active"}</span>
             {plan.next_status&&<small className="payout-future">Next: {plan.next_status}</small>}
@@ -296,5 +359,7 @@ export function PayoutList({view}:{view:"all"|"active"}){
         </form>
       </div>
     </section></div>}
-  </section>;
+  </section>
+  {view==="all"&&<PayoutPaymentHistory onCorrected={()=>setRefresh(n=>n+1)}/>}
+  </>;
 }
