@@ -34,6 +34,35 @@ jobs:
             -e ACME_EMAIL=ops@example.org \
             -v "$PWD/ops/staging/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Validate one shared Contabo HTTPS gateway for all three dashboards
+        run: |
+          cp ops/shared-vps/.env.example ops/shared-vps/.env
+          chmod 600 ops/shared-vps/.env
+          docker compose --env-file ops/shared-vps/.env \
+            -f ops/shared-vps/compose.yaml config --quiet
+          docker run --rm \
+            -e ACME_EMAIL=ops@example.org \
+            -e SAS_HOST=sas-staging.example.org \
+            -e WE_HOST=we-staging.example.org \
+            -e AE_HOST=ae-staging.example.org \
+            -v "$PWD/ops/shared-vps/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          args = [
+              "docker", "compose", "--env-file", "ops/shared-vps/.env",
+              "-f", "ops/shared-vps/compose.yaml", "config", "--format", "json",
+          ]
+          config = json.loads(subprocess.check_output(args, text=True))
+          services = config["services"]
+          assert set(services) == {"gateway"}
+          assert set(services["gateway"]["networks"]) == {"ingress"}
+          published = sorted(int(p["published"]) for p in services["gateway"]["ports"])
+          assert published == [80, 443, 443]
+          print("Single shared gateway validated: only HTTPS/ACME host ports.")
+          PY
       - name: Build FastAPI staging container
         run: docker build --pull -f ops/staging/Dockerfile.api -t sas-api-ci .
       - name: Build Next.js staging container
