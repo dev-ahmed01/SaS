@@ -30,3 +30,10 @@
 # Exclude private single-VPS staging credentials and locally generated TLS material.
 ops/staging/.env.db
 ops/staging/postgres-tls
+
+# Contabo private environment and certificate-authority signing key.
+ops/contabo/.env
+ops/contabo/.env.api
+ops/contabo/.env.db
+ops/contabo/postgres-tls/
+ops/contabo/backups/
