@@ -1,9 +1,12 @@
-name: InterServer staging container validation
+name: SaS VPS deployment container validation
 
 on:
   pull_request:
     paths:
       - 'ops/staging/**'
+      - 'ops/contabo/**'
+      - 'ops/shared-vps/**'
+      - '.dockerignore'
       - '.github/workflows/interserver-staging.yml'
       - 'apps/api/requirements.txt'
       - 'apps/web/package-lock.json'
@@ -43,9 +46,10 @@ jobs:
           docker run --rm \
             -e ACME_EMAIL=ops@example.org \
             -e SAS_HOST=sas-staging.example.org \
-            -e WE_HOST=we-staging.example.org \
-            -e AE_HOST=ae-staging.example.org \
+            -e SAS_API_UPSTREAM=sas-api:8001 \
+            -e SAS_WEB_UPSTREAM=sas-web:3000 \
             -v "$PWD/ops/shared-vps/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/ops/shared-vps/sites:/etc/caddy/sites:ro" \
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
           python3 - <<'PY'
           import json
@@ -123,3 +127,52 @@ jobs:
             -f ops/staging/compose.yaml \
             -f ops/staging/compose.single-vps.yaml run --rm api \
             python -m alembic -c alembic.ini current
+
+      - name: Guard scripts for bash syntax
+        run: |
+          bash -n ops/contabo/prepare-production.sh
+          bash -n ops/contabo/preflight.sh
+          bash -n ops/contabo/backup-database.sh
+          bash -n ops/contabo/restore-drill.sh
+          bash -n ops/contabo/smoke.sh
+      - name: Prepare disposable production-mode SaS secrets and CA
+        run: |
+          bash ops/contabo/prepare-production.sh sas-ci.internal.test
+          docker network inspect emlen_ingress >/dev/null 2>&1 || docker network create emlen_ingress
+          bash ops/contabo/preflight.sh
+      - name: Confirm production stack keeps worker off and data private
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          common = ["docker", "compose", "--env-file", "ops/contabo/.env",
+                    "-f", "ops/contabo/compose.production.yaml"]
+          base = json.loads(subprocess.check_output(common+["config","--format","json"],text=True))
+          services=base["services"]
+          assert {"db","api","web"} <= set(services)
+          assert all(not v.get("ports") for v in services.values())
+          assert set(services["db"]["networks"])=={"private"}
+          api=services["api"]
+          assert set(api["networks"])=={"private","ingress"}
+          assert api["environment"]["APP_ENV"]=="production"
+          assert "sslmode=verify-full" in api["environment"]["DATABASE_URL"]
+          profiled=json.loads(subprocess.check_output(common+["--profile","messaging","config","--format","json"],text=True))
+          worker=profiled["services"]["worker"]
+          assert "messaging" in worker.get("profiles",[])
+          assert "ingress" not in worker["networks"] and not worker.get("ports")
+          print("No host ports. Postgres isolated. Messaging worker profile optional.")
+          PY
+      - name: Exercise production DB verified TLS and one-off Alembic migrations
+        run: |
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml up -d --wait db
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml run --rm api \
+            python -m alembic upgrade head
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml run --rm api \
+            python -m alembic check
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml run --rm api \
+            python -c "from app.config import get_settings; s=get_settings(); assert s.app_env=='production'; assert not s.saasyto_delivery_enabled; print('Production TLS and settings valid')"
