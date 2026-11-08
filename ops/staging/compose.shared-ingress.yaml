@@ -71,8 +71,10 @@ services:
       - ALL
     init: true
     networks:
-      - private
-      - ingress
+      private: {}
+      ingress:
+        aliases:
+          - sas-api
 
   web:
     build:
@@ -96,7 +98,9 @@ services:
       - ALL
     init: true
     networks:
-      - ingress
+      ingress:
+        aliases:
+          - sas-web
 
 networks:
   private:
