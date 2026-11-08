@@ -39,6 +39,8 @@ Use `main` for current development, [the integration record](docs/INTEGRATION_RE
 
 For an exact local username of `Admin`, use the explicit development-only bootstrap in [Windows VS Code localhost guide](docs/LOCAL_VSCODE_WINDOWS.md). The demo mode must be enabled in an ignored local `.env` file, uses a loopback-only PostgreSQL database, prompts for your chosen password instead of committing it, and never changes production authentication. Normal `bootstrap_admin` still requires 12+ character passwords and an email address. Do not reuse demo credentials with real Foundation records.
 
+**Shared Contabo VPS staging:** The original InterServer/standalone Caddy Compose binds host 80/443. When SaS shares a VPS with the WE and AE dashboards, use the [shared-ingress SaS staging topology](ops/staging/CONTABO_SHARED_VPS.md) instead, behind one central HTTPS proxy. No live migration is authorized by this addition.
+
 ## Local development (synthetic data only)
 
 Requires Node.js 22+, Python 3.12+, PostgreSQL 16+ or Docker:
