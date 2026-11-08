@@ -176,3 +176,18 @@ jobs:
           docker compose --env-file ops/contabo/.env \
             -f ops/contabo/compose.production.yaml run --rm api \
             python -c "from app.config import get_settings; s=get_settings(); assert s.app_env=='production'; assert not s.saasyto_delivery_enabled; print('Production TLS and settings valid')"
+      - name: Exercise encrypted backup and isolated restore with synthetic schema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          age-keygen -o /tmp/sas-ci-identity.txt 2>/dev/null
+          export SAS_BACKUP_AGE_RECIPIENT
+          SAS_BACKUP_AGE_RECIPIENT="$(age-keygen -y /tmp/sas-ci-identity.txt)"
+          export SAS_BACKUP_DIR="$PWD/ops/contabo/backups"
+          bash ops/contabo/backup-database.sh
+          BACKUP="$(find "$SAS_BACKUP_DIR" -maxdepth 1 -type f -name '*.dump.age' -print -quit)"
+          test -n "$BACKUP"
+          SAS_RESTORE_ACK=ISOLATED_NEW_DATABASE \
+            AGE_IDENTITY_FILE=/tmp/sas-ci-identity.txt \
+            bash ops/contabo/restore-drill.sh "$BACKUP" "$BACKUP.sha256"
+          rm -f /tmp/sas-ci-identity.txt
