@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   staging-runtime:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +47,34 @@ jobs:
           docker compose --env-file ops/staging/.env \
             -f ops/staging/compose.yaml \
             -f ops/staging/compose.single-vps.yaml config --quiet
+      - name: Validate shared-VPS staging without exposing additional host ports
+        run: |
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.shared-ingress.yaml config --quiet
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          command = [
+              "docker", "compose", "--env-file", "ops/staging/.env",
+              "-f", "ops/staging/compose.shared-ingress.yaml",
+              "config", "--format", "json",
+          ]
+          config = json.loads(subprocess.check_output(command, text=True))
+          services = config["services"]
+          assert set(services) == {"db", "api", "web"}
+          assert all(not svc.get("ports") for svc in services.values()), (
+              "SaS shared-host stack must not publish any host port"
+          )
+          assert set(services["db"]["networks"]) == {"private"}, (
+              "Database must remain off shared ingress"
+          )
+          assert "ingress" in services["api"]["networks"]
+          assert "ingress" in services["web"]["networks"]
+          for name in ("api", "web"):
+              assert services[name]["environment"]["APP_ENV"] == "staging"
+          print("Shared ingress topology validated: no published ports, private database.")
+          PY
       - name: Build TLS PostgreSQL container
         run: docker build --pull -f ops/staging/Dockerfile.postgres -t sas-postgres-ci .
       - name: Exercise TLS database initialization and schema migrations
