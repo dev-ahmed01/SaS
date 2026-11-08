@@ -1,0 +1,40 @@
+{
+    email {$ACME_EMAIL}
+}
+
+# Isolated testing sites: no browser indexing until a separate production approval.
+{$SAS_HOST} {
+    encode zstd gzip
+    @sas_api path /v1/* /health/live /health/ready
+    handle @sas_api {
+        reverse_proxy sas-api:8001
+    }
+    handle {
+        reverse_proxy sas-web:3000
+    }
+    header {
+        X-Robots-Tag "noindex, nofollow"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+{$WE_HOST} {
+    encode zstd gzip
+    reverse_proxy we-web:80
+    header {
+        X-Robots-Tag "noindex, nofollow"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+{$AE_HOST} {
+    encode zstd gzip
+    reverse_proxy ae-web:80
+    header {
+        X-Robots-Tag "noindex, nofollow"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
