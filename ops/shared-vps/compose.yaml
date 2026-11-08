@@ -13,6 +13,9 @@ services:
       SAS_HOST: ${SAS_HOST:?Set SAS_HOST}
       SAS_API_UPSTREAM: ${SAS_API_UPSTREAM:-sas-api:8001}
       SAS_WEB_UPSTREAM: ${SAS_WEB_UPSTREAM:-sas-web:3000}
+      # These are optional until approved WE/AE site fragments are installed.
+      WE_HOST: ${WE_HOST:-}
+      AE_HOST: ${AE_HOST:-}
     ports:
       - "80:80"
       - "443:443"
