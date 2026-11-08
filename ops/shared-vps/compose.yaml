@@ -11,14 +11,15 @@ services:
     environment:
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
       SAS_HOST: ${SAS_HOST:?Set SAS_HOST}
-      WE_HOST: ${WE_HOST:?Set WE_HOST}
-      AE_HOST: ${AE_HOST:?Set AE_HOST}
+      SAS_API_UPSTREAM: ${SAS_API_UPSTREAM:-sas-api:8001}
+      SAS_WEB_UPSTREAM: ${SAS_WEB_UPSTREAM:-sas-web:3000}
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
