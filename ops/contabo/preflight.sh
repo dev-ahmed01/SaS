@@ -26,7 +26,10 @@ root = sys.argv[1]
 cmd = ["docker", "compose", "--env-file", f"{root}/.env",
        "-f", f"{root}/compose.production.yaml", "config", "--format", "json"]
 services = json.loads(subprocess.check_output(cmd, text=True))["services"]
-assert set(services) == {"db", "api", "web"}, "Worker must be opt-in only"
+assert {"db", "api", "web"} <= set(services)
+assert set(services) <= {"db", "api", "web", "worker"}
+if "worker" in services:
+    assert "messaging" in services["worker"].get("profiles", []), "Worker must be opt-in only"
 assert all(not service.get("ports") for service in services.values()), "Host port published"
 assert set(services["db"]["networks"]) == {"private"}, "PostgreSQL exposed"
 assert set(services["web"]["networks"]) == {"ingress"}, "Next.js not isolated"
