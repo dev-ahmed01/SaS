@@ -1,57 +1,33 @@
-# One Contabo HTTPS ingress for SaS, WE and AE
+# Single HTTPS gateway for SaS first, WE and AE later
 
-**Staging use only.** The three application repositories remain independently built, released and recovered. This directory is the **one common proxy** and should be deployed separately from each application's private Docker stack. The proxy uses only the external shared Docker network and cannot access their private database/media networks.
+The gateway is a **single** Caddy container that owns TCP 80/443 on Contabo. The SaS private production stack is `ops/contabo/compose.production.yaml`; SaS staging has a separate stack under `ops/staging/`. Never run both stacks with the same public SaS hostname and routing alias without an explicit switch plan.
 
-The three source configs live at:
-- SaS: `ops/staging/compose.shared-ingress.yaml` (this repository)
-- WE: `dev-ahmed01/Dashboard-WE/compose.shared-ingress.yaml`
-- AE: `dev-ahmed01/AE-dashboard/compose.shared-ingress.yaml`
-
-## Before exposing any domain
-
-- Confirm Docker Engine + Compose, patched Ubuntu, firewall, SSH key authentication, ingress access policy, valid DNS A records for each staging hostname, and administrator-approved domains. Do **not** copy personal donor/student records or enable outbound WhatsApp/SMTP.
-- The three apps need separate private DB volumes, object-storage buckets and secrets; never share these by mistake.
-- Staging admin access should be protected with an identity-aware gateway (such as an approved Cloudflare Access policy) **before** making HTTPS available to testers. A hard-to-guess URL is not authentication.
-- The proxy will bind public 80 and 443; it cannot run beside another container that already owns those ports. Check `docker ps` before starting and avoid replacing an existing live site's reverse proxy.
-- Create the shared ingress network **once**, not on each application restart: `docker network create emlen_ingress`.
-- Use `docker compose --env-file ops/shared-vps/.env -f ops/shared-vps/compose.yaml config --quiet` to validate this proxy stack.
-
-## Initial staging setup
-
-From the SaS repo root:
+## SaS-only first deployment
 
 ```bash
 cp ops/shared-vps/.env.example ops/shared-vps/.env
 chmod 600 ops/shared-vps/.env
-# Edit every value in ops/shared-vps/.env to your real staging DNS names.
-# Never commit this file.
-
-docker network create emlen_ingress
-
-docker compose --env-file ops/shared-vps/.env \
-  -f ops/shared-vps/compose.yaml config --quiet
+docker network inspect emlen_ingress >/dev/null 2>&1 || docker network create emlen_ingress
 ```
 
-First prepare each project using its own migration guide. The SaS staging host in `ops/staging/.env` must match `SAS_HOST`; WE `WE_STAGING_HOST` must equal `WE_HOST`; AE `AE_STAGING_HOST` must equal `AE_HOST`. Run each project's **one-off schema migration** and require healthy services before routing browsers to them. All components use distinct Compose `name:` values, preventing volume/container collision.
+Edit the ignored private `.env` to set `ACME_EMAIL`, the **actual** SaS hostname matching the SaS stack's `SAS_HOST`, and the correct upstream aliases:
 
-Once network aliases, DNS and all three private test stacks are ready, start the **only** Caddy process:
+- **SaS production:** `SAS_API_UPSTREAM=sas-prod-api:8001`, `SAS_WEB_UPSTREAM=sas-prod-web:3000`
+- **SaS synthetic staging:** `SAS_API_UPSTREAM=sas-api:8001`, `SAS_WEB_UPSTREAM=sas-web:3000`
+
+The Caddy service exposes only HTTP/HTTPS, while DB/API/Next.js have no host-published ports. The Caddy network alias for the exact SaS hostname ensures the Next.js server can verify the same-origin HTTPS certificate without insecure localhost exceptions.
+
+Only after SaS's private containers are healthy and DNS is correct:
 
 ```bash
-docker compose --env-file ops/shared-vps/.env \
-  -f ops/shared-vps/compose.yaml up -d
-
-docker compose --env-file ops/shared-vps/.env \
-  -f ops/shared-vps/compose.yaml ps
+docker compose --env-file ops/shared-vps/.env -f ops/shared-vps/compose.yaml config --quiet
+docker compose --env-file ops/shared-vps/.env -f ops/shared-vps/compose.yaml up -d
 ```
 
-Validate all three certs and endpoints externally using their **actual configured hostname**. For SaS, `https://$SAS_HOST/health/ready`; WE and AE, `https://$WE_HOST/api/health/ready` and `https://$AE_HOST/api/health/ready`. Do not disable certificate verification to pass the check. Test protected login, logout, permissions, same-origin mutations, SEO noindex, backups and restore isolation.
+Use `ops/contabo/DEPLOY.md` for the first production deployment, separate database restoration, backup encryption and approved WhatsApp activation. No source change alone authorizes live Foundation data.
 
-## Release gates
+## Add WE and AE without another 80/443 listener
 
-- GitHub main protections, independent PR review and pinned reproducible builds.
-- Real VPS security posture, host resource/disk monitoring, separate encrypted off-host DB and media backups.
-- Successfully witnessed restore into separate empty systems, recorded RPO/RTO, incident owner and rollback dry run.
-- App-specific finance/privacy/data-consent signoffs and documented launch authorization.
-- Email verification, Meta/Saasyto/OTP, production domains, canonical SEO and customer data migrate **only** in separately approved cutovers.
+The Caddyfile imports `ops/shared-vps/sites/*.caddy`. An empty import is explicitly supported by Caddy. Nothing is imported by default; the `other-dashboards.example` file is just a template. When the other dashboards have their own private databases, media buckets, healthy web containers and real DNS, copy only the approved WE/AE blocks into respective `.caddy` site files and provide `WE_HOST`/`AE_HOST` to the gateway's private environment. Use a staging-only `X-Robots-Tag: noindex`, identity-aware access policies and distinct application credentials.
 
-No secrets, backups or customer records are stored by this proxy repo. The example hostnames and admin email are **not** working production settings. If a previous Caddy/Nginx site already handles 80/443, integrate these route definitions into it rather than running a second gateway.
+**Preflight gates:** no other reverse proxy already owns 80/443; TLS and DNS work, only Caddy binds host ports, private data networks are isolated, GitHub release SHA/CI are recorded, encrypted offsite backups restore successfully, independent UAT is signed, and live sender permission remains an explicit separate change.
