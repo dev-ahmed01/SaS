@@ -1,0 +1,42 @@
+# Single TLS gateway for all three Emlen test dashboards.
+# App stacks are separate Compose projects with independent private networks.
+name: emlen-vps-ingress
+services:
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      SAS_HOST: ${SAS_HOST:?Set SAS_HOST}
+      SAS_API_UPSTREAM: ${SAS_API_UPSTREAM:-sas-api:8001}
+      SAS_WEB_UPSTREAM: ${SAS_WEB_UPSTREAM:-sas-web:3000}
+      # These are optional until approved WE/AE site fragments are installed.
+      WE_HOST: ${WE_HOST:-}
+      AE_HOST: ${AE_HOST:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      ingress:
+        aliases:
+          # SaS web calls its own validated HTTPS origin, rather than an
+          # insecure internal HTTP URL or a public-IP hairpin.
+          - ${SAS_HOST:?Set SAS_HOST}
+
+networks:
+  ingress:
+    external: true
+    name: emlen_ingress
+
+volumes:
+  caddy_data:
+  caddy_config:

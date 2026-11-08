@@ -1,0 +1,146 @@
+# Production-ready SaS container topology; ONLY the central Caddy gateway
+# publishes 80/443. This project cannot enable sender traffic by itself.
+name: sas-production
+services:
+  db:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.postgres
+    restart: unless-stopped
+    env_file:
+      - .env.db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-tls/server.key:/run/postgres-tls/server.key:ro
+      - ./postgres-tls/server.crt:/run/postgres-tls/server.crt:ro
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/server.key
+      - -c
+      - password_encryption=scram-sha-256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+
+  api:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - .env.api
+    environment:
+      APP_ENV: production
+      LOCAL_DEMO_LOGIN_ENABLED: "false"
+      SAASYTO_LOCAL_TEST_ENABLED: "false"
+      SAASYTO_LOCAL_DYNAMIC_ENABLED: "false"
+      OTP_LOCAL_PILOT_ENABLED: "false"
+      # Prevent accidentally reviving the unused Pabbly transport.
+      MESSAGING_DELIVERY_ENABLED: "false"
+    volumes:
+      - ./postgres-tls/ca.crt:/run/postgres-ca/ca.crt:ro
+    expose:
+      - "8001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 4
+      start_period: 45s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      private: {}
+      ingress:
+        aliases:
+          - sas-prod-api
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.web
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      NODE_ENV: production
+      APP_PUBLIC_ORIGIN: https://${SAS_HOST:?Set the approved SaS hostname}
+      API_INTERNAL_URL: https://${SAS_HOST:?Set the approved SaS hostname}
+      NEXT_TELEMETRY_DISABLED: "1"
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      ingress:
+        aliases:
+          - sas-prod-web
+
+  # Admin-approved queued campaigns/reminders are dispatched ONLY if an
+  # authorized operator explicitly runs: docker compose --profile messaging up -d worker
+  # and the API's separate sender, delivery and worker settings are valid.
+  worker:
+    profiles: ["messaging"]
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.api
+    restart: unless-stopped
+    command: ["python", "-m", "app.saasyto_vps_worker", "--interval-seconds", "60"]
+    env_file:
+      - .env.api
+    environment:
+      APP_ENV: production
+      LOCAL_DEMO_LOGIN_ENABLED: "false"
+      SAASYTO_LOCAL_TEST_ENABLED: "false"
+      SAASYTO_LOCAL_DYNAMIC_ENABLED: "false"
+      OTP_LOCAL_PILOT_ENABLED: "false"
+      MESSAGING_DELIVERY_ENABLED: "false"
+    volumes:
+      - ./postgres-tls/ca.crt:/run/postgres-ca/ca.crt:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      - private
+      - outbound
+
+networks:
+  private:
+    internal: true
+  ingress:
+    external: true
+    name: emlen_ingress
+  outbound:
+    # Worker requires outbound access to the provider, never a host port.
+    driver: bridge
+
+volumes:
+  postgres_data:

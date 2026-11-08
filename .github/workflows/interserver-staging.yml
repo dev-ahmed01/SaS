@@ -1,9 +1,12 @@
-name: InterServer staging container validation
+name: SaS VPS deployment container validation
 
 on:
   pull_request:
     paths:
       - 'ops/staging/**'
+      - 'ops/contabo/**'
+      - 'ops/shared-vps/**'
+      - '.dockerignore'
       - '.github/workflows/interserver-staging.yml'
       - 'apps/api/requirements.txt'
       - 'apps/web/package-lock.json'
@@ -14,7 +17,7 @@ permissions:
 
 jobs:
   staging-runtime:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +37,36 @@ jobs:
             -e ACME_EMAIL=ops@example.org \
             -v "$PWD/ops/staging/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Validate one shared Contabo HTTPS gateway for all three dashboards
+        run: |
+          cp ops/shared-vps/.env.example ops/shared-vps/.env
+          chmod 600 ops/shared-vps/.env
+          docker compose --env-file ops/shared-vps/.env \
+            -f ops/shared-vps/compose.yaml config --quiet
+          docker run --rm \
+            -e ACME_EMAIL=ops@example.org \
+            -e SAS_HOST=sas-staging.example.org \
+            -e SAS_API_UPSTREAM=sas-api:8001 \
+            -e SAS_WEB_UPSTREAM=sas-web:3000 \
+            -v "$PWD/ops/shared-vps/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/ops/shared-vps/sites:/etc/caddy/sites:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          args = [
+              "docker", "compose", "--env-file", "ops/shared-vps/.env",
+              "-f", "ops/shared-vps/compose.yaml", "config", "--format", "json",
+          ]
+          config = json.loads(subprocess.check_output(args, text=True))
+          services = config["services"]
+          assert set(services) == {"gateway"}
+          assert set(services["gateway"]["networks"]) == {"ingress"}
+          published = sorted(int(p["published"]) for p in services["gateway"]["ports"])
+          assert published == [80, 443, 443]
+          print("Single shared gateway validated: only HTTPS/ACME host ports.")
+          PY
       - name: Build FastAPI staging container
         run: docker build --pull -f ops/staging/Dockerfile.api -t sas-api-ci .
       - name: Build Next.js staging container
@@ -47,6 +80,34 @@ jobs:
           docker compose --env-file ops/staging/.env \
             -f ops/staging/compose.yaml \
             -f ops/staging/compose.single-vps.yaml config --quiet
+      - name: Validate shared-VPS staging without exposing additional host ports
+        run: |
+          docker compose --env-file ops/staging/.env \
+            -f ops/staging/compose.shared-ingress.yaml config --quiet
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          command = [
+              "docker", "compose", "--env-file", "ops/staging/.env",
+              "-f", "ops/staging/compose.shared-ingress.yaml",
+              "config", "--format", "json",
+          ]
+          config = json.loads(subprocess.check_output(command, text=True))
+          services = config["services"]
+          assert set(services) == {"db", "api", "web"}
+          assert all(not svc.get("ports") for svc in services.values()), (
+              "SaS shared-host stack must not publish any host port"
+          )
+          assert set(services["db"]["networks"]) == {"private"}, (
+              "Database must remain off shared ingress"
+          )
+          assert "ingress" in services["api"]["networks"]
+          assert "ingress" in services["web"]["networks"]
+          for name in ("api", "web"):
+              assert services[name]["environment"]["APP_ENV"] == "staging"
+          print("Shared ingress topology validated: no published ports, private database.")
+          PY
       - name: Build TLS PostgreSQL container
         run: docker build --pull -f ops/staging/Dockerfile.postgres -t sas-postgres-ci .
       - name: Exercise TLS database initialization and schema migrations
@@ -66,3 +127,67 @@ jobs:
             -f ops/staging/compose.yaml \
             -f ops/staging/compose.single-vps.yaml run --rm api \
             python -m alembic -c alembic.ini current
+
+      - name: Guard scripts for bash syntax
+        run: |
+          bash -n ops/contabo/prepare-production.sh
+          bash -n ops/contabo/preflight.sh
+          bash -n ops/contabo/backup-database.sh
+          bash -n ops/contabo/restore-drill.sh
+          bash -n ops/contabo/smoke.sh
+      - name: Prepare disposable production-mode SaS secrets and CA
+        run: |
+          bash ops/contabo/prepare-production.sh sas-ci.internal.test
+          docker network inspect emlen_ingress >/dev/null 2>&1 || docker network create emlen_ingress
+          bash ops/contabo/preflight.sh
+      - name: Confirm production stack keeps worker off and data private
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          common = ["docker", "compose", "--env-file", "ops/contabo/.env",
+                    "-f", "ops/contabo/compose.production.yaml"]
+          base = json.loads(subprocess.check_output(common+["config","--format","json"],text=True))
+          services=base["services"]
+          assert {"db","api","web"} <= set(services)
+          assert all(not v.get("ports") for v in services.values())
+          assert set(services["db"]["networks"])=={"private"}
+          api=services["api"]
+          assert set(api["networks"])=={"private","ingress"}
+          assert api["environment"]["APP_ENV"]=="production"
+          assert "sslmode=verify-full" in api["environment"]["DATABASE_URL"]
+          profiled=json.loads(subprocess.check_output(common+["--profile","messaging","config","--format","json"],text=True))
+          worker=profiled["services"]["worker"]
+          assert "messaging" in worker.get("profiles",[])
+          assert "ingress" not in worker["networks"] and not worker.get("ports")
+          print("No host ports. Postgres isolated. Messaging worker profile optional.")
+          PY
+      - name: Exercise production DB verified TLS and one-off Alembic migrations
+        run: |
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml up -d --wait db
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml run --rm api \
+            python -m alembic upgrade head
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml run --rm api \
+            python -m alembic check
+          docker compose --env-file ops/contabo/.env \
+            -f ops/contabo/compose.production.yaml run --rm api \
+            python -c "from app.config import get_settings; s=get_settings(); assert s.app_env=='production'; assert not s.saasyto_delivery_enabled; print('Production TLS and settings valid')"
+      - name: Exercise encrypted backup and isolated restore with synthetic schema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          age-keygen -o /tmp/sas-ci-identity.txt 2>/dev/null
+          export SAS_BACKUP_AGE_RECIPIENT
+          SAS_BACKUP_AGE_RECIPIENT="$(age-keygen -y /tmp/sas-ci-identity.txt)"
+          export SAS_BACKUP_DIR="$PWD/ops/contabo/backups"
+          bash ops/contabo/backup-database.sh
+          BACKUP="$(find "$SAS_BACKUP_DIR" -maxdepth 1 -type f -name '*.dump.age' -print -quit)"
+          test -n "$BACKUP"
+          SAS_RESTORE_ACK=ISOLATED_NEW_DATABASE \
+            AGE_IDENTITY_FILE=/tmp/sas-ci-identity.txt \
+            bash ops/contabo/restore-drill.sh "$BACKUP" "$BACKUP.sha256"
+          rm -f /tmp/sas-ci-identity.txt

@@ -1,0 +1,113 @@
+# SaS private staging on a VPS shared with WE and AE.
+# The ONE shared ingress proxy owns host ports 80/443; this stack owns none.
+# Prerequisites: run prepare-single-vps.sh and create emlen_ingress externally.
+name: sas-staging-shared
+services:
+  db:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.postgres
+    restart: unless-stopped
+    env_file:
+      - .env.db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-tls:/run/postgres-tls:ro
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/server.key
+      - -c
+      - password_encryption=scram-sha-256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+
+  api:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - .env.api
+    environment:
+      APP_ENV: staging
+      LOCAL_DEMO_LOGIN_ENABLED: "false"
+      MESSAGING_DELIVERY_ENABLED: "false"
+      MESSAGING_SENDER_APPROVED: "false"
+      SAASYTO_DELIVERY_ENABLED: "false"
+      SAASYTO_SENDER_APPROVED: "false"
+      SAASYTO_WORKER_ENABLED: "false"
+      SAASYTO_AUTO_REMINDERS_ENABLED: "false"
+      OTP_DELIVERY_ENABLED: "false"
+      OTP_SAASYTO_ENABLED: "false"
+      OTP_LOCAL_PILOT_ENABLED: "false"
+      OTP_ACTIVATION_NOTICE_ENABLED: "false"
+    expose:
+      - "8001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/live', timeout=4)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      private: {}
+      ingress:
+        aliases:
+          - sas-api
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.web
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      NODE_ENV: production
+      APP_PUBLIC_ORIGIN: https://${STAGING_HOST:?Set STAGING_HOST in ops/staging/.env}
+      API_INTERNAL_URL: https://${STAGING_HOST:?Set STAGING_HOST in ops/staging/.env}
+      NEXT_TELEMETRY_DISABLED: "1"
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      ingress:
+        aliases:
+          - sas-web
+
+networks:
+  private:
+    internal: true
+  ingress:
+    external: true
+    name: emlen_ingress
+
+volumes:
+  postgres_data:

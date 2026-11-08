@@ -1,0 +1,24 @@
+{
+    email {$ACME_EMAIL}
+}
+
+# Isolated testing sites: no browser indexing until a separate production approval.
+{$SAS_HOST} {
+    encode zstd gzip
+    @sas_api path /v1/* /health/live /health/ready
+    handle @sas_api {
+        reverse_proxy {$SAS_API_UPSTREAM}
+    }
+    handle {
+        reverse_proxy {$SAS_WEB_UPSTREAM}
+    }
+    header {
+        X-Robots-Tag "noindex, nofollow"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# Optional additional site fragments (e.g. WE/AE) are enabled only after
+# those apps are deployed; an empty glob is valid in Caddy.
+import /etc/caddy/sites/*.caddy
