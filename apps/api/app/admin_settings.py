@@ -24,6 +24,7 @@ from app.sponsorship_policy import (
     INACTIVITY_COMPLETED_MONTHS,
     SPONSORSHIP_STEP_PAISE,
 )
+from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/settings", tags=["Admin settings"])
 
@@ -152,13 +153,28 @@ def change_automation(
 
     if payload.enabled:
         cfg = get_settings()
-        if not (
-            cfg.app_env == "production"
-            and cfg.messaging_delivery_enabled
+        # Two independent transports share the organization automation
+        # approval. Saasyto does not require (and must not enable) Pabbly.
+        # Enabling this switch only authorizes future scheduled reminders;
+        # the private worker and standing-reminder flags remain separate.
+        legacy_ready = (
+            cfg.messaging_delivery_enabled
             and cfg.messaging_sender_approved
             and cfg.messaging_enable_after is not None
             and cfg.messaging_enable_after.tzinfo is not None
-        ):
+        )
+        saasyto_cutoff = getattr(cfg, "saasyto_enable_after", None)
+        saasyto_ready = (
+            getattr(cfg, "saasyto_delivery_enabled", False)
+            and getattr(cfg, "saasyto_sender_approved", False)
+            and getattr(cfg, "saasyto_worker_enabled", False)
+            and getattr(cfg, "saasyto_auto_reminders_enabled", False)
+            and not cfg.messaging_delivery_enabled
+            and saasyto_cutoff is not None
+            and saasyto_cutoff.tzinfo is not None
+            and as_utc(saasyto_cutoff) <= utc_now()
+        )
+        if not (cfg.app_env == "production" and (legacy_ready or saasyto_ready)):
             raise HTTPException(
                 status_code=409,
                 detail="Approved production sender and activation cutoff are required",
