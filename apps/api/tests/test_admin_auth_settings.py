@@ -339,3 +339,57 @@ def test_automation_enable_is_separate_audited_fail_closed_admin_action(
         assert events[0].after_data == {"automation_enabled": True}
         assert events[1].before_data == {"automation_enabled": True}
         assert events[1].after_data == {"automation_enabled": False}
+
+
+def test_saasyto_automation_requires_independent_worker_reminder_approval(
+    environment, monkeypatch,
+) -> None:
+    """Never enable standing reminders based on OTP credentials alone."""
+    from types import SimpleNamespace
+
+    client, engine = environment
+    csrf = sign_in(client)
+    url = "/v1/settings/automation"
+    enable = {"enabled": True, "confirmation": "ENABLE WHATSAPP"}
+    now = utc_now()
+    base = {
+        "app_env": "production",
+        "messaging_delivery_enabled": False,
+        "messaging_sender_approved": False,
+        "messaging_enable_after": None,
+        "saasyto_delivery_enabled": True,
+        "saasyto_sender_approved": True,
+        "saasyto_worker_enabled": False,
+        "saasyto_auto_reminders_enabled": False,
+        "saasyto_enable_after": now - timedelta(minutes=1),
+    }
+
+    def set_config(**changes):
+        monkeypatch.setattr("app.admin_settings.get_settings",
+                            lambda: SimpleNamespace(**{**base, **changes}))
+
+    # OTP/send approval is insufficient to start monthly automation.
+    set_config()
+    assert client.post(url, headers={"X-CSRF-Token": csrf},
+                       json=enable).status_code == 409
+    set_config(saasyto_worker_enabled=True)
+    assert client.post(url, headers={"X-CSRF-Token": csrf},
+                       json=enable).status_code == 409
+    set_config(saasyto_worker_enabled=True,
+               saasyto_auto_reminders_enabled=True,
+               saasyto_enable_after=now + timedelta(days=1))
+    assert client.post(url, headers={"X-CSRF-Token": csrf},
+                       json=enable).status_code == 409
+
+    # Explicit production approval for both worker and standing reminders.
+    set_config(saasyto_worker_enabled=True,
+               saasyto_auto_reminders_enabled=True)
+    approved = client.post(url, headers={"X-CSRF-Token": csrf}, json=enable)
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["automation_enabled"] is True
+
+    stopped = client.post(url, headers={"X-CSRF-Token": csrf}, json={
+        "enabled": False, "confirmation": "DISABLE WHATSAPP",
+    })
+    assert stopped.status_code == 200, stopped.text
+    assert stopped.json()["automation_enabled"] is False
