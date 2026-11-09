@@ -20,11 +20,11 @@ from app.models import (
     OrganizationFieldOption,
     OrganizationSettings,
 )
+from app.security import as_utc, utc_now
 from app.sponsorship_policy import (
     INACTIVITY_COMPLETED_MONTHS,
     SPONSORSHIP_STEP_PAISE,
 )
-from app.security import as_utc, utc_now
 
 router = APIRouter(prefix="/v1/settings", tags=["Admin settings"])
 
