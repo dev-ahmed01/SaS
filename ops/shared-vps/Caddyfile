@@ -13,7 +13,7 @@
         reverse_proxy {$SAS_WEB_UPSTREAM}
     }
     header {
-        X-Robots-Tag "noindex, nofollow"
+        X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex"
         X-Content-Type-Options "nosniff"
         Referrer-Policy "strict-origin-when-cross-origin"
     }
