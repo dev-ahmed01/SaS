@@ -23,10 +23,12 @@ from app.models import (
     AuditEvent,
     OrganizationSettings,
     Prospect,
+    Promoter,
     SponsorshipRate,
 )
 from app.prospect_defaults import get_registration_stage
 from app.prospects import ProspectFields, _ist_month
+from app.promoters import _edit_assignment
 from app.security import utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
 
@@ -36,6 +38,9 @@ router = APIRouter(prefix="/v1/prospects/bulk", tags=["Admin prospects"])
 class BulkPerson(BaseModel):
     model_config = ConfigDict(extra="forbid")
     full_name: str = Field(min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, min_length=2, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    promoter: str | None = Field(default=None, max_length=160)
     mobile_number: str = Field(min_length=9, max_length=16)
     area_city: str = Field(default="", max_length=120)
     email: EmailStr | None = None
@@ -49,6 +54,11 @@ class BulkPerson(BaseModel):
     @classmethod
     def normalize_name(cls, value: str) -> str:
         return ProspectFields.normalize_labels(value)
+
+    @field_validator("first_name", "last_name", "promoter")
+    @classmethod
+    def normalize_profile(cls, value: str | None) -> str | None:
+        return ProspectFields.clean_profile(value)
 
     @field_validator("area_city")
     @classmethod
@@ -73,6 +83,7 @@ class BulkRequest(BaseModel):
     rows: list[BulkPerson] = Field(min_length=1, max_length=100)
     expected_month: date | None = None
     expected_default_amount_paise: int | None = None
+    expected_promoter_ids: list[uuid.UUID | None] | None = Field(default=None, max_length=100)
 
 
 class BulkRowResult(BaseModel):
@@ -82,6 +93,8 @@ class BulkRowResult(BaseModel):
     status: str
     detail: str | None = None
     prospect_id: uuid.UUID | None = None
+    promoter_id: uuid.UUID | None = None
+    promoter_name: str | None = None
 
 
 class BulkResponse(BaseModel):
@@ -100,9 +113,12 @@ def _row_hash(row: BulkPerson) -> str:
     secret = auth_module.get_settings().auth_secret
     if not secret or len(secret) < 32:
         raise HTTPException(status_code=503, detail="Import fingerprint unavailable")
-    canonical = json.dumps(
-        row.model_dump(mode="json"), sort_keys=True, ensure_ascii=True
-    ).encode("utf-8")
+    fields = row.model_dump(mode="json")
+    # Keep legacy six-column batch replays compatible with their original hashes.
+    for key in ("first_name", "last_name", "promoter"):
+        if fields[key] is None:
+            fields.pop(key)
+    canonical = json.dumps(fields, sort_keys=True, ensure_ascii=True).encode("utf-8")
     return hmac.new(
         secret.encode("utf-8"), b"sas:bulk-prospect:v1:" + canonical, hashlib.sha256,
     ).hexdigest()
@@ -145,6 +161,24 @@ def import_prospects(
         )).all()
     }
 
+    # Resolve exact, case-insensitive active names within the signed-in tenant.
+    # Lock active promoter rows during commit so deactivation cannot race assignment.
+    by_name: dict[str, list[Promoter]] = {}
+    if any(row.promoter for row in payload.rows):
+        query = select(Promoter).where(
+            Promoter.organization_id == admin.organization_id,
+            Promoter.is_active.is_(True),
+        ).order_by(Promoter.id)
+        if payload.commit:
+            query = query.with_for_update()
+        for promoter in db.scalars(query).all():
+            key = " ".join(promoter.full_name.split()).casefold()
+            by_name.setdefault(key, []).append(promoter)
+    if payload.commit and payload.expected_promoter_ids is not None and (
+        len(payload.expected_promoter_ids) != len(payload.rows)
+    ):
+        raise HTTPException(status_code=409, detail="Promoter selection changed. Preview again.")
+    chosen: dict[int, Promoter] = {}
     seen: set[str] = set()
     results: list[BulkRowResult] = []
     for index, row in enumerate(payload.rows):
@@ -160,6 +194,21 @@ def import_prospects(
                 status, detail = "blocked", "Batch ID was already used for different data"
         elif row.mobile_number in duplicates:
             status, detail = "blocked", "Mobile already registered (including archived)"
+        if status == "ready" and row.first_name is not None:
+            expected_name = " ".join(filter(None, (row.first_name, row.last_name)))
+            if len(row.first_name) < 2 or expected_name != row.full_name:
+                status, detail = "blocked", "First and last name must match the full name"
+        if status == "ready" and row.promoter:
+            matches = by_name.get(" ".join(row.promoter.split()).casefold(), [])
+            if len(matches) != 1:
+                status, detail = "blocked", "Promoter not found or multiple active promoters match this name"
+            else:
+                chosen[index] = matches[0]
+                if payload.commit and (
+                    payload.expected_promoter_ids is None
+                    or payload.expected_promoter_ids[index] != matches[0].id
+                ):
+                    status, detail = "blocked", "Promoter selection changed. Preview again."
         amount = row.monthly_contribution_paise or default_amount
         if not valid_commitment(amount):
             status, detail = "blocked", "Invalid ₹250 sponsorship increment"
@@ -167,6 +216,8 @@ def import_prospects(
             row=index + 1, full_name=row.full_name, mobile_number=row.mobile_number,
             status=status, detail=detail,
             prospect_id=original.id if status == "already_imported" else None,
+            promoter_id=chosen[index].id if index in chosen else None,
+            promoter_name=chosen[index].full_name if index in chosen else row.promoter,
         ))
         seen.add(row.mobile_number)
 
@@ -192,7 +243,8 @@ def import_prospects(
                 beginning = row.start_month or month
                 person = Prospect(
                     organization_id=admin.organization_id,
-                    full_name=row.full_name, mobile_number=row.mobile_number,
+                    full_name=row.full_name, first_name=row.first_name, last_name=row.last_name,
+                    mobile_number=row.mobile_number,
                     whatsapp_number=row.mobile_number, area_city=row.area_city,
                     email=str(row.email) if row.email else None,
                     monthly_contribution_paise=amount, start_month=beginning,
@@ -214,6 +266,8 @@ def import_prospects(
                     after_data={"batch_id": str(payload.batch_id), "row": index + 1,
                                 "status": "new", "version": 1},
                 ))
+                if index in chosen:
+                    _edit_assignment(db, admin, chosen[index], person.id, person.version, remove=False)
                 results[index].status = "added"
                 results[index].prospect_id = person.id
                 added += 1
