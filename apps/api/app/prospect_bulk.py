@@ -22,13 +22,13 @@ from app.models import (
     AdminUser,
     AuditEvent,
     OrganizationSettings,
-    Prospect,
     Promoter,
+    Prospect,
     SponsorshipRate,
 )
+from app.promoters import _edit_assignment
 from app.prospect_defaults import get_registration_stage
 from app.prospects import ProspectFields, _ist_month
-from app.promoters import _edit_assignment
 from app.security import utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
 
@@ -201,7 +201,8 @@ def import_prospects(
         if status == "ready" and row.promoter:
             matches = by_name.get(" ".join(row.promoter.split()).casefold(), [])
             if len(matches) != 1:
-                status, detail = "blocked", "Promoter not found or multiple active promoters match this name"
+                status = "blocked"
+                detail = "Promoter not found or multiple active promoters match this name"
             else:
                 chosen[index] = matches[0]
                 if payload.commit and (
@@ -267,7 +268,9 @@ def import_prospects(
                                 "status": "new", "version": 1},
                 ))
                 if index in chosen:
-                    _edit_assignment(db, admin, chosen[index], person.id, person.version, remove=False)
+                    _edit_assignment(
+                        db, admin, chosen[index], person.id, person.version, remove=False,
+                    )
                 results[index].status = "added"
                 results[index].prospect_id = person.id
                 added += 1
