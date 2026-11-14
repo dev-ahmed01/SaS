@@ -5,7 +5,7 @@ import { PersistentAppShell } from "../components/persistent-app-shell";
 export const metadata: Metadata = {
   title: "Sponsor a Salah | Emlen Foundation",
   description: "Internal charity operations workspace for Emlen Foundation.",
-  robots: { index: false, follow: false },
+  robots: { index: false, follow: false, noarchive: true, nosnippet: true, noimageindex: true },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
