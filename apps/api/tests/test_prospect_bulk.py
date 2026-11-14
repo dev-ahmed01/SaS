@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from test_prospects import login
 
-from app.models import AuditEvent, Prospect, SponsorshipRate
+from app.models import AuditEvent, PromoterAssignment, Prospect, SponsorshipRate
 
 pytest_plugins = ("test_prospects",)
 
@@ -157,3 +157,67 @@ def test_import_request_id_cannot_be_reused_with_different_details(system):
     ])
     assert client.post(path, headers=csrf, json=changed).json()["blocked"] == 1
     assert client.get("/v1/prospects").json()["total"] == 1
+
+def test_split_fields_and_promoter_are_saved_atomically(system):
+    client, engine = system
+    csrf = login(client)
+    promoter = client.post("/v1/promoters", headers=csrf, json={
+        "full_name": "Test Promoter", "mobile_number": "+919876549999",
+    })
+    assert promoter.status_code == 201, promoter.text
+    promoter_id = promoter.json()["id"]
+    source = payload(rows=[{
+        "full_name": "Sample Multi Word", "first_name": "Sample", "last_name": "Multi Word",
+        "mobile_number": "+919876541234", "area_city": "Bengaluru",
+        "email": "sample@example.com", "monthly_contribution_paise": 25000,
+        "promoter": "test promoter",
+    }])
+    path = "/v1/prospects/bulk"
+    preview = client.post(path, headers=csrf, json=source)
+    assert preview.status_code == 200, preview.text
+    pre = preview.json()
+    assert pre["rows"][0]["promoter_id"] == promoter_id
+    assert pre["ready"] == 1
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 0
+        assert db.scalar(select(func.count()).select_from(PromoterAssignment)) == 0
+    approved = {
+        **source, "commit": True, "expected_month": pre["default_start_month"],
+        "expected_default_amount_paise": pre["default_amount_paise"],
+        "expected_promoter_ids": [promoter_id],
+    }
+    result = client.post(path, headers=csrf, json=approved)
+    assert result.status_code == 200, result.text
+    assert result.json()["added"] == 1
+    with Session(engine) as db:
+        person = db.scalars(select(Prospect)).one()
+        assert person.first_name == "Sample" and person.last_name == "Multi Word"
+        assert person.email == "sample@example.com"
+        assert person.crm_stage == "inactive" and not person.whatsapp_opt_in
+        assert person.monthly_contribution_paise == 25000
+        assignment = db.scalars(select(PromoterAssignment)).one()
+        assert str(assignment.promoter_id) == promoter_id
+        assert assignment.prospect_id == person.id
+    repeated = client.post(path, headers=csrf, json=approved)
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["already_imported"] == 1
+
+
+def test_unknown_promoter_blocks_batch(system):
+    client, engine = system
+    csrf = login(client)
+    path = "/v1/prospects/bulk"
+    source = payload(rows=[{
+        "full_name": "Sample Person", "first_name": "Sample", "last_name": "Person",
+        "mobile_number": "+919876541235", "promoter": "Not registered",
+    }])
+    pre = client.post(path, headers=csrf, json=source).json()
+    assert pre["blocked"] == 1
+    response = client.post(path, headers=csrf, json={
+        **source, "commit": True, "expected_month": pre["default_start_month"],
+        "expected_default_amount_paise": pre["default_amount_paise"],
+        "expected_promoter_ids": [None],
+    })
+    assert response.status_code == 409
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 0
