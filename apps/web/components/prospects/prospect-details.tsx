@@ -211,9 +211,10 @@ export function ProspectDetails({id}:{id:string}){
       <section className="crm-dialog" role="dialog" aria-modal="true"
         aria-label="Confirm permanent prospect deletion">
         <h2>Are you sure you want to delete this prospect?</h2>
-        <p>This permanently deletes the record, not archives it. Records with
-          payment, communications, follow-up or assignment history cannot be
-          permanently deleted; the app will explain any restriction.</p>
+        <p>This permanently deletes the prospect, including eligible OTP, follow-up
+          and assignment history. The mobile number can be used again. Other people
+          are not deleted. Protected financial or messaging history, current consent
+          and OTP attempts from the last 24 hours prevent permanent deletion.</p>
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" disabled={busy}
             onClick={()=>setDeleteOpen(false)}>Cancel</button>
