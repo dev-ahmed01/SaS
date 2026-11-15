@@ -130,9 +130,10 @@ export function PromoterDetails({id}:{id:string}){
       <section className="crm-dialog" role="dialog" aria-modal="true"
         aria-label="Confirm permanent promoter deletion">
         <h2>Are you sure you want to delete this promoter?</h2>
-        <p>This is permanent, not deactivation. Promoters with any sponsor
-          assignment history cannot be deleted. Reassignment does not erase
-          that historical record.</p>
+        <p>This permanently deletes the promoter and removes their assignment links.
+          Existing sponsors and prospects remain in the CRM and become unassigned
+          if currently assigned here. Protected communication history and consent
+          prevent permanent deletion. This cannot be undone.</p>
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" disabled={deleting}
             onClick={()=>setDeleteOpen(false)}>Cancel</button>
