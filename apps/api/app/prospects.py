@@ -41,7 +41,12 @@ from app.models import (
     ProspectUpiIdentifier,
     SponsorshipRate,
 )
-from app.permanent_delete import DeleteConfirmation, check_dependencies, require_confirmation
+from app.permanent_delete import (
+    DeleteConfirmation,
+    check_dependencies,
+    purge_removable_dependencies,
+    require_confirmation,
+)
 from app.prospect_defaults import get_registration_stage
 from app.security import utc_now
 from app.sponsorship_policy import SPONSORSHIP_STEP_PAISE, valid_commitment
@@ -833,7 +838,7 @@ def permanently_delete_unused_prospect(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
     database: Annotated[Session, Depends(db_session)],
 ) -> Response:
-    """Remove unused registrations; never erase business/communication history."""
+    """Permanently remove eligible prospects while retaining protected evidence."""
     require_confirmation(payload.confirmation)
     admin = context[0]
     prospect = _get(database, admin, prospect_id, lock=True, allow_archived=True)
@@ -841,21 +846,26 @@ def permanently_delete_unused_prospect(
     if prospect.crm_stage != "inactive" or prospect.whatsapp_opt_in:
         raise HTTPException(
             status_code=409,
-            detail="Only unused inactive prospects without communication consent can be deleted",
+            detail="Only inactive prospects without communication consent can be deleted",
         )
     check_dependencies(
         database, admin.organization_id, prospect.id, kind="prospect",
     )
-    # Registration creates one rate by design. Historical rates (>1) are
-    # prohibited by check_dependencies and cannot be erased.
-    database.execute(delete(SponsorshipRate).where(
-        SponsorshipRate.organization_id == admin.organization_id,
-        SponsorshipRate.prospect_id == prospect.id,
-    ))
-    _audit(database, admin, prospect, "prospect.permanently_deleted",
-           before={"version": prospect.version}, after={"unused_registration": True})
     try:
-        database.delete(prospect)
+        removed = purge_removable_dependencies(
+            database, admin.organization_id, prospect.id, kind="prospect",
+        )
+        database.execute(delete(SponsorshipRate).where(
+            SponsorshipRate.organization_id == admin.organization_id,
+            SponsorshipRate.prospect_id == prospect.id,
+        ))
+        _audit(database, admin, prospect, "prospect.permanently_deleted",
+               before={"version": prospect.version}, after={"removed_metadata": removed})
+        # Core deletion avoids ORM attempts to null already removed child rows.
+        database.execute(delete(Prospect.__table__).where(
+            Prospect.__table__.c.organization_id == admin.organization_id,
+            Prospect.__table__.c.id == prospect.id,
+        ))
         database.commit()
     except IntegrityError as exc:
         database.rollback()
