@@ -85,11 +85,31 @@ export function ProspectDetails({id}:{id:string}){
         const payload=await response.json().catch(()=>null);
         throw Error(response.status===409
           ?(typeof payload?.detail==="string"?payload.detail:
-            "This prospect has linked history and cannot be permanently deleted.")
+            "This prospect has linked history and cannot be permanently deleted.")+
+            (record.archived_at?"":" Use Delete prospect → Archive instead to retain history (mark inactive first if needed).")
           :"Could not permanently delete this prospect.");
       }
       window.location.assign("/prospects");
     }catch(e){setError(e instanceof Error?e.message:"Could not delete prospect.");}
+    finally{setBusy(false);setDeleteOpen(false);}
+  }
+  async function changeArchive(restore:boolean){
+    if(!record||busy||(!restore&&record.crm_stage!=="inactive"))return;
+    setBusy(true);setError("");
+    try{
+      const session=await fetch("/api/admin/session",{cache:"no-store"});
+      if(!session.ok)throw Error("Session expired. Sign in again.");
+      const {csrf_token}=await session.json();
+      const response=await fetch("/api/admin/prospects/"+id+(restore?"/restore":""),{
+        method:restore?"POST":"DELETE",credentials:"same-origin",
+        headers:{"X-CSRF-Token":csrf_token,"If-Match":String(record.version)},
+      });
+      if(!response.ok){
+        const payload=await response.json().catch(()=>null);
+        throw Error(typeof payload?.detail==="string"?payload.detail:"Could not change archive status.");
+      }
+      if(restore)refresh();else window.location.assign("/prospects");
+    }catch(e){setError(e instanceof Error?e.message:"Could not change archive status.");}
     finally{setBusy(false);setDeleteOpen(false);}
   }
   const entries=filter==="all"?activity:activity.filter(item=>item.kind===filter);
@@ -200,6 +220,8 @@ export function ProspectDetails({id}:{id:string}){
         </section>
       </div>
       <div className="crm-redesign-actions prospect-danger-footer" aria-label="Additional prospect actions">
+        {record.archived_at&&<button type="button" className="btn btn-secondary" disabled={busy}
+          onClick={()=>void changeArchive(true)}>Restore prospect</button>}
         <button type="button" className="btn btn-secondary crm-danger-btn"
           onClick={()=>setDeleteOpen(true)}>
           <Icon name="trash" size={17}/> Delete prospect</button>
@@ -211,12 +233,17 @@ export function ProspectDetails({id}:{id:string}){
       <section className="crm-dialog" role="dialog" aria-modal="true"
         aria-label="Confirm permanent prospect deletion">
         <h2>Are you sure you want to delete this prospect?</h2>
-        <p>This permanently deletes the record, not archives it. Records with
-          payment, communications, follow-up or assignment history cannot be
-          permanently deleted; the app will explain any restriction.</p>
+        <p>Permanent deletion is only for unused records. Payment, activation,
+          follow-up and assignment history must be retained. Archive an inactive
+          prospect instead to hide it from the regular directory without losing history.</p>
+        {!record.archived_at&&record.crm_stage==="active"&&
+          <p>Mark this prospect inactive before archiving.</p>}
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" disabled={busy}
             onClick={()=>setDeleteOpen(false)}>Cancel</button>
+          {!record.archived_at&&record.crm_stage==="inactive"&&<button type="button"
+            className="btn btn-secondary" disabled={busy} onClick={()=>void changeArchive(false)}>
+            Archive instead</button>}
           <button type="button" className="btn btn-danger" disabled={busy}
             onClick={()=>void permanentlyDelete()}>
             {busy?"Deleting…":"Yes, delete permanently"}
