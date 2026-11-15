@@ -1,6 +1,7 @@
 """Permanent deletion removes eligible metadata but protects business history."""
 import uuid
 from datetime import timedelta
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
