@@ -130,12 +130,15 @@ export function PromoterDetails({id}:{id:string}){
       <section className="crm-dialog" role="dialog" aria-modal="true"
         aria-label="Confirm permanent promoter deletion">
         <h2>Are you sure you want to delete this promoter?</h2>
-        <p>This is permanent, not deactivation. Promoters with any sponsor
-          assignment history cannot be deleted. Reassignment does not erase
-          that historical record.</p>
+        <p>Permanent deletion is only for unused promoters. If assignment or
+          communication history exists, deactivate instead. The reassignment step
+          preserves existing prospects and assignment history.</p>
+        {!record.is_active&&<p>This promoter is already inactive; protected historical records remain retained.</p>}
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" disabled={deleting}
             onClick={()=>setDeleteOpen(false)}>Cancel</button>
+          {record.is_active&&<button type="button" className="btn btn-secondary" disabled={deleting}
+            onClick={()=>{setDeleteOpen(false);setConfirm(true);}}>Deactivate instead</button>}
           <button type="button" className="btn btn-danger" disabled={deleting}
             onClick={async()=>{
               setDeleting(true);setError("");
@@ -148,8 +151,9 @@ export function PromoterDetails({id}:{id:string}){
                 });
                 if(!res.ok){
                   const payload=await res.json().catch(()=>null);
-                  throw Error(typeof payload?.detail==="string"?payload.detail:
-                    "Could not permanently delete promoter.");
+                  throw Error((typeof payload?.detail==="string"?payload.detail:
+                    "Could not permanently delete promoter.")+
+                    (res.status===409&&record.is_active?" Use Delete promoter → Deactivate instead to retain history.":""));
                 }
                 window.location.assign("/promoters");
               }catch(e){setError(e instanceof Error?e.message:"Deletion failed.");}
