@@ -512,6 +512,28 @@ test("Admin can permanently delete an unused prospect with confirmation",async (
   await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
 });
 
+test("Admin can archive and restore an inactive prospect from the delete flow",async ({page})=>{
+  const label="Archive Browser Candidate "+(Date.now()%1000000);
+  await page.goto("/prospects/add");
+  await page.getByRole("textbox",{name:/First Name/}).fill(label);
+  await page.getByRole("textbox",{name:"Mobile (WhatsApp)"}).fill(uniqueProspectMobile());
+  await page.getByRole("button",{name:"Add Prospect",exact:true}).click();
+  await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]{36}$/);
+  const detailUrl=page.url();
+  await page.getByRole("button",{name:"Delete prospect"}).click();
+  await page.getByRole("dialog",{name:"Confirm permanent prospect deletion"})
+    .getByRole("button",{name:"Archive instead"}).click();
+  await expect(page).toHaveURL(/\/prospects$/);
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
+  await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(0);
+  await page.goto(detailUrl);
+  await page.getByRole("button",{name:"Restore prospect"}).click();
+  await expect(page.getByRole("button",{name:"Restore prospect"})).toHaveCount(0);
+  await page.goto("/prospects");
+  await page.getByRole("textbox",{name:"Search prospects"}).fill(label);
+  await expect(page.getByRole("row",{name:new RegExp(label)})).toHaveCount(1);
+});
+
 test("Prospect listing shows contribution, follow-ups and selected CSV export",async ({page})=>{
   await page.goto("/prospects");
   await expect(page.getByRole("checkbox",{name:"Include archived"})).toHaveCount(0);
@@ -696,7 +718,9 @@ test("Admin edits promoter cards and changes status with confirmation",async ({p
   await page.getByRole("textbox",{name:/City/}).fill("Hubballi");
   await page.getByRole("button",{name:"Save Changes"}).click();
   await expect(page.getByText("Hubballi",{exact:true})).toBeVisible();
-  await page.getByRole("button",{name:"Mark Inactive"}).click();
+  await page.getByRole("button",{name:"Delete promoter"}).click();
+  await page.getByRole("dialog",{name:"Confirm permanent promoter deletion"})
+    .getByRole("button",{name:"Deactivate instead"}).click();
   const confirm=page.getByRole("dialog",{name:"Confirm promoter status"});
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button",{name:"Confirm deactivation"}).click();
