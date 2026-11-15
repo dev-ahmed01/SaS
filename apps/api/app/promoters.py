@@ -22,7 +22,12 @@ from app.models import (
     PromoterAssignment,
     Prospect,
 )
-from app.permanent_delete import DeleteConfirmation, check_dependencies, require_confirmation
+from app.permanent_delete import (
+    DeleteConfirmation,
+    check_dependencies,
+    purge_removable_dependencies,
+    require_confirmation,
+)
 from app.prospects import ProspectFields, _clean_text, _project_statuses
 from app.security import utc_now
 
@@ -445,7 +450,7 @@ def permanently_delete_unused_promoter(
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
     database: Annotated[Session, Depends(db_session)],
 ) -> Response:
-    """Delete only unused promoters, never those with assignment history."""
+    """Permanently remove eligible promoters, leaving assigned people intact."""
     require_confirmation(payload.confirmation)
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
@@ -453,9 +458,12 @@ def permanently_delete_unused_promoter(
     if promoter.whatsapp_opt_in:
         raise HTTPException(status_code=409, detail="Promoter consent history must be retained")
     check_dependencies(database, admin.organization_id, promoter.id, kind="promoter")
-    _audit(database, admin, promoter, "promoter.permanently_deleted",
-           before={"version": promoter.version}, after={"unused_registration": True})
     try:
+        removed = purge_removable_dependencies(
+            database, admin.organization_id, promoter.id, kind="promoter",
+        )
+        _audit(database, admin, promoter, "promoter.permanently_deleted",
+               before={"version": promoter.version}, after={"removed_metadata": removed})
         database.delete(promoter)
         database.commit()
     except IntegrityError as exc:

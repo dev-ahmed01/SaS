@@ -1,8 +1,12 @@
-"""Deletion must refuse historical assignments and permit only unused people."""
+"""Permanent deletion removes eligible metadata but protects business history."""
+import uuid
+from datetime import timedelta
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Promoter, Prospect, SponsorshipRate
+from app.models import Promoter, PromoterAssignment, Prospect, SponsorOtpChallenge, SponsorshipRate
+from app.security import utc_now
 
 pytest_plugins = ("test_prospects",)
 
@@ -34,7 +38,7 @@ def test_unused_prospect_delete_and_confirmation(system):
         assert db.scalar(select(func.count()).select_from(Prospect)) == 0
 
 
-def test_assigned_promoter_cannot_be_deleted(system):
+def test_assigned_promoter_deletion_preserves_prospect(system):
     client, engine = system
     csrf = session_token(client)
     promoter = client.post("/v1/promoters", headers=csrf, json={
@@ -53,9 +57,13 @@ def test_assigned_promoter_cannot_be_deleted(system):
         headers=csrf,
         json={"version": assigned.json()["version"], "confirmation": "DELETE"},
     )
-    assert r.status_code == 409, r.text
+    assert r.status_code == 204, r.text
     with Session(engine) as db:
-        assert db.scalar(select(func.count()).select_from(Promoter)) == 1
+        assert db.scalar(select(func.count()).select_from(Promoter)) == 0
+        assert db.scalar(select(func.count()).select_from(PromoterAssignment)) == 0
+        survivor = db.get(Prospect, uuid.UUID(person["id"]))
+        assert survivor is not None
+        assert survivor.version > person["version"]
 
 
 def test_nontrivial_sponsorship_history_blocks_prospect_deletion(system):
@@ -102,3 +110,70 @@ def test_unused_promoter_may_be_permanently_deleted(system):
     assert result.status_code == 204
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Promoter)) == 0
+
+
+def test_prospect_with_old_otp_and_assignment_can_be_deleted(system):
+    client, engine = system
+    csrf = session_token(client)
+    promoter = client.post("/v1/promoters", headers=csrf, json={
+        "full_name": "Keep Promoter", "mobile_number": "+919899999996",
+    }).json()
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Old OTP Prospect", "mobile_number": "+919899999997",
+    }).json()
+    assigned = client.put(
+        "/v1/promoters/" + promoter["id"] + "/sponsors/" + person["id"],
+        headers={**csrf, "If-Match": str(person["version"])},
+    )
+    assert assigned.status_code == 200, assigned.text
+    now = utc_now()
+    with Session(engine) as db:
+        identity = db.get(Prospect, uuid.UUID(person["id"]))
+        version = identity.version
+        db.add(SponsorOtpChallenge(
+            organization_id=identity.organization_id, prospect_id=identity.id,
+            phone_digest="a" * 64, code_digest="b" * 64, status="failed",
+            attempts=1, created_at=now - timedelta(days=2),
+            expires_at=now - timedelta(days=2) + timedelta(minutes=2),
+        ))
+        db.commit()
+    result = client.post(
+        "/v1/prospects/" + person["id"] + "/permanent-delete",
+        headers=csrf, json={"version": version, "confirmation": "DELETE"},
+    )
+    assert result.status_code == 204, result.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 0
+        assert db.scalar(select(func.count()).select_from(SponsorOtpChallenge)) == 0
+        assert db.scalar(select(func.count()).select_from(PromoterAssignment)) == 0
+        assert db.scalar(select(func.count()).select_from(Promoter)) == 1
+        assert db.scalar(select(func.count()).select_from(SponsorshipRate)) == 0
+    recreated = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Replacement Prospect", "mobile_number": "+919899999997",
+    })
+    assert recreated.status_code == 201, recreated.text
+
+
+def test_recent_otp_protects_phone_rate_limit(system):
+    client, engine = system
+    csrf = session_token(client)
+    person = client.post("/v1/prospects", headers=csrf, json={
+        "full_name": "Recent OTP Prospect", "mobile_number": "+919899999998",
+    }).json()
+    now = utc_now()
+    with Session(engine) as db:
+        identity = db.get(Prospect, uuid.UUID(person["id"]))
+        db.add(SponsorOtpChallenge(
+            organization_id=identity.organization_id, prospect_id=identity.id,
+            phone_digest="c" * 64, code_digest="d" * 64, status="failed",
+            created_at=now, expires_at=now + timedelta(minutes=2),
+        ))
+        db.commit()
+    result = client.post(
+        "/v1/prospects/" + person["id"] + "/permanent-delete",
+        headers=csrf, json={"version": person["version"], "confirmation": "DELETE"},
+    )
+    assert result.status_code == 409, result.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 1
+        assert db.scalar(select(func.count()).select_from(SponsorOtpChallenge)) == 1
