@@ -1,17 +1,14 @@
-"""Conservative, tenant-scoped permanent removal for unused CRM identities.
-
-Financial entries, past assignments and communication/activation history block
-hard-delete. Audit events remain immutable even after an unused identity is
-removed; archiving remains available through the existing legacy endpoint.
-"""
+"""Tenant-scoped CRM removal with financial and communication safeguards."""
 import uuid
+from datetime import timedelta
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from app.models import Base
+from app.models import Base, Promoter, PromoterAssignment, SponsorOtpChallenge
+from app.security import utc_now
 
 
 class DeleteConfirmation(BaseModel):
@@ -61,3 +58,52 @@ def check_dependencies(
                     + " history. Records with history must be retained."
                 ),
             )
+
+
+# Only these non-financial prospect dependencies may be removed.
+REMOVABLE_PROSPECT = frozenset({
+    "sponsor_otp_challenges", "promoter_assignments", "prospect_followups",
+    "prospect_stage_transitions", "prospect_archive_intervals", "prospect_upi_ids",
+})
+
+
+def purge_prospect_dependencies(
+    db: Session, organization_id: uuid.UUID, prospect_id: uuid.UUID,
+) -> dict[str, int]:
+    """Check and remove eligible CRM metadata in the prospect deletion transaction."""
+    check_dependencies(
+        db, organization_id, prospect_id, kind="prospect",
+        allowed_tables=REMOVABLE_PROSPECT,
+    )
+    now = utc_now()
+    recent = db.scalar(select(func.count()).select_from(SponsorOtpChallenge).where(
+        SponsorOtpChallenge.organization_id == organization_id,
+        SponsorOtpChallenge.prospect_id == prospect_id,
+        SponsorOtpChallenge.created_at >= now - timedelta(days=1),
+    ))
+    if recent:
+        raise HTTPException(
+            status_code=409,
+            detail="Recent OTP history must be retained for 24 hours after issuance.",
+        )
+    assignments = PromoterAssignment.__table__
+    linked = select(assignments.c.promoter_id).where(
+        assignments.c.organization_id == organization_id,
+        assignments.c.prospect_id == prospect_id,
+        assignments.c.ended_at.is_(None),
+    )
+    other = Promoter.__table__
+    db.execute(update(other).where(
+        other.c.organization_id == organization_id,
+        other.c.id.in_(linked),
+    ).values(version=other.c.version + 1, updated_at=now))
+    counts: dict[str, int] = {}
+    for name in sorted(REMOVABLE_PROSPECT):
+        table = Base.metadata.tables[name]
+        result = db.execute(delete(table).where(
+            table.c.organization_id == organization_id,
+            table.c.prospect_id == prospect_id,
+        ))
+        if result.rowcount:
+            counts[name] = result.rowcount
+    return counts
