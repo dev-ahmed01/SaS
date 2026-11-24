@@ -1,8 +1,10 @@
-"""Deletion must refuse historical assignments and permit only unused people."""
+"""Permanent deletion preserves prospect data and retained business history."""
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Promoter, Prospect, SponsorshipRate
+from app.models import (
+    AuditEvent, CommunicationConsentEvent, Promoter, PromoterAssignment, Prospect, SponsorshipRate,
+)
 
 pytest_plugins = ("test_prospects",)
 
@@ -34,11 +36,12 @@ def test_unused_prospect_delete_and_confirmation(system):
         assert db.scalar(select(func.count()).select_from(Prospect)) == 0
 
 
-def test_assigned_promoter_cannot_be_deleted(system):
+def test_assigned_promoter_can_be_deleted_without_removing_prospect(system):
     client, engine = system
     csrf = session_token(client)
     promoter = client.post("/v1/promoters", headers=csrf, json={
         "full_name": "Active Promoter", "mobile_number": "+919899999992",
+        "whatsapp_opt_in": True,
     }).json()
     person = client.post("/v1/prospects", headers=csrf, json={
         "full_name": "Assigned Person", "mobile_number": "+919899999993",
@@ -48,14 +51,31 @@ def test_assigned_promoter_cannot_be_deleted(system):
         headers={**csrf, "If-Match": str(person["version"])},
     )
     assert assigned.status_code == 200, assigned.text
-    r = client.post(
-        "/v1/promoters/" + promoter["id"] + "/permanent-delete",
-        headers=csrf,
-        json={"version": assigned.json()["version"], "confirmation": "DELETE"},
-    )
-    assert r.status_code == 409, r.text
     with Session(engine) as db:
-        assert db.scalar(select(func.count()).select_from(Promoter)) == 1
+        row = db.scalars(select(Promoter)).one()
+        db.add(CommunicationConsentEvent(
+            organization_id=row.organization_id, recipient_kind="promoter",
+            recipient_id=row.id, channel="whatsapp", decision="opted_in",
+            source="admin_attestation",
+        ))
+        db.commit()
+    url = "/v1/promoters/" + promoter["id"] + "/permanent-delete"
+    body = {"version": assigned.json()["version"], "confirmation": "DELETE"}
+    assert client.post(url, headers=csrf, json={**body, "version": 1}).status_code == 409
+    assert client.post(url, headers=csrf, json={**body, "confirmation": "YES"}).status_code == 422
+    r = client.post(url, headers=csrf, json=body)
+    assert r.status_code == 204, r.text
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Promoter)) == 0
+        assert db.scalar(select(func.count()).select_from(PromoterAssignment)) == 0
+        assert db.scalar(select(func.count()).select_from(Prospect)) == 1
+        assert db.scalar(select(func.count()).select_from(SponsorshipRate)) == 1
+        assert db.scalar(select(func.count()).select_from(CommunicationConsentEvent)) >= 1
+        event = db.scalars(select(AuditEvent).where(
+            AuditEvent.action == "promoter.permanently_deleted",
+        )).one()
+        assert event.after_data["unassigned_count"] == 1
+    assert client.get("/v1/promoters/" + promoter["id"]).status_code == 404
 
 
 def test_nontrivial_sponsorship_history_blocks_prospect_deletion(system):

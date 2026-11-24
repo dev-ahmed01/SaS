@@ -27,7 +27,7 @@ def require_confirmation(value: str) -> None:
 
 def check_dependencies(
     db: Session, organization_id: uuid.UUID, identity_id: uuid.UUID,
-    *, kind: str,
+    *, kind: str, allowed_tables: frozenset[str] = frozenset(),
 ) -> None:
     """A real registration rate can be removed, but not any business history.
 
@@ -36,7 +36,7 @@ def check_dependencies(
     """
     field = "prospect_id" if kind == "prospect" else "promoter_id"
     for table in Base.metadata.tables.values():
-        if table.name in ("prospects", "promoters"):
+        if table.name in ("prospects", "promoters") or table.name in allowed_tables:
             continue
         if field in table.c:
             clause = table.c[field] == identity_id
