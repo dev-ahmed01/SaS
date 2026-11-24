@@ -439,23 +439,53 @@ def update_promoter(
 
 
 @router.post("/{promoter_id}/permanent-delete", status_code=204)
-def permanently_delete_unused_promoter(
+def permanently_delete_promoter(
     promoter_id: uuid.UUID,
     payload: DeleteConfirmation,
     context: Annotated[tuple[AdminUser, AdminSession, str], Depends(require_csrf)],
     database: Annotated[Session, Depends(db_session)],
 ) -> Response:
-    """Delete only unused promoters, never those with assignment history."""
+    """Remove a promoter profile without deleting prospects or consent evidence."""
     require_confirmation(payload.confirmation)
     admin = context[0]
     promoter = _load(database, admin, promoter_id, lock=True)
     _version(promoter, payload.version)
-    if promoter.whatsapp_opt_in:
-        raise HTTPException(status_code=409, detail="Promoter consent history must be retained")
-    check_dependencies(database, admin.organization_id, promoter.id, kind="promoter")
+    # Consent events are append-only and have no foreign key to the profile.
+    # Preserve them and the audit trail. Assignment links are explicitly removed
+    # below; other business history continues to fail closed.
+    check_dependencies(
+        database, admin.organization_id, promoter.id, kind="promoter",
+        allowed_tables=frozenset({"communication_consent_events", "promoter_assignments"}),
+    )
+    assignments = database.scalars(select(PromoterAssignment).where(
+        PromoterAssignment.organization_id == admin.organization_id,
+        PromoterAssignment.promoter_id == promoter.id,
+    ).order_by(PromoterAssignment.prospect_id, PromoterAssignment.id).with_for_update()).all()
+    now = utc_now()
+    active_ids = {a.prospect_id for a in assignments if a.ended_at is None}
+    if active_ids:
+        prospects = database.scalars(select(Prospect).where(
+            Prospect.organization_id == admin.organization_id,
+            Prospect.id.in_(active_ids),
+        ).order_by(Prospect.id).with_for_update()).all()
+        for prospect in prospects:
+            prospect.version += 1
+            prospect.updated_at = now
     _audit(database, admin, promoter, "promoter.permanently_deleted",
-           before={"version": promoter.version}, after={"unused_registration": True})
+           before={"version": promoter.version},
+           after={"unassigned_count": len(active_ids),
+                  "removed_assignment_count": len(assignments),
+                  "assignments": [
+                      {"prospect_id": str(a.prospect_id),
+                       "assigned_at": a.assigned_at.isoformat(),
+                       "ended_at": (a.ended_at or now).isoformat()}
+                      for a in assignments
+                  ]})
     try:
+        for assignment in assignments:
+            database.delete(assignment)
+        # Explicitly release FK references before removing the promoter row.
+        database.flush()
         database.delete(promoter)
         database.commit()
     except IntegrityError as exc:
